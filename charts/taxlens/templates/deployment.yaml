@@ -41,6 +41,16 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.azure.secretName }}
                   key: {{ .Values.azure.apiKeyKey }}
+            - name: OPENFILE_DB_HOST
+              value: {{ .Values.openfileDb.host | quote }}
+            - name: OPENFILE_DB_PORT
+              value: {{ .Values.openfileDb.port | quote }}
+            - name: OPENFILE_DB_NAME
+              value: {{ .Values.openfileDb.name | quote }}
+            - name: OPENFILE_DB_USER
+              value: {{ .Values.openfileDb.user | quote }}
+            - name: OPENFILE_DB_PASSWORD
+              value: {{ .Values.openfileDb.password | quote }}
           volumeMounts:
             - name: documents
               mountPath: {{ .Values.storage.root }}

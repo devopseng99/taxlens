@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
 from ocr import analyze_document
+from bridge import ocr_to_w2_payload, write_populated_data
+from tax_routes import router as tax_router
 
 app = FastAPI(
     title="TaxLens Document Intake API",
@@ -23,6 +25,9 @@ app = FastAPI(
 # --- Config from env ---
 STORAGE_ROOT = Path(os.getenv("TAXLENS_STORAGE_ROOT", "/data/documents"))
 MAX_FILE_SIZE = int(os.getenv("TAXLENS_MAX_FILE_MB", "30")) * 1024 * 1024  # 30MB default
+
+# Mount tax draft routes
+app.include_router(tax_router)
 
 
 # --- Models ---
@@ -200,6 +205,50 @@ async def download_file(username: str, proc_id: str):
         raise HTTPException(404)
 
     return FileResponse(files[0], filename=files[0].name)
+
+
+@app.post("/bridge/{proc_id}")
+async def bridge_to_openfile(
+    proc_id: str,
+    username: str = Query(...),
+    tax_return_id: str = Query(...),
+):
+    """Bridge OCR results to OpenFile populated_data table."""
+    dest = doc_dir(username, proc_id)
+    if not dest.exists():
+        raise HTTPException(404, f"Document {proc_id} not found for user {username}")
+
+    ocr_file = dest / "ocr_result.json"
+    if not ocr_file.exists():
+        raise HTTPException(400, f"No OCR result for {proc_id}. Run /analyze first.")
+
+    ocr_data = json.loads(ocr_file.read_text())
+    ocr_fields = ocr_data.get("fields", {})
+
+    try:
+        result = write_populated_data(tax_return_id, ocr_fields)
+    except Exception as e:
+        raise HTTPException(502, f"Failed to write to OpenFile DB: {str(e)}")
+
+    return result
+
+
+@app.post("/bridge/{proc_id}/preview")
+async def preview_bridge(
+    proc_id: str,
+    username: str = Query(...),
+):
+    """Preview the W2 payload that would be written to OpenFile (dry run)."""
+    dest = doc_dir(username, proc_id)
+    if not dest.exists():
+        raise HTTPException(404)
+
+    ocr_file = dest / "ocr_result.json"
+    if not ocr_file.exists():
+        raise HTTPException(400, "No OCR result. Run /analyze first.")
+
+    ocr_data = json.loads(ocr_file.read_text())
+    return {"w2_payload": ocr_to_w2_payload(ocr_data.get("fields", {}))}
 
 
 @app.delete("/documents/{username}/{proc_id}")

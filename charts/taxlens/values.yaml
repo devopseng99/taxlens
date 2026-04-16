@@ -25,6 +25,13 @@ azure:
   endpointKey: endpoint
   apiKeyKey: key
 
+openfileDb:
+  host: openfile-postgresql.openfile.svc.cluster.local
+  port: "5432"
+  name: openfile
+  user: postgres
+  password: EXBzXH9dLrsLEML6TOQtn7cN6fbVN4Pc
+
 nodeSelector:
   kubernetes.io/hostname: mgplcb05
 
