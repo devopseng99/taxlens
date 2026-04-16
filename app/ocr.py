@@ -49,21 +49,37 @@ async def analyze_document(file_path: Path, model_id: str = "prebuilt-tax.us") -
     )
     result = poller.result()
 
-    # Extract fields from first document
+    # Extract fields from first document (with nested object/array support)
     fields = {}
     confidence_sum = 0.0
     field_count = 0
 
+    def extract_field(field):
+        """Recursively extract field value, handling objects and arrays."""
+        ft = field.type if hasattr(field, "type") else None
+
+        if ft == "object" and hasattr(field, "value_object") and field.value_object:
+            sub = {}
+            for k, v in field.value_object.items():
+                sub[k] = extract_field(v)
+            return {"value": sub, "confidence": field.confidence, "type": "object"}
+
+        if ft == "array" and hasattr(field, "value_array") and field.value_array:
+            items = [extract_field(item) for item in field.value_array]
+            return {"value": items, "confidence": field.confidence, "type": "array"}
+
+        val = field.content if hasattr(field, "content") and field.content else (
+            str(field.value) if hasattr(field, "value") and field.value is not None else None
+        )
+        return {"value": val, "confidence": field.confidence, "type": ft}
+
     if result.documents:
         doc = result.documents[0]
         for name, field in (doc.fields or {}).items():
-            fields[name] = {
-                "value": field.content if hasattr(field, "content") else str(field.value) if field.value else None,
-                "confidence": field.confidence,
-                "type": field.type if hasattr(field, "type") else None,
-            }
-            if field.confidence:
-                confidence_sum += field.confidence
+            extracted = extract_field(field)
+            fields[name] = extracted
+            if extracted.get("confidence"):
+                confidence_sum += extracted["confidence"]
                 field_count += 1
 
     avg_confidence = confidence_sum / field_count if field_count > 0 else 0.0
