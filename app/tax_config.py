@@ -138,6 +138,26 @@ CTC_PHASEOUT_START = {
 CTC_PHASEOUT_RATE = 50  # $50 reduction per $1,000 over threshold
 
 # ---------------------------------------------------------------------------
+# Self-Employment Tax (Schedule SE)
+# ---------------------------------------------------------------------------
+SE_TAX_RATE = 0.153            # 12.4% SS + 2.9% Medicare
+SE_INCOME_FACTOR = 0.9235      # 92.35% of net SE income is taxable
+SE_SS_RATE = 0.124
+SE_MEDICARE_RATE = 0.029
+# SS wage base shared with FICA (SS_WAGE_BASE above)
+
+# ---------------------------------------------------------------------------
+# Qualified Business Income (QBI) Deduction — Section 199A
+# ---------------------------------------------------------------------------
+QBI_DEDUCTION_RATE = 0.20      # 20% of QBI
+QBI_TAXABLE_INCOME_LIMIT = {   # Below this, full 20% with no phase-out
+    SINGLE: 191_950,
+    MFJ:    383_900,
+    HOH:    191_950,
+    MFS:    191_950,
+}
+
+# ---------------------------------------------------------------------------
 # Illinois State Tax (2025)
 # ---------------------------------------------------------------------------
 IL_FLAT_RATE = 0.0495
