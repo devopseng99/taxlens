@@ -1,0 +1,55 @@
+replicaCount: 1
+
+image:
+  repository: localhost/taxlens-api
+  tag: latest
+  pullPolicy: Never
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+
+storage:
+  root: /data/documents
+  maxFileMb: "30"
+  pvc:
+    name: taxlens-docs
+    size: 10Gi
+    storageClass: my-local-storage
+
+azure:
+  secretName: azure-docai
+  endpointKey: endpoint
+  apiKeyKey: key
+
+nodeSelector:
+  kubernetes.io/hostname: mgplcb05
+
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+startupProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  failureThreshold: 10
+  periodSeconds: 5
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  periodSeconds: 10

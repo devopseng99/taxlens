@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxlens-api
+  labels:
+    app.kubernetes.io/name: taxlens
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taxlens
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taxlens
+        app.kubernetes.io/component: api
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          env:
+            - name: TAXLENS_STORAGE_ROOT
+              value: {{ .Values.storage.root }}
+            - name: TAXLENS_MAX_FILE_MB
+              value: {{ .Values.storage.maxFileMb | quote }}
+            - name: AZURE_DOCAI_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.azure.secretName }}
+                  key: {{ .Values.azure.endpointKey }}
+            - name: AZURE_DOCAI_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.azure.secretName }}
+                  key: {{ .Values.azure.apiKeyKey }}
+          volumeMounts:
+            - name: documents
+              mountPath: {{ .Values.storage.root }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: documents
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.pvc.name }}
