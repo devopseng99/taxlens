@@ -168,18 +168,24 @@ def generate_1040(result: TaxResult) -> BytesIO:
     y = draw_line(c, "3a", "Qualified dividends", result.line_3a_qualified_dividends, y)
     y = draw_line(c, "3b", "Ordinary dividends", result.line_3b_ordinary_dividends, y)
     y = draw_line(c, "7", "Capital gain or (loss) — from Schedule D", result.line_7_capital_gain_loss, y)
+    if result.line_8a_business_income != 0:
+        y = draw_line(c, "8a", "Business income or (loss) — from Schedule C", result.line_8a_business_income, y)
     y = draw_line(c, "8", "Other income", result.line_8_other_income, y)
     y = draw_line(c, "9", "Total income", result.line_9_total_income, y, bold=True)
 
     # --- Adjustments ---
     y = draw_section(c, "Adjustments to Income", y)
-    y = draw_line(c, "10", "Adjustments (student loan interest, etc.)", result.line_10_adjustments, y)
+    if result.se_tax_deduction > 0:
+        y = draw_line(c, "", "Deductible part of self-employment tax", result.se_tax_deduction, y)
+    y = draw_line(c, "10", "Total adjustments", result.line_10_adjustments, y)
     y = draw_line(c, "11", "Adjusted gross income (AGI)", result.line_11_agi, y, bold=True)
 
     # --- Deductions ---
     y = draw_section(c, "Deductions", y)
     dtype = f"{'Standard' if result.deduction_type == 'standard' else 'Itemized'} deduction"
     y = draw_line(c, "12", f"{dtype} ({result.deduction_type})", result.line_13_deduction, y)
+    if result.qbi_deduction > 0:
+        y = draw_line(c, "13", "Qualified business income deduction (Section 199A)", result.qbi_deduction, y)
     y = draw_line(c, "15", "Taxable income", result.line_15_taxable_income, y, bold=True)
 
     # --- Tax ---
@@ -187,6 +193,8 @@ def generate_1040(result: TaxResult) -> BytesIO:
     y = draw_line(c, "16", "Tax (from tax table / brackets)", result.line_16_tax, y)
     if result.capital_gains_tax > 0:
         y = draw_line(c, "", "Capital gains tax (preferential rates)", result.capital_gains_tax, y)
+    if result.se_tax > 0:
+        y = draw_line(c, "", "Self-employment tax (Schedule SE)", result.se_tax, y)
     if result.line_27_ctc > 0:
         y = draw_line(c, "27", "Child tax credit", -result.line_27_ctc, y)
     y = draw_line(c, "24", "Total tax", result.line_24_total_tax, y, bold=True)
@@ -346,6 +354,79 @@ def generate_schedule_d(result: TaxResult) -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Schedule C — Profit or Loss from Business
+# ---------------------------------------------------------------------------
+def generate_schedule_c(result: TaxResult) -> BytesIO:
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+
+    y = HEIGHT - 40
+    y = draw_header(c, "Schedule C", "Profit or Loss From Business", result.tax_year, y)
+    y = draw_filer_info(c, result, y)
+
+    for idx, biz in enumerate(result.sched_c_businesses):
+        if idx > 0:
+            y -= 10
+        y = draw_section(c, f"Business #{idx+1}: {biz.get('name', 'Business')}", y)
+        if biz.get("type"):
+            c.setFont("Helvetica", 7)
+            c.setFillColor(colors.gray)
+            c.drawString(65, y + 4, f"Type: {biz['type']}")
+            c.setFillColor(colors.black)
+            y -= 12
+
+        y = draw_line(c, "1", "Gross receipts or sales", biz.get("gross_receipts", 0), y)
+        y = draw_line(c, "4", "Cost of goods sold", biz.get("cogs", 0), y)
+        y = draw_line(c, "7", "Gross profit", biz.get("gross_profit", 0), y, bold=True)
+        y = draw_line(c, "28", "Total expenses", biz.get("expenses", 0), y)
+        y = draw_line(c, "31", "Net profit or (loss)", biz.get("net_profit", 0), y, bold=True)
+
+        # Page break if running low
+        if y < 150 and idx < len(result.sched_c_businesses) - 1:
+            c.showPage()
+            y = HEIGHT - 40
+
+    y -= 10
+    y = draw_section(c, "Total — All Businesses", y)
+    y = draw_line(c, "", "TOTAL NET BUSINESS INCOME — to Form 1040, Line 8a",
+                  result.sched_c_total_profit, y, bold=True)
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
+# Schedule SE — Self-Employment Tax
+# ---------------------------------------------------------------------------
+def generate_schedule_se(result: TaxResult) -> BytesIO:
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+
+    y = HEIGHT - 40
+    y = draw_header(c, "Schedule SE", "Self-Employment Tax", result.tax_year, y)
+    y = draw_filer_info(c, result, y)
+
+    y = draw_section(c, "Part I — Self-Employment Tax", y)
+    y = draw_line(c, "2", "Net earnings from self-employment (from Schedule C)", result.sched_se_net_earnings, y)
+    y = draw_line(c, "3", f"92.35% of net earnings", result.sched_se_taxable, y)
+    y = draw_line(c, "4a", "Social Security tax portion (12.4%)", result.sched_se_ss_tax, y)
+    y = draw_line(c, "4b", "Medicare tax portion (2.9%)", result.sched_se_medicare_tax, y)
+    y = draw_line(c, "5", "TOTAL SELF-EMPLOYMENT TAX", result.sched_se_total, y, bold=True)
+
+    y -= 10
+    y = draw_section(c, "Deduction", y)
+    y = draw_line(c, "6", "Deductible part of SE tax (50%) — to Form 1040 adjustments",
+                  result.se_tax_deduction, y, bold=True)
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # IL-1040 — Illinois Individual Income Tax Return
 # ---------------------------------------------------------------------------
 def generate_il1040(result: TaxResult) -> BytesIO:
@@ -413,9 +494,15 @@ def generate_summary_page(result: TaxResult) -> BytesIO:
     # Federal summary
     y = draw_section(c, "Federal Tax Summary (Form 1040)", y)
     y = draw_line(c, "", "Total income", result.line_9_total_income, y)
+    if result.sched_c_total_profit > 0:
+        y = draw_line(c, "", "  Business income (Schedule C)", result.sched_c_total_profit, y)
     y = draw_line(c, "", "Adjusted gross income", result.line_11_agi, y)
     y = draw_line(c, "", f"Deduction ({result.deduction_type})", result.line_13_deduction, y)
+    if result.qbi_deduction > 0:
+        y = draw_line(c, "", "  QBI deduction (Section 199A)", result.qbi_deduction, y)
     y = draw_line(c, "", "Taxable income", result.line_15_taxable_income, y)
+    if result.se_tax > 0:
+        y = draw_line(c, "", "  Self-employment tax", result.se_tax, y)
     y = draw_line(c, "", "Total federal tax", result.line_24_total_tax, y, bold=True)
     y = draw_line(c, "", "Total withholding + payments", result.line_33_total_payments, y)
     if result.line_34_overpaid > 0:
@@ -496,6 +583,20 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
     p = out / "form_1040.pdf"
     p.write_bytes(buf.read())
     paths["1040"] = str(p)
+
+    # Schedule C (if business income)
+    if result.sched_c_businesses:
+        buf = generate_schedule_c(result)
+        p = out / "schedule_c.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_c"] = str(p)
+
+    # Schedule SE (if self-employment tax)
+    if result.se_tax > 0:
+        buf = generate_schedule_se(result)
+        p = out / "schedule_se.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_se"] = str(p)
 
     # Schedule A (if itemizing or always for reference)
     buf = generate_schedule_a(result)

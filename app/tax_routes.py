@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from tax_engine import (
-    PersonInfo, W2Income, CapitalTransaction, Deductions,
+    PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, Payments, TaxResult,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
 )
@@ -62,6 +62,26 @@ class DeductionsInput(BaseModel):
     student_loan_interest: float = 0.0
 
 
+class BusinessIncomeInput(BaseModel):
+    business_name: str = "Self-Employment"
+    business_type: str = ""
+    ein: str = ""
+    gross_receipts: float = 0.0
+    cost_of_goods_sold: float = 0.0
+    advertising: float = 0.0
+    car_expenses: float = 0.0
+    insurance: float = 0.0
+    office_expense: float = 0.0
+    rent: float = 0.0
+    supplies: float = 0.0
+    utilities: float = 0.0
+    home_office_sqft: float = 0.0
+    home_total_sqft: float = 0.0
+    home_expenses: float = 0.0
+    other_expenses: float = 0.0
+    other_expenses_description: str = ""
+
+
 class PaymentsInput(BaseModel):
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -77,6 +97,9 @@ class TaxDraftRequest(BaseModel):
     # OCR document references — pull W-2/1099 data from existing TaxLens documents
     w2_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded W-2s with OCR results")
     interest_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-INTs with OCR")
+
+    # Business income (Schedule C)
+    businesses: list[BusinessIncomeInput] = Field(default=[], description="Self-employment / business income")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -188,6 +211,30 @@ async def create_tax_draft(req: TaxDraftRequest):
             address_zip=req.spouse.address_zip,
         )
 
+    # --- Build business income (Schedule C) ---
+    biz_list = [
+        BusinessIncome(
+            business_name=b.business_name,
+            business_type=b.business_type,
+            ein=b.ein,
+            gross_receipts=b.gross_receipts,
+            cost_of_goods_sold=b.cost_of_goods_sold,
+            advertising=b.advertising,
+            car_expenses=b.car_expenses,
+            insurance=b.insurance,
+            office_expense=b.office_expense,
+            rent=b.rent,
+            supplies=b.supplies,
+            utilities=b.utilities,
+            home_office_sqft=b.home_office_sqft,
+            home_total_sqft=b.home_total_sqft,
+            home_expenses=b.home_expenses,
+            other_expenses=b.other_expenses,
+            other_expenses_description=b.other_expenses_description,
+        )
+        for b in req.businesses
+    ]
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -198,6 +245,7 @@ async def create_tax_draft(req: TaxDraftRequest):
         payments=payments,
         spouse=spouse,
         num_dependents=req.num_dependents,
+        businesses=biz_list,
     )
 
     # --- Generate PDFs ---
@@ -242,7 +290,9 @@ async def download_pdf(draft_id: str, form_name: str, username: str = Query(...)
         "1040": "form_1040.pdf",
         "schedule_a": "schedule_a.pdf",
         "schedule_b": "schedule_b.pdf",
+        "schedule_c": "schedule_c.pdf",
         "schedule_d": "schedule_d.pdf",
+        "schedule_se": "schedule_se.pdf",
         "il_1040": "il_1040.pdf",
     }
 

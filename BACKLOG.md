@@ -24,6 +24,31 @@ Updated: 2026-04-16 02:45 CDT
 - [x] 20 PDF files stored on PVC across 3 drafts
 - [x] All PDFs downloadable via HTTPS at dropit.istayintek.com
 
+## Wave 5b — Business Income Support [COMPLETED]
+- [x] Added SE tax constants (15.3% rate, 92.35% factor) and QBI deduction (20%) to tax_config.py
+- [x] Added BusinessIncome dataclass with Schedule C computation (gross receipts, COGS, 12 expense categories, home office)
+- [x] Added Schedule SE computation (SS capped at wage base minus W-2 SS wages, Medicare uncapped)
+- [x] Added QBI deduction (Section 199A, 20% of business income, simplified phase-out)
+- [x] Wired BusinessIncomeInput in tax_routes.py to convert and pass to compute_tax()
+- [x] Added Schedule C PDF generator (per-business detail + total)
+- [x] Added Schedule SE PDF generator
+- [x] Updated Form 1040 PDF with business income line (8a), SE tax, QBI deduction (13)
+- [x] Updated Summary PDF with business income, SE tax, QBI sections
+- [x] Added schedule_c and schedule_se to PDF download endpoint file_map
+- [x] Built, deployed, and verified (Helm revision)
+- [x] Created comprehensive smoke test suite: 15 test cases all passing
+  - TC01-03: Single/MFJ/HoH basic (no business)
+  - TC04: Freelance developer ($125k gross, $110k net, $15.5k SE tax)
+  - TC05: Rideshare driver + W-2 MFJ ($38k gross, $21.3k net)
+  - TC06: Restaurant owner ($280k gross, $98.4k net, $13.9k SE tax)
+  - TC07: Multiple businesses (marketing + photography)
+  - TC08: MFS high earner (investments only)
+  - TC09: HoH freelance writer + 3 dependents + CTC
+  - TC10: MFJ dual-business couple + investments ($227k income)
+  - TC11: Minimum wage / low income
+  - TC12: High-income consultant ($350k, owes $48k)
+  - TC13a-c: Original 3 scenarios revalidated
+
 ## Wave 6 — Agentic Intelligence [DEFERRED]
 - Future: chat interface, tax optimization, multi-doc correlation
 

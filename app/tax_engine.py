@@ -67,6 +67,46 @@ class Deductions:
 
 
 @dataclass
+class BusinessIncome:
+    """Schedule C — Profit or Loss from Business."""
+    business_name: str = ""
+    business_type: str = ""       # e.g., "Consulting", "Freelance", "Rideshare"
+    ein: str = ""
+    gross_receipts: float = 0.0
+    cost_of_goods_sold: float = 0.0
+    # Expenses
+    advertising: float = 0.0
+    car_expenses: float = 0.0
+    insurance: float = 0.0
+    office_expense: float = 0.0
+    rent: float = 0.0
+    supplies: float = 0.0
+    utilities: float = 0.0
+    home_office_sqft: float = 0.0
+    home_total_sqft: float = 0.0
+    home_expenses: float = 0.0     # Mortgage interest + utilities + insurance for home
+    other_expenses: float = 0.0
+    other_expenses_description: str = ""
+
+    @property
+    def gross_profit(self) -> float:
+        return self.gross_receipts - self.cost_of_goods_sold
+
+    @property
+    def total_expenses(self) -> float:
+        home_office = 0.0
+        if self.home_total_sqft > 0 and self.home_office_sqft > 0:
+            home_office = self.home_expenses * (self.home_office_sqft / self.home_total_sqft)
+        return (self.advertising + self.car_expenses + self.insurance +
+                self.office_expense + self.rent + self.supplies +
+                self.utilities + home_office + self.other_expenses)
+
+    @property
+    def net_profit(self) -> float:
+        return self.gross_profit - self.total_expenses
+
+
+@dataclass
 class AdditionalIncome:
     other_interest: float = 0.0
     ordinary_dividends: float = 0.0
@@ -105,10 +145,12 @@ class TaxResult:
     line_3b_ordinary_dividends: float = 0.0
     line_7_capital_gain_loss: float = 0.0  # From Schedule D
     line_8_other_income: float = 0.0
+    line_8a_business_income: float = 0.0  # Schedule C net profit
     line_9_total_income: float = 0.0
 
     # Adjustments
     line_10_adjustments: float = 0.0     # Student loan interest, etc.
+    se_tax_deduction: float = 0.0        # 50% of SE tax (above-the-line)
     line_11_agi: float = 0.0             # Adjusted Gross Income
 
     # Deductions
@@ -121,6 +163,8 @@ class TaxResult:
     # Tax computation
     line_16_tax: float = 0.0             # Ordinary income tax
     capital_gains_tax: float = 0.0       # Preferential rate on LTCG/QD
+    se_tax: float = 0.0                  # Self-employment tax (Schedule SE)
+    qbi_deduction: float = 0.0           # Section 199A QBI deduction
     line_24_total_tax: float = 0.0
 
     # Payments & credits
@@ -144,6 +188,17 @@ class TaxResult:
     sched_b_interest_total: float = 0.0
     sched_b_dividends_total: float = 0.0
 
+    # --- Schedule C (Business Income) ---
+    sched_c_businesses: list = field(default_factory=list)
+    sched_c_total_profit: float = 0.0
+
+    # --- Schedule SE (Self-Employment Tax) ---
+    sched_se_net_earnings: float = 0.0
+    sched_se_taxable: float = 0.0
+    sched_se_ss_tax: float = 0.0
+    sched_se_medicare_tax: float = 0.0
+    sched_se_total: float = 0.0
+
     # --- Schedule D ---
     sched_d_short_term_gain: float = 0.0
     sched_d_long_term_gain: float = 0.0
@@ -161,8 +216,9 @@ class TaxResult:
     il_refund: float = 0.0
     il_owed: float = 0.0
 
-    # W-2 detail for forms
+    # Detail for forms
     w2s: list = field(default_factory=list)
+    businesses: list = field(default_factory=list)
     capital_transactions: list = field(default_factory=list)
 
     # Forms generated
@@ -180,6 +236,9 @@ class TaxResult:
             "deduction_type": self.deduction_type,
             "deduction_amount": round(self.line_13_deduction, 2),
             "taxable_income": round(self.line_15_taxable_income, 2),
+            "business_income": round(self.sched_c_total_profit, 2),
+            "se_tax": round(self.se_tax, 2),
+            "qbi_deduction": round(self.qbi_deduction, 2),
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
             "federal_refund": round(self.line_34_overpaid, 2),
@@ -345,11 +404,14 @@ def compute_tax(
     payments: Payments,
     spouse: Optional[PersonInfo] = None,
     num_dependents: int = 0,
+    businesses: list[BusinessIncome] | None = None,
 ) -> TaxResult:
     """Compute full federal + Illinois tax return."""
 
     if filing_status not in FILING_STATUSES:
         raise ValueError(f"Invalid filing status: {filing_status}")
+
+    businesses = businesses or []
 
     result = TaxResult(
         draft_id=uuid.uuid4().hex[:12],
@@ -359,6 +421,7 @@ def compute_tax(
         spouse=spouse,
         num_dependents=num_dependents,
         w2s=w2s,
+        businesses=businesses,
         capital_transactions=additional.capital_transactions,
     )
 
@@ -387,6 +450,21 @@ def compute_tax(
     # Line 8: Other income
     result.line_8_other_income = additional.other_income
 
+    # Schedule C: Business income
+    result.sched_c_businesses = []
+    for biz in businesses:
+        result.sched_c_businesses.append({
+            "name": biz.business_name,
+            "type": biz.business_type,
+            "gross_receipts": biz.gross_receipts,
+            "cogs": biz.cost_of_goods_sold,
+            "gross_profit": biz.gross_profit,
+            "expenses": biz.total_expenses,
+            "net_profit": biz.net_profit,
+        })
+    result.sched_c_total_profit = sum(b.net_profit for b in businesses)
+    result.line_8a_business_income = result.sched_c_total_profit
+
     # Line 9: Total income
     result.line_9_total_income = (
         result.line_1a_wages
@@ -394,7 +472,29 @@ def compute_tax(
         + result.line_3b_ordinary_dividends
         + result.line_7_capital_gain_loss
         + result.line_8_other_income
+        + result.line_8a_business_income
     )
+
+    # =======================================================================
+    # SCHEDULE SE — Self-Employment Tax
+    # =======================================================================
+
+    if result.sched_c_total_profit > 0:
+        # Net SE earnings = 92.35% of net profit
+        result.sched_se_net_earnings = result.sched_c_total_profit
+        result.sched_se_taxable = result.sched_se_net_earnings * SE_INCOME_FACTOR
+
+        # SS portion: 12.4% on earnings up to wage base (minus W-2 SS wages)
+        w2_ss_wages = sum(w.ss_wages for w in w2s)
+        ss_room = max(0, SS_WAGE_BASE - w2_ss_wages)
+        ss_taxable = min(result.sched_se_taxable, ss_room)
+        result.sched_se_ss_tax = ss_taxable * SE_SS_RATE
+
+        # Medicare portion: 2.9% on all SE earnings (no cap)
+        result.sched_se_medicare_tax = result.sched_se_taxable * SE_MEDICARE_RATE
+
+        result.sched_se_total = result.sched_se_ss_tax + result.sched_se_medicare_tax
+        result.se_tax = result.sched_se_total
 
     # =======================================================================
     # ADJUSTMENTS (Line 10-11)
@@ -403,6 +503,9 @@ def compute_tax(
     adjustments = 0.0
     # Student loan interest deduction (above-the-line, max $2,500)
     adjustments += min(deductions.student_loan_interest, STUDENT_LOAN_INTEREST_MAX)
+    # 50% of SE tax is deductible above-the-line
+    result.se_tax_deduction = result.se_tax * 0.5
+    adjustments += result.se_tax_deduction
     result.line_10_adjustments = adjustments
 
     # Line 11: AGI
@@ -452,7 +555,20 @@ def compute_tax(
     # TAXABLE INCOME (Line 15)
     # =======================================================================
 
-    result.line_15_taxable_income = max(0, result.line_11_agi - result.line_13_deduction)
+    # QBI deduction (Section 199A) — 20% of qualified business income
+    if result.sched_c_total_profit > 0:
+        qbi_limit = QBI_TAXABLE_INCOME_LIMIT[filing_status]
+        tentative_taxable = result.line_11_agi - result.line_13_deduction
+        if tentative_taxable <= qbi_limit:
+            # Full 20% deduction below threshold
+            result.qbi_deduction = result.sched_c_total_profit * QBI_DEDUCTION_RATE
+        else:
+            # Simplified: phase-out not implemented, cap at 20%
+            result.qbi_deduction = result.sched_c_total_profit * QBI_DEDUCTION_RATE
+        # QBI deduction can't exceed taxable income
+        result.qbi_deduction = min(result.qbi_deduction, max(0, result.line_11_agi - result.line_13_deduction))
+
+    result.line_15_taxable_income = max(0, result.line_11_agi - result.line_13_deduction - result.qbi_deduction)
 
     # =======================================================================
     # TAX COMPUTATION (Line 16)
@@ -489,7 +605,7 @@ def compute_tax(
     # TOTAL TAX (Line 24)
     # =======================================================================
 
-    result.line_24_total_tax = result.line_16_tax + result.capital_gains_tax
+    result.line_24_total_tax = result.line_16_tax + result.capital_gains_tax + result.se_tax
 
     # =======================================================================
     # CREDITS
@@ -579,6 +695,9 @@ def compute_tax(
     # =======================================================================
 
     result.forms_generated = ["1040"]
+    if businesses:
+        result.forms_generated.append("Schedule C")
+        result.forms_generated.append("Schedule SE")
     if result.deduction_type == "itemized":
         result.forms_generated.append("Schedule A")
     if result.sched_b_interest_total > 1500 or result.sched_b_dividends_total > 1500:
