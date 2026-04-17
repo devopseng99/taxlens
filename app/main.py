@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
@@ -20,6 +21,16 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs",
     root_path="/api",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://taxlens.istayintek.com",
+        "https://dropit.istayintek.com",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Config from env ---
@@ -194,8 +205,12 @@ async def get_document(username: str, proc_id: str):
 
 
 @app.get("/documents/{username}/{proc_id}/file")
-async def download_file(username: str, proc_id: str):
-    """Download the original uploaded file."""
+async def download_file(
+    username: str,
+    proc_id: str,
+    download: bool = Query(default=False, description="Force download instead of inline view"),
+):
+    """View or download the original uploaded file."""
     dest = doc_dir(username, proc_id)
     if not dest.exists():
         raise HTTPException(404)
@@ -204,7 +219,13 @@ async def download_file(username: str, proc_id: str):
     if not files:
         raise HTTPException(404)
 
-    return FileResponse(files[0], filename=files[0].name)
+    if download:
+        return FileResponse(files[0], filename=files[0].name)
+    return FileResponse(
+        files[0],
+        filename=files[0].name,
+        content_disposition_type="inline",
+    )
 
 
 @app.post("/bridge/{proc_id}")

@@ -253,12 +253,27 @@ async def create_tax_draft(req: TaxDraftRequest):
     pdf_paths = generate_all_pdfs(result, str(draft_dir))
     result.pdf_paths = pdf_paths
 
-    # Save computation result as JSON
+    # Save computation result as JSON (include input for UI display)
     result_json = result.to_summary()
     result_json["pdf_urls"] = {
         name: f"/api/tax-draft/{result.draft_id}/pdf/{name}?username={req.username}"
         for name in pdf_paths.keys()
     }
+
+    # Store the original request input for review
+    result_json["input"] = {
+        "filing_status": req.filing_status,
+        "filer": req.filer.model_dump(),
+        "spouse": req.spouse.model_dump() if req.spouse else None,
+        "num_dependents": req.num_dependents,
+        "w2_proc_ids": req.w2_proc_ids,
+        "interest_1099_proc_ids": req.interest_1099_proc_ids,
+        "businesses": [b.model_dump() for b in req.businesses],
+        "additional_income": req.additional_income.model_dump(),
+        "deductions": req.deductions.model_dump(),
+        "payments": req.payments.model_dump(),
+    }
+
     (draft_dir / "result.json").write_text(json.dumps(result_json, indent=2, default=str))
 
     return result_json
@@ -275,16 +290,20 @@ async def get_tax_draft(draft_id: str, username: str = Query(...)):
 
 
 @router.get("/{draft_id}/pdf/{form_name}")
-async def download_pdf(draft_id: str, form_name: str, username: str = Query(...)):
-    """Download a generated tax form PDF.
+async def download_pdf(
+    draft_id: str,
+    form_name: str,
+    username: str = Query(...),
+    download: bool = Query(default=False, description="Force download instead of inline view"),
+):
+    """View or download a generated tax form PDF.
 
-    form_name: summary, 1040, schedule_a, schedule_b, schedule_d, il_1040
+    form_name: summary, 1040, schedule_a, schedule_b, schedule_c, schedule_d, schedule_se, il_1040
     """
     draft_dir = get_draft_dir(username, draft_id)
     if not draft_dir.exists():
         raise HTTPException(404, f"Draft {draft_id} not found")
 
-    # Map form names to filenames
     file_map = {
         "summary": "summary.pdf",
         "1040": "form_1040.pdf",
@@ -308,6 +327,7 @@ async def download_pdf(draft_id: str, form_name: str, username: str = Query(...)
         pdf_path,
         media_type="application/pdf",
         filename=f"TaxLens_{draft_id}_{form_name}.pdf",
+        content_disposition_type="attachment" if download else "inline",
     )
 
 

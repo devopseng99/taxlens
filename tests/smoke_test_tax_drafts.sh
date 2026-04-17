@@ -491,7 +491,167 @@ run_test "TC12: High-income consultant underpaid" '{
     "payments": {"estimated_federal": 30000, "estimated_state": 8000}
 }' "owed" "1040,Schedule C,Schedule SE,Schedule A,Schedule B,Schedule D,IL-1040" "yes"
 
-# --- 13. Rerun original 3 validated scenarios ---
+# --- 13. Nurse with side tutoring business (MFJ, 1 dependent) ---
+run_test "TC13: Nurse + tutor side hustle MFJ" '{
+    "filing_status": "mfj",
+    "username": "smoketest",
+    "filer": {"first_name": "Amanda", "last_name": "Foster", "ssn": "XXX-XX-1301",
+              "address_street": "1422 Lakeshore Dr", "address_city": "Evanston", "address_state": "IL", "address_zip": "60201"},
+    "spouse": {"first_name": "Brian", "last_name": "Foster", "ssn": "XXX-XX-1302"},
+    "num_dependents": 1,
+    "businesses": [
+        {
+            "business_name": "Foster Tutoring",
+            "business_type": "Educational Services",
+            "gross_receipts": 18000,
+            "advertising": 400,
+            "supplies": 950,
+            "car_expenses": 1800,
+            "other_expenses": 600,
+            "other_expenses_description": "Online platform fees"
+        }
+    ],
+    "additional_income": {
+        "other_interest": 1200,
+        "ordinary_dividends": 900,
+        "qualified_dividends": 700
+    },
+    "deductions": {
+        "mortgage_interest": 16500,
+        "property_tax": 7200,
+        "state_income_tax_paid": 3800,
+        "charitable_cash": 4200
+    },
+    "payments": {"estimated_federal": 2500, "estimated_state": 800}
+}' "" "1040,Schedule C,Schedule SE,IL-1040" "yes"
+
+# --- 14. Retired couple with pension + investments (MFJ) ---
+run_test "TC14: Retired MFJ couple" '{
+    "filing_status": "mfj",
+    "username": "smoketest",
+    "filer": {"first_name": "Harold", "last_name": "Nakamura", "ssn": "XXX-XX-1401",
+              "address_street": "890 Willow Ct", "address_city": "Schaumburg", "address_state": "IL", "address_zip": "60193"},
+    "spouse": {"first_name": "Doris", "last_name": "Nakamura", "ssn": "XXX-XX-1402"},
+    "num_dependents": 0,
+    "additional_income": {
+        "other_interest": 18500,
+        "ordinary_dividends": 22000,
+        "qualified_dividends": 16000,
+        "capital_transactions": [
+            {"description": "Municipal bond fund", "proceeds": 25000, "cost_basis": 22000, "is_long_term": true},
+            {"description": "Growth ETF rebalance", "proceeds": 35000, "cost_basis": 28000, "is_long_term": true}
+        ],
+        "other_income": 42000,
+        "other_income_description": "Pension"
+    },
+    "deductions": {
+        "mortgage_interest": 8000,
+        "property_tax": 9500,
+        "charitable_cash": 12000,
+        "charitable_noncash": 5000,
+        "medical_expenses": 28000
+    },
+    "payments": {"estimated_federal": 15000, "estimated_state": 4000}
+}' "" "1040,Schedule A,Schedule B,Schedule D,IL-1040" ""
+
+# --- 15. Young single gig worker (Etsy + DoorDash) ---
+run_test "TC15: Young gig worker multi-platform" '{
+    "filing_status": "single",
+    "username": "smoketest",
+    "filer": {"first_name": "Zoe", "last_name": "Martinez", "ssn": "XXX-XX-1501",
+              "address_street": "2100 N Milwaukee Ave Apt 3B", "address_city": "Chicago", "address_state": "IL", "address_zip": "60647"},
+    "num_dependents": 0,
+    "businesses": [
+        {
+            "business_name": "Zoe Creates (Etsy)",
+            "business_type": "Online Retail",
+            "gross_receipts": 32000,
+            "cost_of_goods_sold": 9500,
+            "advertising": 2400,
+            "supplies": 4200,
+            "other_expenses": 1800,
+            "other_expenses_description": "Etsy fees, packaging, shipping"
+        },
+        {
+            "business_name": "Zoe Delivers",
+            "business_type": "Delivery Services",
+            "gross_receipts": 22000,
+            "car_expenses": 8500,
+            "insurance": 1800,
+            "supplies": 300,
+            "other_expenses": 600,
+            "other_expenses_description": "Phone mount, insulated bags"
+        }
+    ],
+    "additional_income": {"other_interest": 85},
+    "deductions": {"student_loan_interest": 2500},
+    "payments": {"estimated_federal": 3000, "estimated_state": 1000}
+}' "" "1040,Schedule C,Schedule SE,IL-1040" "yes"
+
+# --- 16. Real estate agent with heavy expenses (HoH, 2 kids) ---
+run_test "TC16: Real estate agent HoH" '{
+    "filing_status": "hoh",
+    "username": "smoketest",
+    "filer": {"first_name": "Denise", "last_name": "Washington", "ssn": "XXX-XX-1601",
+              "address_street": "4500 S King Dr", "address_city": "Chicago", "address_state": "IL", "address_zip": "60653"},
+    "num_dependents": 2,
+    "businesses": [
+        {
+            "business_name": "Washington Realty",
+            "business_type": "Real Estate Agent",
+            "gross_receipts": 145000,
+            "advertising": 12000,
+            "car_expenses": 9500,
+            "insurance": 3200,
+            "office_expense": 4800,
+            "rent": 6000,
+            "supplies": 2000,
+            "other_expenses": 8500,
+            "other_expenses_description": "MLS dues, lockboxes, staging"
+        }
+    ],
+    "additional_income": {
+        "other_interest": 350,
+        "ordinary_dividends": 1200,
+        "qualified_dividends": 900
+    },
+    "deductions": {
+        "mortgage_interest": 14000,
+        "property_tax": 6800,
+        "state_income_tax_paid": 3500,
+        "charitable_cash": 6000,
+        "charitable_noncash": 2500
+    },
+    "payments": {"estimated_federal": 18000, "estimated_state": 5000}
+}' "" "1040,Schedule C,Schedule SE,IL-1040" "yes"
+
+# --- 17. MFS spouse with crypto day trading losses ---
+run_test "TC17: MFS crypto trader with losses" '{
+    "filing_status": "mfs",
+    "username": "smoketest",
+    "filer": {"first_name": "Marcus", "last_name": "Okafor", "ssn": "XXX-XX-1701",
+              "address_street": "155 N Wacker Dr Apt 42", "address_city": "Chicago", "address_state": "IL", "address_zip": "60606"},
+    "num_dependents": 0,
+    "additional_income": {
+        "other_interest": 4500,
+        "ordinary_dividends": 6000,
+        "qualified_dividends": 4800,
+        "capital_transactions": [
+            {"description": "BTC swing trades", "proceeds": 85000, "cost_basis": 110000, "is_long_term": false},
+            {"description": "ETH staking sale", "proceeds": 12000, "cost_basis": 8000, "is_long_term": true},
+            {"description": "SOL position", "proceeds": 5000, "cost_basis": 18000, "is_long_term": false}
+        ],
+        "other_income": 3500,
+        "other_income_description": "Crypto staking rewards"
+    },
+    "deductions": {
+        "state_income_tax_paid": 2000,
+        "charitable_cash": 3000
+    },
+    "payments": {"estimated_federal": 5000, "estimated_state": 1500}
+}' "" "1040,Schedule B,Schedule D,IL-1040" ""
+
+# --- Rerun original 3 validated scenarios ---
 # TC13a: Original Single
 run_test "TC13a: Original Single (revalidation)" '{
     "filing_status": "single",

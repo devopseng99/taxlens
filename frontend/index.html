@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TaxLens - Document Intake</title>
+  <title>TaxLens - Tax Intelligence</title>
   <style>
     :root {
       --primary: #1a56db;
@@ -34,190 +34,175 @@
     header h1 { font-size: 1.5rem; font-weight: 600; }
     header .status { font-size: 0.85rem; opacity: 0.9; }
     .status-dot {
-      display: inline-block;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      margin-right: 6px;
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; margin-right: 6px;
     }
     .status-dot.ok { background: #4ade80; }
     .status-dot.err { background: #f87171; }
 
-    main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .tabs {
+      display: flex; background: white;
+      border-bottom: 2px solid var(--border); padding: 0 2rem;
+    }
+    .tab {
+      padding: 0.75rem 1.5rem; font-size: 0.95rem; font-weight: 500;
+      cursor: pointer; border-bottom: 3px solid transparent;
+      color: var(--muted); transition: all 0.2s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
 
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
       box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .card h2 {
-      font-size: 1.1rem;
-      margin-bottom: 1rem;
-      color: var(--text);
-    }
+    .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--text); }
 
-    /* Upload zone */
     .upload-zone {
-      border: 2px dashed var(--border);
-      border-radius: 8px;
-      padding: 2.5rem;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s;
-      position: relative;
+      border: 2px dashed var(--border); border-radius: 8px;
+      padding: 2.5rem; text-align: center; cursor: pointer;
+      transition: all 0.2s; position: relative;
     }
-    .upload-zone:hover, .upload-zone.dragover {
-      border-color: var(--primary);
-      background: #eff6ff;
-    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--primary); background: #eff6ff; }
     .upload-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
     .upload-zone p { color: var(--muted); margin-bottom: 0.5rem; }
     .upload-zone .hint { font-size: 0.8rem; color: var(--muted); }
-    .upload-zone input[type="file"] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer;
-    }
+    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-    /* Form row */
-    .form-row {
-      display: flex;
-      gap: 1rem;
-      margin-top: 1rem;
-      align-items: end;
-    }
+    .form-row { display: flex; gap: 1rem; margin-top: 1rem; align-items: end; }
     .form-group { flex: 1; }
-    .form-group label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 500;
-      margin-bottom: 0.3rem;
-      color: var(--muted);
-    }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.3rem; color: var(--muted); }
     .form-group input, .form-group select {
-      width: 100%;
-      padding: 0.5rem 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.9rem;
+      width: 100%; padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem;
     }
     button {
-      padding: 0.5rem 1.25rem;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.15s;
+      padding: 0.5rem 1.25rem; border: none; border-radius: 6px;
+      font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background 0.15s;
     }
-    .btn-primary {
-      background: var(--primary);
-      color: white;
-    }
+    .btn-primary { background: var(--primary); color: white; }
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-success { background: var(--success); color: white; }
     .btn-danger { background: var(--danger); color: white; font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+    .btn-sm { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+    .btn-outline {
+      background: white; color: var(--primary); border: 1px solid var(--primary);
+      font-size: 0.8rem; padding: 0.3rem 0.7rem;
+    }
+    .btn-outline:hover { background: #eff6ff; }
+    .btn-download {
+      background: white; color: var(--success); border: 1px solid var(--success);
+      font-size: 0.8rem; padding: 0.3rem 0.7rem;
+    }
+    .btn-download:hover { background: #f0fdf4; }
 
-    /* File selected */
     .file-info {
-      display: none;
-      margin-top: 1rem;
-      padding: 0.75rem 1rem;
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 6px;
-      font-size: 0.9rem;
+      display: none; margin-top: 1rem; padding: 0.75rem 1rem;
+      background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 0.9rem;
     }
     .file-info.visible { display: flex; align-items: center; justify-content: space-between; }
 
-    /* Progress */
     .progress-bar {
-      display: none;
-      height: 4px;
-      background: #e2e8f0;
-      border-radius: 2px;
-      margin-top: 1rem;
-      overflow: hidden;
+      display: none; height: 4px; background: #e2e8f0;
+      border-radius: 2px; margin-top: 1rem; overflow: hidden;
     }
     .progress-bar.visible { display: block; }
-    .progress-bar .fill {
-      height: 100%;
-      background: var(--primary);
-      border-radius: 2px;
-      transition: width 0.3s;
-      width: 0%;
-    }
+    .progress-bar .fill { height: 100%; background: var(--primary); border-radius: 2px; transition: width 0.3s; width: 0%; }
 
-    /* Documents table */
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th { text-align: left; padding: 0.6rem 0.75rem; color: var(--muted); font-weight: 500; border-bottom: 2px solid var(--border); }
-    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:hover td { background: #f8fafc; }
-    .badge {
-      display: inline-block;
-      padding: 0.15rem 0.5rem;
-      border-radius: 10px;
-      font-size: 0.75rem;
-      font-weight: 500;
-    }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.75rem; font-weight: 500; }
     .badge-ocr { background: #dbeafe; color: #1e40af; }
     .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-pdf { background: #fce7f3; color: #9d174d; }
+    .badge-refund { background: #d1fae5; color: #065f46; }
+    .badge-owed { background: #fee2e2; color: #991b1b; }
     .empty-state { text-align: center; padding: 2rem; color: var(--muted); }
+    .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 
-    /* Toast */
     .toast {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      padding: 0.75rem 1.25rem;
-      border-radius: 8px;
-      color: white;
-      font-size: 0.9rem;
-      opacity: 0;
-      transform: translateY(10px);
-      transition: all 0.3s;
-      z-index: 100;
+      position: fixed; bottom: 2rem; right: 2rem; padding: 0.75rem 1.25rem;
+      border-radius: 8px; color: white; font-size: 0.9rem;
+      opacity: 0; transform: translateY(10px); transition: all 0.3s; z-index: 100;
     }
     .toast.show { opacity: 1; transform: translateY(0); }
     .toast.success { background: var(--success); }
     .toast.error { background: var(--danger); }
 
-    /* OCR Result Modal */
     .modal-overlay {
-      display: none;
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 200;
+      align-items: center; justify-content: center;
     }
     .modal-overlay.visible { display: flex; }
     .modal {
-      background: white;
-      border-radius: 12px;
-      padding: 1.5rem;
-      max-width: 600px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
+      background: white; border-radius: 12px; padding: 1.5rem;
+      max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto;
     }
+    .modal.wide { max-width: 950px; }
     .modal h3 { margin-bottom: 1rem; }
     .modal pre {
-      background: #f1f5f9;
-      padding: 1rem;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      overflow-x: auto;
-      white-space: pre-wrap;
+      background: #f1f5f9; padding: 1rem; border-radius: 6px;
+      font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap;
     }
-    .modal .close-btn {
-      margin-top: 1rem;
-      float: right;
-    }
+    .modal .close-btn { margin-top: 1rem; float: right; }
 
-    @media (max-width: 600px) {
+    .pdf-embed { width: 100%; height: 70vh; border: 1px solid var(--border); border-radius: 8px; }
+    .pdf-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; justify-content: flex-end; }
+
+    /* Draft cards */
+    .draft-card {
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 1rem; margin-bottom: 1rem; transition: box-shadow 0.2s;
+    }
+    .draft-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .draft-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .draft-header h4 { font-size: 1rem; margin: 0; }
+    .draft-status { font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 10px; background: #dbeafe; color: #1e40af; }
+    .draft-stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.5rem; margin: 0.75rem 0; font-size: 0.85rem;
+    }
+    .draft-stat { padding: 0.4rem 0.6rem; background: #f8fafc; border-radius: 6px; }
+    .draft-stat .label { font-size: 0.75rem; color: var(--muted); }
+    .draft-stat .value { font-weight: 600; }
+    .draft-stat .value.refund { color: var(--success); }
+    .draft-stat .value.owed { color: var(--danger); }
+    .draft-pdfs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+
+    /* Input detail collapsible */
+    .input-detail { margin-top: 0.75rem; }
+    .input-toggle {
+      font-size: 0.8rem; color: var(--primary); cursor: pointer;
+      background: none; border: none; padding: 0; font-weight: 500;
+    }
+    .input-toggle:hover { text-decoration: underline; }
+    .input-body {
+      display: none; margin-top: 0.5rem; padding: 0.75rem;
+      background: #f8fafc; border-radius: 6px; font-size: 0.8rem;
+    }
+    .input-body.visible { display: block; }
+    .input-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+    }
+    .input-section h5 { font-size: 0.8rem; color: var(--primary); margin-bottom: 0.3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.2rem; }
+    .input-row { display: flex; justify-content: space-between; padding: 0.15rem 0; }
+    .input-row .k { color: var(--muted); }
+    .input-row .v { font-weight: 500; }
+
+    @media (max-width: 700px) {
       .form-row { flex-direction: column; }
+      .tabs { padding: 0 0.5rem; }
+      .tab { padding: 0.6rem 0.8rem; font-size: 0.85rem; }
+      .input-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -230,72 +215,111 @@
     </div>
   </header>
 
+  <div class="tabs">
+    <div class="tab active" data-tab="documents" onclick="switchTab('documents')">Documents</div>
+    <div class="tab" data-tab="drafts" onclick="switchTab('drafts')">Tax Drafts</div>
+    <div class="tab" data-tab="smoketests" onclick="switchTab('smoketests')">Smoke Tests</div>
+  </div>
+
   <main>
-    <!-- Upload Card -->
-    <div class="card">
-      <h2>Upload Document</h2>
-      <div class="upload-zone" id="dropZone">
-        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.webp" />
-        <div class="icon">&#128196;</div>
-        <p>Drop a tax document here or click to browse</p>
-        <div class="hint">PDF, JPEG, PNG, TIFF, WebP — max 30MB</div>
-      </div>
-      <div class="file-info" id="fileInfo">
-        <span id="fileName"></span>
-        <span id="fileSize"></span>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" value="hr1" placeholder="Enter username" />
+    <!-- =================== Documents Tab =================== -->
+    <div class="tab-content active" id="tab-documents">
+      <div class="card">
+        <h2>Upload Document</h2>
+        <div class="upload-zone" id="dropZone">
+          <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.webp" />
+          <div class="icon">&#128196;</div>
+          <p>Drop a tax document here or click to browse</p>
+          <div class="hint">PDF, JPEG, PNG, TIFF, WebP &mdash; max 30MB</div>
         </div>
-        <div class="form-group">
-          <label for="docType">Document Type</label>
-          <select id="docType">
-            <option value="auto">Auto-detect</option>
-            <option value="w2">W-2</option>
-            <option value="1099int">1099-INT</option>
-            <option value="1099misc">1099-MISC</option>
-            <option value="1099nec">1099-NEC</option>
-            <option value="1099div">1099-DIV</option>
-            <option value="1040">1040</option>
-          </select>
+        <div class="file-info" id="fileInfo">
+          <span id="fileName"></span>
+          <span id="fileSize"></span>
         </div>
-        <button class="btn-primary" id="uploadBtn" disabled>Upload</button>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" value="hr1" placeholder="Enter username" />
+          </div>
+          <div class="form-group">
+            <label for="docType">Document Type</label>
+            <select id="docType">
+              <option value="auto">Auto-detect</option>
+              <option value="w2">W-2</option>
+              <option value="1099int">1099-INT</option>
+              <option value="1099misc">1099-MISC</option>
+              <option value="1099nec">1099-NEC</option>
+              <option value="1099div">1099-DIV</option>
+              <option value="1040">1040</option>
+            </select>
+          </div>
+          <button class="btn-primary" id="uploadBtn" disabled>Upload</button>
+        </div>
+        <div class="progress-bar" id="progressBar">
+          <div class="fill" id="progressFill"></div>
+        </div>
       </div>
-      <div class="progress-bar" id="progressBar">
-        <div class="fill" id="progressFill"></div>
+      <div class="card">
+        <h2>Documents</h2>
+        <div id="docsList"><div class="empty-state">No documents yet. Upload one above.</div></div>
       </div>
     </div>
 
-    <!-- Documents Card -->
-    <div class="card">
-      <h2>Documents</h2>
-      <div id="docsList">
-        <div class="empty-state">No documents yet. Upload one above.</div>
+    <!-- =================== Tax Drafts Tab =================== -->
+    <div class="tab-content" id="tab-drafts">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin-bottom:0;">Tax Drafts</h2>
+          <button class="btn-primary btn-sm" onclick="loadDrafts()">Refresh</button>
+        </div>
+        <div id="draftsList"><div class="empty-state">Loading drafts...</div></div>
+      </div>
+    </div>
+
+    <!-- =================== Smoke Tests Tab =================== -->
+    <div class="tab-content" id="tab-smoketests">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin-bottom:0;">Smoke Test Results</h2>
+          <button class="btn-primary btn-sm" onclick="loadSmokeTests()">Refresh</button>
+        </div>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem;">
+          15 filing scenarios (Single, MFJ, HoH, MFS) with W-2, business income, investments, deductions, and CTC.
+          Each card shows the full input parameters and computed output with downloadable PDFs.
+        </p>
+        <div id="smokeTestsList"><div class="empty-state">Loading smoke test results...</div></div>
       </div>
     </div>
   </main>
 
-  <!-- OCR Result Modal -->
+  <!-- OCR / JSON Modal -->
   <div class="modal-overlay" id="ocrModal">
     <div class="modal">
-      <h3>OCR Result</h3>
+      <h3 id="modalTitle">OCR Result</h3>
       <pre id="ocrResult"></pre>
-      <button class="btn-primary close-btn" onclick="closeModal()">Close</button>
+      <button class="btn-primary close-btn" onclick="closeModal('ocrModal')">Close</button>
     </div>
   </div>
 
-  <!-- Toast -->
+  <!-- File/PDF Viewer Modal -->
+  <div class="modal-overlay" id="fileModal">
+    <div class="modal wide">
+      <h3 id="fileModalTitle">Document Viewer</h3>
+      <div id="fileViewerContent"></div>
+      <div class="pdf-actions">
+        <a id="fileDownloadLink" href="#" class="btn-download" style="text-decoration:none;">Download</a>
+        <a id="fileNewTabLink" href="#" target="_blank" class="btn-outline" style="text-decoration:none;">Open in New Tab</a>
+        <button class="btn-primary close-btn" onclick="closeModal('fileModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
     const API_BASE = 'https://dropit.istayintek.com/api';
-
-    // --- State ---
     let selectedFile = null;
 
-    // --- Elements ---
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const fileInfo = document.getElementById('fileInfo');
@@ -308,31 +332,35 @@
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
 
-    // --- Health check ---
+    // =================== Tab switching ===================
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === 'tab-' + tabName));
+      if (tabName === 'drafts') loadDrafts();
+      if (tabName === 'smoketests') loadSmokeTests();
+    }
+
+    // =================== Health ===================
     async function checkHealth() {
       try {
         const res = await fetch(`${API_BASE}/health`);
-        const data = await res.json();
+        await res.json();
         statusDot.className = 'status-dot ok';
-        statusText.textContent = `API OK — storage ${data.writable ? 'writable' : 'read-only'}`;
+        statusText.textContent = 'API OK';
       } catch (e) {
         statusDot.className = 'status-dot err';
         statusText.textContent = 'API unreachable';
       }
     }
 
-    // --- File selection ---
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length) selectFile(e.target.files[0]);
-    });
+    // =================== File selection ===================
+    fileInput.addEventListener('change', (e) => { if (e.target.files.length) selectFile(e.target.files[0]); });
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('dragover');
+      e.preventDefault(); dropZone.classList.remove('dragover');
       if (e.dataTransfer.files.length) selectFile(e.dataTransfer.files[0]);
     });
-
     function selectFile(file) {
       selectedFile = file;
       fileName.textContent = file.name;
@@ -340,93 +368,73 @@
       fileInfo.classList.add('visible');
       uploadBtn.disabled = false;
     }
-
     function formatSize(bytes) {
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
       return (bytes / 1048576).toFixed(1) + ' MB';
     }
+    function getUsername() { return document.getElementById('username').value.trim(); }
 
-    // --- Upload ---
+    // =================== Upload ===================
     uploadBtn.addEventListener('click', upload);
-
     async function upload() {
       if (!selectedFile) return;
-      const username = document.getElementById('username').value.trim();
+      const username = getUsername();
       if (!username) { toast('Username required', 'error'); return; }
-
       uploadBtn.disabled = true;
-      progressBar.classList.add('visible');
-      progressFill.style.width = '30%';
-
+      progressBar.classList.add('visible'); progressFill.style.width = '30%';
       const form = new FormData();
       form.append('file', selectedFile);
       form.append('username', username);
       form.append('doc_type', document.getElementById('docType').value);
-
       try {
         progressFill.style.width = '60%';
         const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: form });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || res.statusText);
-        }
+        if (!res.ok) { const err = await res.json(); throw new Error(err.detail || res.statusText); }
         const data = await res.json();
         progressFill.style.width = '100%';
         toast(`Uploaded: ${data.proc_id}`, 'success');
-
-        // Reset
-        selectedFile = null;
-        fileInput.value = '';
-        fileInfo.classList.remove('visible');
+        selectedFile = null; fileInput.value = ''; fileInfo.classList.remove('visible');
         setTimeout(() => { progressBar.classList.remove('visible'); progressFill.style.width = '0%'; }, 1000);
-
         loadDocuments();
       } catch (e) {
-        toast(`Upload failed: ${e.message}`, 'error');
-        progressBar.classList.remove('visible');
+        toast(`Upload failed: ${e.message}`, 'error'); progressBar.classList.remove('visible');
       }
       uploadBtn.disabled = false;
     }
 
-    // --- Documents list ---
+    // =================== Documents list ===================
     async function loadDocuments() {
-      const username = document.getElementById('username').value.trim();
+      const username = getUsername();
       if (!username) return;
-
       try {
         const res = await fetch(`${API_BASE}/documents/${username}`);
         const data = await res.json();
-
         if (!data.documents || data.documents.length === 0) {
           docsList.innerHTML = '<div class="empty-state">No documents yet. Upload one above.</div>';
           return;
         }
-
-        let html = `<table>
-          <thead><tr><th>ID</th><th>File</th><th>Size</th><th>Uploaded</th><th>OCR</th><th>Actions</th></tr></thead>
-          <tbody>`;
-
+        let html = `<table><thead><tr><th>ID</th><th>File</th><th>Size</th><th>Uploaded</th><th>OCR</th><th>Actions</th></tr></thead><tbody>`;
         for (const doc of data.documents) {
           const ts = new Date(doc.uploaded_at).toLocaleString();
           const ocrBadge = doc.has_ocr
             ? '<span class="badge badge-ocr">OCR Done</span>'
             : '<span class="badge badge-pending">Pending</span>';
-
+          const u = encodeURIComponent(username);
           html += `<tr>
-            <td><code>${doc.proc_id}</code></td>
+            <td><code style="font-size:0.8rem">${doc.proc_id}</code></td>
             <td>${doc.filename}</td>
             <td>${formatSize(doc.size_bytes)}</td>
-            <td>${ts}</td>
+            <td style="font-size:0.85rem">${ts}</td>
             <td>${ocrBadge}</td>
-            <td>
-              ${!doc.has_ocr ? `<button class="btn-success" onclick="runOcr('${doc.proc_id}','${username}')" data-action="ocr">Analyze</button> ` : ''}
-              ${doc.has_ocr ? `<button class="btn-primary" onclick="viewOcr('${doc.proc_id}','${username}')" data-action="view" style="font-size:0.8rem;padding:0.3rem 0.7rem;">View</button> ` : ''}
-              <button class="btn-danger" onclick="deleteDoc('${doc.proc_id}','${username}')" data-action="delete">Del</button>
-            </td>
-          </tr>`;
+            <td><div class="actions">
+              <button class="btn-outline" onclick="viewFile('${doc.proc_id}','${username}','${doc.filename}')">View</button>
+              <button class="btn-download" onclick="window.open('${API_BASE}/documents/${u}/${doc.proc_id}/file?download=true')">DL</button>
+              ${!doc.has_ocr ? `<button class="btn-success btn-sm" onclick="runOcr('${doc.proc_id}','${username}')">Analyze</button>` : ''}
+              ${doc.has_ocr ? `<button class="btn-primary btn-sm" onclick="viewOcr('${doc.proc_id}','${username}')">OCR</button>` : ''}
+              <button class="btn-danger" onclick="deleteDoc('${doc.proc_id}','${username}')">Del</button>
+            </div></td></tr>`;
         }
-
         html += '</tbody></table>';
         docsList.innerHTML = html;
       } catch (e) {
@@ -434,75 +442,320 @@
       }
     }
 
-    // --- OCR ---
+    // =================== View file inline ===================
+    function viewFile(procId, username, filename) {
+      const fileUrl = `${API_BASE}/documents/${encodeURIComponent(username)}/${procId}/file`;
+      const dlUrl = fileUrl + '?download=true';
+      const ext = filename.split('.').pop().toLowerCase();
+      document.getElementById('fileModalTitle').textContent = filename || procId;
+      document.getElementById('fileDownloadLink').href = dlUrl;
+      document.getElementById('fileNewTabLink').href = fileUrl;
+      const viewer = document.getElementById('fileViewerContent');
+      if (ext === 'pdf') {
+        viewer.innerHTML = `<iframe src="${fileUrl}" class="pdf-embed" title="${filename}"></iframe>`;
+      } else if (['jpg','jpeg','png','tiff','tif','webp'].includes(ext)) {
+        viewer.innerHTML = `<img src="${fileUrl}" style="max-width:100%;border-radius:8px;border:1px solid var(--border);" alt="${filename}" />`;
+      } else {
+        viewer.innerHTML = `<p>Preview not available. Use Download or Open in New Tab.</p>`;
+      }
+      document.getElementById('fileModal').classList.add('visible');
+    }
+
+    // =================== OCR ===================
     async function runOcr(procId, username) {
       const docType = document.getElementById('docType').value;
       const modelMap = {
-        'auto': 'prebuilt-tax.us',
-        'w2': 'prebuilt-tax.us.w2',
-        '1099int': 'prebuilt-tax.us.1099INT',
-        '1099misc': 'prebuilt-tax.us.1099MISC',
-        '1099nec': 'prebuilt-tax.us.1099NEC',
-        '1099div': 'prebuilt-tax.us.1099DIV',
+        'auto': 'prebuilt-tax.us', 'w2': 'prebuilt-tax.us.w2',
+        '1099int': 'prebuilt-tax.us.1099INT', '1099misc': 'prebuilt-tax.us.1099MISC',
+        '1099nec': 'prebuilt-tax.us.1099NEC', '1099div': 'prebuilt-tax.us.1099DIV',
         '1040': 'prebuilt-tax.us.1040',
       };
       const model = modelMap[docType] || 'prebuilt-tax.us';
-
       toast('Running OCR...', 'success');
       try {
         const res = await fetch(`${API_BASE}/analyze/${procId}?username=${username}&model_id=${model}`, { method: 'POST' });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || res.statusText);
-        }
+        if (!res.ok) { const err = await res.json(); throw new Error(err.detail || res.statusText); }
         const data = await res.json();
-        toast(`OCR complete — ${Object.keys(data.fields).length} fields, ${(data.confidence * 100).toFixed(1)}% confidence`, 'success');
+        toast(`OCR complete: ${Object.keys(data.fields).length} fields`, 'success');
         loadDocuments();
-      } catch (e) {
-        toast(`OCR failed: ${e.message}`, 'error');
-      }
+      } catch (e) { toast(`OCR failed: ${e.message}`, 'error'); }
     }
 
-    // --- View OCR result ---
     async function viewOcr(procId, username) {
       try {
         const res = await fetch(`${API_BASE}/documents/${username}/${procId}`);
         const data = await res.json();
+        document.getElementById('modalTitle').textContent = `OCR Result - ${procId}`;
         document.getElementById('ocrResult').textContent = JSON.stringify(data.ocr_result || data, null, 2);
         document.getElementById('ocrModal').classList.add('visible');
-      } catch (e) {
-        toast(`Failed to load OCR: ${e.message}`, 'error');
-      }
+      } catch (e) { toast(`Failed to load OCR: ${e.message}`, 'error'); }
     }
 
-    function closeModal() {
-      document.getElementById('ocrModal').classList.remove('visible');
-    }
+    function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+    document.querySelectorAll('.modal-overlay').forEach(o => {
+      o.addEventListener('click', (e) => { if (e.target === o) o.classList.remove('visible'); });
+    });
 
-    // --- Delete ---
     async function deleteDoc(procId, username) {
+      if (!confirm(`Delete document ${procId}?`)) return;
       try {
         const res = await fetch(`${API_BASE}/documents/${username}/${procId}`, { method: 'DELETE' });
         if (!res.ok) throw new Error(res.statusText);
-        toast(`Deleted ${procId}`, 'success');
-        loadDocuments();
+        toast(`Deleted ${procId}`, 'success'); loadDocuments();
+      } catch (e) { toast(`Delete failed: ${e.message}`, 'error'); }
+    }
+
+    // =================================================================
+    // Tax Drafts
+    // =================================================================
+    async function loadDrafts() {
+      const username = getUsername();
+      if (!username) { document.getElementById('draftsList').innerHTML = '<div class="empty-state">Enter a username first.</div>'; return; }
+      try {
+        const res = await fetch(`${API_BASE}/tax-drafts/${username}`);
+        const data = await res.json();
+        if (!data.drafts || data.drafts.length === 0) {
+          document.getElementById('draftsList').innerHTML = '<div class="empty-state">No tax drafts for this user.</div>';
+          return;
+        }
+        document.getElementById('draftsList').innerHTML = renderDraftCards(data.drafts.reverse(), username, false);
+        for (const d of data.drafts) loadDraftPdfs(d.draft_id, username);
       } catch (e) {
-        toast(`Delete failed: ${e.message}`, 'error');
+        document.getElementById('draftsList').innerHTML = `<div class="empty-state">Error: ${e.message}</div>`;
       }
     }
 
-    // --- Toast ---
+    // =================================================================
+    // Smoke Tests
+    // =================================================================
+    async function loadSmokeTests() {
+      try {
+        const res = await fetch(`${API_BASE}/tax-drafts/smoketest`);
+        const data = await res.json();
+        if (!data.drafts || data.drafts.length === 0) {
+          document.getElementById('smokeTestsList').innerHTML = '<div class="empty-state">No smoke test drafts found. Run <code>tests/smoke_test_tax_drafts.sh</code> first.</div>';
+          return;
+        }
+        document.getElementById('smokeTestsList').innerHTML = renderDraftCards(data.drafts.reverse(), 'smoketest', true);
+        for (const d of data.drafts) loadDraftPdfs(d.draft_id, 'smoketest');
+      } catch (e) {
+        document.getElementById('smokeTestsList').innerHTML = `<div class="empty-state">Error: ${e.message}</div>`;
+      }
+    }
+
+    // =================================================================
+    // Shared draft card renderer
+    // =================================================================
+    function renderDraftCards(drafts, username, showInput) {
+      const statusLabels = { single: 'Single', mfj: 'Married Filing Jointly', hoh: 'Head of Household', mfs: 'Married Filing Separately' };
+      let html = '';
+      for (const d of drafts) {
+        const net = d.net_refund || 0;
+        const isRefund = net >= 0;
+        html += `<div class="draft-card">
+          <div class="draft-header">
+            <h4>${d.filer_name || 'Unknown'} &mdash; ${d.tax_year || 2025}</h4>
+            <div>
+              <span class="draft-status">${statusLabels[d.filing_status] || d.filing_status}</span>
+              <span class="badge ${isRefund ? 'badge-refund' : 'badge-owed'}" style="margin-left:6px;">
+                ${isRefund ? 'Refund' : 'Owed'}: $${fmtNum(Math.abs(net))}
+              </span>
+            </div>
+          </div>
+          <div class="draft-stats">
+            <div class="draft-stat"><div class="label">Total Income</div><div class="value">$${fmtNum(d.total_income)}</div></div>
+            <div class="draft-stat"><div class="label">AGI</div><div class="value">$${fmtNum(d.agi)}</div></div>
+            <div class="draft-stat"><div class="label">Deduction (${d.deduction_type || 'std'})</div><div class="value">$${fmtNum(d.deduction_amount)}</div></div>
+            <div class="draft-stat"><div class="label">Taxable Income</div><div class="value">$${fmtNum(d.taxable_income)}</div></div>
+            <div class="draft-stat"><div class="label">Fed Tax</div><div class="value">$${fmtNum(d.federal_tax)}</div></div>
+            <div class="draft-stat"><div class="label">IL Tax</div><div class="value">$${fmtNum(d.illinois_tax)}</div></div>
+            ${d.business_income > 0 ? `<div class="draft-stat"><div class="label">Business Inc</div><div class="value">$${fmtNum(d.business_income)}</div></div>` : ''}
+            ${d.se_tax > 0 ? `<div class="draft-stat"><div class="label">SE Tax</div><div class="value">$${fmtNum(d.se_tax)}</div></div>` : ''}
+            ${d.qbi_deduction > 0 ? `<div class="draft-stat"><div class="label">QBI Deduction</div><div class="value">$${fmtNum(d.qbi_deduction)}</div></div>` : ''}
+            <div class="draft-stat"><div class="label">Fed Withholding</div><div class="value">$${fmtNum(d.federal_withholding)}</div></div>
+            <div class="draft-stat">
+              <div class="label">Net ${isRefund ? 'Refund' : 'Owed'}</div>
+              <div class="value ${isRefund ? 'refund' : 'owed'}">$${fmtNum(Math.abs(net))}</div>
+            </div>
+          </div>`;
+
+        // Input detail (only if input data is stored and showInput is true)
+        if (showInput && d.input) {
+          const inp = d.input;
+          const uid = d.draft_id;
+          html += `<div class="input-detail">
+            <button class="input-toggle" onclick="toggleInput('${uid}')">Show Filing Input Details</button>
+            <div class="input-body" id="input-${uid}">
+              <div class="input-grid">`;
+
+          // Filer
+          if (inp.filer) {
+            html += `<div class="input-section"><h5>Filer</h5>
+              ${inputRow('Name', `${inp.filer.first_name} ${inp.filer.last_name}`)}
+              ${inputRow('SSN', inp.filer.ssn)}
+              ${inp.filer.address_street ? inputRow('Address', inp.filer.address_street) : ''}
+              ${inp.filer.address_city ? inputRow('City/St', `${inp.filer.address_city}, ${inp.filer.address_state} ${inp.filer.address_zip}`) : ''}
+            </div>`;
+          }
+          // Spouse
+          if (inp.spouse) {
+            html += `<div class="input-section"><h5>Spouse</h5>
+              ${inputRow('Name', `${inp.spouse.first_name} ${inp.spouse.last_name}`)}
+              ${inputRow('SSN', inp.spouse.ssn)}
+            </div>`;
+          }
+          // Filing info
+          html += `<div class="input-section"><h5>Filing</h5>
+            ${inputRow('Status', statusLabels[inp.filing_status] || inp.filing_status)}
+            ${inp.num_dependents > 0 ? inputRow('Dependents', inp.num_dependents) : ''}
+          </div>`;
+
+          // Businesses
+          if (inp.businesses && inp.businesses.length > 0) {
+            for (const biz of inp.businesses) {
+              html += `<div class="input-section"><h5>Business: ${biz.business_name}</h5>
+                ${biz.business_type ? inputRow('Type', biz.business_type) : ''}
+                ${inputRow('Gross Receipts', '$' + fmtNum(biz.gross_receipts))}
+                ${biz.cost_of_goods_sold > 0 ? inputRow('COGS', '$' + fmtNum(biz.cost_of_goods_sold)) : ''}
+                ${biz.advertising > 0 ? inputRow('Advertising', '$' + fmtNum(biz.advertising)) : ''}
+                ${biz.car_expenses > 0 ? inputRow('Car/Vehicle', '$' + fmtNum(biz.car_expenses)) : ''}
+                ${biz.insurance > 0 ? inputRow('Insurance', '$' + fmtNum(biz.insurance)) : ''}
+                ${biz.office_expense > 0 ? inputRow('Office', '$' + fmtNum(biz.office_expense)) : ''}
+                ${biz.rent > 0 ? inputRow('Rent', '$' + fmtNum(biz.rent)) : ''}
+                ${biz.supplies > 0 ? inputRow('Supplies', '$' + fmtNum(biz.supplies)) : ''}
+                ${biz.utilities > 0 ? inputRow('Utilities', '$' + fmtNum(biz.utilities)) : ''}
+                ${biz.home_office_sqft > 0 ? inputRow('Home Office', `${biz.home_office_sqft} / ${biz.home_total_sqft} sqft`) : ''}
+                ${biz.other_expenses > 0 ? inputRow('Other', '$' + fmtNum(biz.other_expenses) + (biz.other_expenses_description ? ' (' + biz.other_expenses_description + ')' : '')) : ''}
+              </div>`;
+            }
+          }
+
+          // Additional income
+          const ai = inp.additional_income;
+          if (ai && (ai.other_interest > 0 || ai.ordinary_dividends > 0 || (ai.capital_transactions && ai.capital_transactions.length > 0) || ai.other_income > 0)) {
+            html += `<div class="input-section"><h5>Additional Income</h5>
+              ${ai.other_interest > 0 ? inputRow('Interest', '$' + fmtNum(ai.other_interest)) : ''}
+              ${ai.ordinary_dividends > 0 ? inputRow('Ord. Dividends', '$' + fmtNum(ai.ordinary_dividends)) : ''}
+              ${ai.qualified_dividends > 0 ? inputRow('Qual. Dividends', '$' + fmtNum(ai.qualified_dividends)) : ''}
+              ${ai.other_income > 0 ? inputRow('Other Income', '$' + fmtNum(ai.other_income)) : ''}
+            </div>`;
+            if (ai.capital_transactions && ai.capital_transactions.length > 0) {
+              html += `<div class="input-section"><h5>Capital Transactions</h5>`;
+              for (const ct of ai.capital_transactions) {
+                const gl = ct.proceeds - ct.cost_basis;
+                html += inputRow(ct.description + (ct.is_long_term ? ' (LT)' : ' (ST)'),
+                  `$${fmtNum(ct.proceeds)} - $${fmtNum(ct.cost_basis)} = $${fmtNum(gl)}`);
+              }
+              html += `</div>`;
+            }
+          }
+
+          // Deductions
+          const ded = inp.deductions;
+          if (ded) {
+            const hasDeductions = Object.values(ded).some(v => typeof v === 'number' && v > 0);
+            if (hasDeductions) {
+              html += `<div class="input-section"><h5>Deductions</h5>
+                ${ded.mortgage_interest > 0 ? inputRow('Mortgage Interest', '$' + fmtNum(ded.mortgage_interest)) : ''}
+                ${ded.property_tax > 0 ? inputRow('Property Tax', '$' + fmtNum(ded.property_tax)) : ''}
+                ${ded.state_income_tax_paid > 0 ? inputRow('State Tax Paid', '$' + fmtNum(ded.state_income_tax_paid)) : ''}
+                ${ded.charitable_cash > 0 ? inputRow('Charitable (Cash)', '$' + fmtNum(ded.charitable_cash)) : ''}
+                ${ded.charitable_noncash > 0 ? inputRow('Charitable (Other)', '$' + fmtNum(ded.charitable_noncash)) : ''}
+                ${ded.medical_expenses > 0 ? inputRow('Medical', '$' + fmtNum(ded.medical_expenses)) : ''}
+                ${ded.student_loan_interest > 0 ? inputRow('Student Loan', '$' + fmtNum(ded.student_loan_interest)) : ''}
+              </div>`;
+            }
+          }
+
+          // Payments
+          const pay = inp.payments;
+          if (pay && (pay.estimated_federal > 0 || pay.estimated_state > 0)) {
+            html += `<div class="input-section"><h5>Estimated Payments</h5>
+              ${pay.estimated_federal > 0 ? inputRow('Federal', '$' + fmtNum(pay.estimated_federal)) : ''}
+              ${pay.estimated_state > 0 ? inputRow('State', '$' + fmtNum(pay.estimated_state)) : ''}
+            </div>`;
+          }
+
+          html += `</div></div></div>`;
+        } else if (showInput && !d.input) {
+          html += `<div class="input-detail"><span style="font-size:0.8rem;color:var(--muted);">Input data not stored (run smoke tests again to capture inputs)</span></div>`;
+        }
+
+        // PDFs
+        html += `<div class="draft-pdfs" id="pdfs-${d.draft_id}"><span style="font-size:0.8rem;color:var(--muted);">Loading PDFs...</span></div>`;
+        html += `</div>`;
+      }
+      return html;
+    }
+
+    function inputRow(key, val) {
+      return `<div class="input-row"><span class="k">${key}</span><span class="v">${val}</span></div>`;
+    }
+
+    function toggleInput(draftId) {
+      const el = document.getElementById('input-' + draftId);
+      if (el) el.classList.toggle('visible');
+    }
+
+    // =================================================================
+    // PDF loading (shared by drafts and smoke tests)
+    // =================================================================
+    async function loadDraftPdfs(draftId, username) {
+      try {
+        const res = await fetch(`${API_BASE}/tax-draft/${draftId}/pdfs?username=${username}`);
+        const data = await res.json();
+        const container = document.getElementById(`pdfs-${draftId}`);
+        if (!container) return;
+        if (!data.pdfs || Object.keys(data.pdfs).length === 0) {
+          container.innerHTML = '<span style="font-size:0.8rem;color:var(--muted);">No PDFs</span>';
+          return;
+        }
+        const labels = {
+          summary: 'Summary', '1040': '1040', form_1040: '1040',
+          schedule_a: 'Sched A', schedule_b: 'Sched B', schedule_c: 'Sched C',
+          schedule_d: 'Sched D', schedule_se: 'Sched SE', il_1040: 'IL-1040',
+        };
+        let html = '';
+        for (const [name, info] of Object.entries(data.pdfs)) {
+          const viewUrl = `${API_BASE}/tax-draft/${draftId}/pdf/${name}?username=${username}`;
+          const dlUrl = viewUrl + '&download=true';
+          const label = labels[name] || name;
+          html += `<button class="btn-outline" onclick="viewPdf('${viewUrl}','${label} - ${draftId}')" style="font-size:0.75rem;">
+            <span class="badge badge-pdf" style="margin-right:2px;">PDF</span> ${label}
+          </button>`;
+        }
+        container.innerHTML = html;
+      } catch (e) {
+        const c = document.getElementById(`pdfs-${draftId}`);
+        if (c) c.innerHTML = '<span style="font-size:0.8rem;color:var(--danger);">Error loading PDFs</span>';
+      }
+    }
+
+    function viewPdf(url, title) {
+      const dlUrl = url + (url.includes('?') ? '&' : '?') + 'download=true';
+      document.getElementById('fileModalTitle').textContent = title;
+      document.getElementById('fileDownloadLink').href = dlUrl;
+      document.getElementById('fileNewTabLink').href = url;
+      document.getElementById('fileViewerContent').innerHTML = `<iframe src="${url}" class="pdf-embed" title="${title}"></iframe>`;
+      document.getElementById('fileModal').classList.add('visible');
+    }
+
+    function fmtNum(n) {
+      if (n === null || n === undefined) return '0.00';
+      return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
     function toast(msg, type) {
       const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.className = `toast ${type} show`;
+      el.textContent = msg; el.className = `toast ${type} show`;
       setTimeout(() => el.classList.remove('show'), 3000);
     }
 
-    // --- Init ---
+    // =================== Init ===================
     checkHealth();
     loadDocuments();
     setInterval(checkHealth, 30000);
+    document.getElementById('username').addEventListener('change', () => { loadDocuments(); });
   </script>
 </body>
 </html>

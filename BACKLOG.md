@@ -1,6 +1,6 @@
 # TaxLens + OpenFile Integration Backlog
 
-Updated: 2026-04-16 02:45 CDT
+Updated: 2026-04-17
 
 ## Azure Budget Tracker
 - **Tier:** F0 Free (500 pages/month)
@@ -10,68 +10,73 @@ Updated: 2026-04-16 02:45 CDT
 
 ---
 
-## Wave 5 — Tax Form Generator [COMPLETED]
-- [x] Created tax_config.py — 2025 federal brackets (Single/MFJ/HoH/MFS), IL flat tax, SALT cap, CTC, LTCG rates
-- [x] Created tax_engine.py — Full computation: income, AGI, standard vs itemized, brackets, capital gains, CTC, IL-1040
-- [x] Created pdf_generator.py — ReportLab PDFs: Summary, Form 1040, Schedule A/B/D, IL-1040
-- [x] Created tax_routes.py — 5 API endpoints: create draft, get summary, download PDF, list PDFs, list drafts
-- [x] Wired into main.py, added reportlab==4.1.0
-- [x] Built, deployed, and tested (Helm revision 5)
-- [x] Validated 3 filing scenarios:
-  - Single: $44,640 income, standard deduction, $3,708 net refund
-  - MFJ: $57,540 income (w/ investments), standard beats itemized, $7,525 net refund
-  - HoH: $47,940 income, itemized ($32k > $22.5k std), CTC zeroes tax, $8,345 net refund
-- [x] 20 PDF files stored on PVC across 3 drafts
-- [x] All PDFs downloadable via HTTPS at dropit.istayintek.com
+## Wave 5c — Official IRS PDF Templates [COMPLETED]
+- [x] Replaced ReportLab canvas PDFs with pypdf fillable IRS templates
+- [x] Added pypdf==4.3.1 to requirements.txt
+- [x] Rewrote pdf_generator.py — `_fill_pdf()` using `PdfWriter(clone_from=reader)` + `update_page_form_field_values()`
+- [x] Sourced 8 official IRS/IL fillable PDF templates (6 byte-match IRS 26f25, 2 match OpenFile production)
+- [x] Fixed AcroForm dictionary loss bug (clone_from vs append_pages_from_reader)
+- [x] Swapped Schedule B from accessible variant to official (identical field names)
+- [x] Deleted f1040sb_accessible.pdf (obsolete)
+- [x] Expanded smoke test suite: 12 original + 5 new custom cases + 3 revalidation = 20 total
+- [x] New test cases: nurse+tutor MFJ, retired couple, gig worker multi-platform, real estate agent HoH, MFS crypto trader
+- [x] Created 5 custom filing drafts for hr1 user matching new test cases
+- [x] All 20 smoke tests passing
+- [x] Validated all PDFs: proper sizes (100KB-1MB for IRS forms), correct content-type/disposition
+- [x] Playwright E2E: UI tabs, PDF headers, inline viewing verification
+- [x] Frontend redesign: tabbed interface, smoketest panel, draft management
+- [x] Built, deployed, verified (podman build → ctr import → helm upgrade)
 
-## Wave 5b — Business Income Support [COMPLETED]
-- [x] Added SE tax constants (15.3% rate, 92.35% factor) and QBI deduction (20%) to tax_config.py
-- [x] Added BusinessIncome dataclass with Schedule C computation (gross receipts, COGS, 12 expense categories, home office)
-- [x] Added Schedule SE computation (SS capped at wage base minus W-2 SS wages, Medicare uncapped)
-- [x] Added QBI deduction (Section 199A, 20% of business income, simplified phase-out)
-- [x] Wired BusinessIncomeInput in tax_routes.py to convert and pass to compute_tax()
-- [x] Added Schedule C PDF generator (per-business detail + total)
-- [x] Added Schedule SE PDF generator
-- [x] Updated Form 1040 PDF with business income line (8a), SE tax, QBI deduction (13)
-- [x] Updated Summary PDF with business income, SE tax, QBI sections
-- [x] Added schedule_c and schedule_se to PDF download endpoint file_map
-- [x] Built, deployed, and verified (Helm revision)
-- [x] Created comprehensive smoke test suite: 15 test cases all passing
-  - TC01-03: Single/MFJ/HoH basic (no business)
-  - TC04: Freelance developer ($125k gross, $110k net, $15.5k SE tax)
-  - TC05: Rideshare driver + W-2 MFJ ($38k gross, $21.3k net)
-  - TC06: Restaurant owner ($280k gross, $98.4k net, $13.9k SE tax)
-  - TC07: Multiple businesses (marketing + photography)
-  - TC08: MFS high earner (investments only)
-  - TC09: HoH freelance writer + 3 dependents + CTC
-  - TC10: MFJ dual-business couple + investments ($227k income)
-  - TC11: Minimum wage / low income
-  - TC12: High-income consultant ($350k, owes $48k)
-  - TC13a-c: Original 3 scenarios revalidated
+## Completed (Prior)
 
-## Wave 6 — Agentic Intelligence [DEFERRED]
-- Future: chat interface, tax optimization, multi-doc correlation
+### Wave 5b — Business Income Support ✓
+- [x] Schedule C, SE tax, QBI deduction, 15-scenario smoke test
 
----
-
-## Completed
-
-### Wave 1 — Deploy OpenFile 26f25 ✓
-- [x] Built + deployed localhost/openfile-api:26f25 + localhost/openfile-client:26f25
-- [x] 5 pods running, factgraph ENABLED, 21 tax returns for 2025
-
-### Wave 2 — Bridge TaxLens → OpenFile auto-fill ✓
-- [x] bridge.py with W-2 field mapping, NetworkPolicy, correct PG password
-- [x] Verified: W-2 OCR → populated_data → tax return a9b6e1a6
-
-### Wave 3 — Full E2E validation ✓
-- [x] 6/6 endpoints 200, full pipeline verified
+### Wave 5 — Tax Form Generator ✓
+- [x] Full tax computation engine: Federal 1040 + IL-1040, PDF generation
 
 ### Wave 4 — Multi-form OCR test (1099-INT) ✓
 - [x] Azure auto-detected 1099-INT, extracted Payer/Recipient/Box 1
 
-### Wave 5 — Tax Form Generator ✓
-- [x] Full tax computation engine: Federal 1040 + IL-1040
-- [x] PDF generation: 1040, Schedule A/B/D, IL-1040, Summary
-- [x] 3 filing scenarios validated: Single, MFJ, HoH
-- [x] Supports: W-2, 1099-INT, dividends, capital gains (stock/crypto), mortgage, SALT, charitable, CTC
+### Wave 3 — Full E2E validation ✓
+- [x] 6/6 endpoints 200, full pipeline verified
+
+### Wave 2 — Bridge TaxLens → OpenFile auto-fill ✓
+- [x] W-2 OCR → populated_data → tax return
+
+### Wave 1 — Deploy OpenFile 26f25 ✓
+- [x] Built + deployed, factgraph ENABLED, 21 tax returns for 2025
+
+---
+
+## Next Work Items
+
+### 1. NIIT + Additional Medicare Tax
+Add 3.8% NIIT on investment income and 0.9% Additional Medicare Tax for high earners. Constants exist in tax_config.py. Affects TC08, TC10, TC12 (high-income scenarios).
+
+```bash
+# After implementing in tax_engine.py:
+bash tests/smoke_test_tax_drafts.sh  # verify all 20 still pass (amounts will change for high earners)
+```
+
+### 2. Schedule C Expense Line-Item PDF Filling
+Fill individual expense line fields in the Schedule C fillable template instead of summary-only.
+
+```bash
+# Verify field names:
+python3 -c "import pypdf; r=pypdf.PdfReader('app/templates/f1040sc.pdf'); print([f.get('/T') for f in r.get_fields().values()][:30])"
+```
+
+### 3. W-2 OCR Fixture Tests
+Create stored OCR JSON fixtures to test the full W-2 → compute → PDF pipeline without Azure.
+
+```bash
+# Extract fixture from existing OCR result:
+kubectl exec -n taxlens deploy/taxlens-api -- cat /data/documents/hr1/<proc_id>/ocr_result.json > tests/fixtures/w2_sample.json
+```
+
+### 4. Authentication Layer
+Add JWT auth with user management. Currently username is self-reported.
+
+### 5. Wave 6 — Agentic Intelligence
+Chat interface, tax optimization, multi-doc correlation. See NEXT-STEPS.md.
