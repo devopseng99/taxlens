@@ -12,32 +12,29 @@ Updated: 2026-04-17
 - [x] PDF template validation against official IRS 26f25 tax-refs
 - [x] Playwright E2E UI + PDF header verification
 - [x] Frontend redesign with tabbed interface (Documents, Tax Drafts, Smoke Tests)
+- [x] NIIT (3.8%) + Additional Medicare Tax (0.9%) in engine + PDF
+- [x] Schedule C home office line + Schedule D proceeds/cost basis
+- [x] 43 pytest unit tests + 9 auth tests + 4 OCR fixture tests
+- [x] API key auth layer (X-API-Key header, disabled by default)
+- [x] W-2/1099-INT OCR fixture tests (4 scenarios, no Azure needed)
 
 ## Ready to Build
-
-### NIIT (Net Investment Income Tax)
-- 3.8% surtax on investment income for high earners (>$200k single, >$250k MFJ)
-- Constants already in tax_config.py, just needs computation in engine
-
-### Additional Medicare Tax
-- 0.9% on earnings above threshold ($200k single, $250k MFJ)
-- Constants already in tax_config.py
-
-### Schedule C Expense Detail in PDFs
-- Currently shows summary (gross receipts, COGS, total expenses, net profit)
-- Could fill per-line expense fields matching IRS Schedule C fillable form
-
-### W-2 Integration in Smoke Tests
-- Create stored OCR fixture files to test W-2 → computation pipeline
-- Would validate the full upload → OCR → compute → PDF flow in tests
 
 ### AMT (Alternative Minimum Tax)
 - Would need AMT exemption amounts, phase-out, and preference items
 - Complex but relevant for high-income business owners
 
-### Authentication
-- Currently username is self-reported
-- Implement JWT or session-based auth for multi-user security
+### Enable Auth in Production
+- Generate API keys, set TAXLENS_API_KEYS env var
+- Update frontend to send X-API-Key header
+
+### Schedule 2 PDF (Form 8959/8960)
+- Formal IRS forms for NIIT and Additional Medicare Tax
+- Currently embedded in 1040 line 23
+
+### Multi-State Support
+- Currently Illinois-only
+- Add configurable state tax computation
 
 ## Wave 6 — Agentic Intelligence (Deferred)
 - Chat interface for tax Q&A

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-17
+Updated: 2026-04-17 (v0.6.0)
 
 ## Architecture
 

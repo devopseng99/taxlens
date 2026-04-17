@@ -49,34 +49,35 @@ Updated: 2026-04-17
 
 ---
 
+## Wave 6a — Surtaxes + Tests + Auth [COMPLETED]
+- [x] NIIT (3.8% on net investment income for AGI > threshold)
+- [x] Additional Medicare Tax (0.9% on earnings above threshold)
+- [x] Schedule C home office line, Schedule D proceeds/cost basis columns
+- [x] 43 pytest unit tests (brackets, LTCG, SE, NIIT, Medicare, CTC, IL, OCR, E2E)
+- [x] 9 auth unit tests
+- [x] 4 OCR fixture tests (W-2 parse, high earner surtaxes, 1099-INT, combined pipeline)
+- [x] API key auth layer (X-API-Key header, TAXLENS_API_KEYS env var)
+- [x] All 20 smoke tests passing with surtax changes
+- [x] 5 hr1 custom drafts recreated
+- [x] Built, deployed, verified (v0.6.0)
+
 ## Next Work Items
 
-### 1. NIIT + Additional Medicare Tax
-Add 3.8% NIIT on investment income and 0.9% Additional Medicare Tax for high earners. Constants exist in tax_config.py. Affects TC08, TC10, TC12 (high-income scenarios).
-
-```bash
-# After implementing in tax_engine.py:
-bash tests/smoke_test_tax_drafts.sh  # verify all 20 still pass (amounts will change for high earners)
-```
-
-### 2. Schedule C Expense Line-Item PDF Filling
-Fill individual expense line fields in the Schedule C fillable template instead of summary-only.
-
-```bash
-# Verify field names:
-python3 -c "import pypdf; r=pypdf.PdfReader('app/templates/f1040sc.pdf'); print([f.get('/T') for f in r.get_fields().values()][:30])"
-```
-
-### 3. W-2 OCR Fixture Tests
-Create stored OCR JSON fixtures to test the full W-2 → compute → PDF pipeline without Azure.
-
-```bash
-# Extract fixture from existing OCR result:
-kubectl exec -n taxlens deploy/taxlens-api -- cat /data/documents/hr1/<proc_id>/ocr_result.json > tests/fixtures/w2_sample.json
-```
-
-### 4. Authentication Layer
-Add JWT auth with user management. Currently username is self-reported.
-
-### 5. Wave 6 — Agentic Intelligence
+### 1. Wave 6 — Agentic Intelligence
 Chat interface, tax optimization, multi-doc correlation. See NEXT-STEPS.md.
+
+### 2. Enable Auth in Production
+Generate API keys, set TAXLENS_API_KEYS in K8s secret, update frontend to send header.
+
+```bash
+# Generate a key:
+python3 -c "from auth import generate_api_key; print(generate_api_key())"
+# Set in K8s:
+kubectl create secret generic taxlens-api-keys -n taxlens --from-literal=keys="tlk_xxx,tlk_yyy"
+```
+
+### 3. Schedule 2 PDF (Form 8959/8960)
+Formal Schedule 2 for NIIT and Additional Medicare Tax. Currently embedded in 1040 line 23.
+
+### 4. Multi-State Support
+Currently Illinois-only. Add configurable state tax computation.
