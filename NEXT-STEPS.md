@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-17
+Updated: 2026-04-17 (v0.7.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -17,6 +17,12 @@ Updated: 2026-04-17
 - [x] 43 pytest unit tests + 9 auth tests + 4 OCR fixture tests
 - [x] API key auth layer (X-API-Key header, disabled by default)
 - [x] W-2/1099-INT OCR fixture tests (4 scenarios, no Azure needed)
+- [x] Schedule 2 PDF (Form 1040) — Additional Taxes (SE + NIIT + Add'l Medicare)
+- [x] Form 8959 PDF — Additional Medicare Tax (Parts I-V with withholding reconciliation)
+- [x] Form 8960 PDF — Net Investment Income Tax (Parts I-III for individuals)
+- [x] Conditional form generation (only when surtaxes apply)
+- [x] 6 new unit tests for Schedule 2 form generation logic
+- [x] 58 total unit tests passing (49 engine + 9 auth)
 
 ## Ready to Build
 
@@ -27,10 +33,6 @@ Updated: 2026-04-17
 ### Enable Auth in Production
 - Generate API keys, set TAXLENS_API_KEYS env var
 - Update frontend to send X-API-Key header
-
-### Schedule 2 PDF (Form 8959/8960)
-- Formal IRS forms for NIIT and Additional Medicare Tax
-- Currently embedded in 1040 line 23
 
 ### Multi-State Support
 - Currently Illinois-only

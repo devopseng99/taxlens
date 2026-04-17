@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-17 (v0.6.0)
+Updated: 2026-04-17 (v0.7.0)
 
 ## Architecture
 
@@ -32,6 +32,10 @@ Updated: 2026-04-17 (v0.6.0)
 
 13. **Playwright E2E for UI + PDF validation** — Headless Chromium via central Playwright server (WebSocket). Tests tab navigation, draft listing, PDF download headers. Note: headless Chromium triggers download for PDFs instead of inline render — not a bug, Content-Disposition is correct. Programmatic header verification used instead.
 
+14. **Schedule 2 + Form 8959 + Form 8960 conditional generation** — These forms are only generated when their respective taxes are triggered: Schedule 2 when SE tax, NIIT, or Additional Medicare Tax > 0; Form 8959 only when Additional Medicare Tax > 0; Form 8960 only when NIIT > 0. Schedule 2 line 21 (total other taxes) flows to 1040 line 23. Field mappings derived from labeled PDF inspection (no tooltips on IRS PDFs).
+
+15. **Form 8959 withholding reconciliation** — Part V computes excess Additional Medicare Tax withholding (W-2 box 6 minus regular 1.45% Medicare) which can offset total tax. Threshold reduction for SE income: if W-2 wages exceed the filing-status threshold, there's zero remaining threshold for SE income.
+
 ## PDF Template Provenance
 
 | Template | Source | SHA256 (first 8) | Match |
@@ -43,4 +47,7 @@ Updated: 2026-04-17 (v0.6.0)
 | f1040sc.pdf | IRS 26f25 | ddf401... | Official byte-match |
 | f1040sd.pdf | IRS 26f25 | 90564c... | Official byte-match |
 | f1040sse.pdf | IRS 26f25 | 05bc2b... | Official byte-match |
+| f1040s2.pdf | IRS irs-pdf | 64d867... | Official IRS 2025 |
+| f8959.pdf | IRS irs-pdf | 13e640... | Official IRS 2025 |
+| f8960.pdf | IRS irs-pdf | 9b323b... | Official IRS 2025 |
 | il1040.pdf | IRS 26f25 | 30651b... | Official byte-match |

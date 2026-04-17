@@ -740,6 +740,12 @@ def compute_tax(
         result.forms_generated.append("Schedule B")
     if additional.capital_transactions:
         result.forms_generated.append("Schedule D")
+    if result.niit > 0 or result.additional_medicare_tax > 0 or result.se_tax > 0:
+        result.forms_generated.append("Schedule 2")
+    if result.additional_medicare_tax > 0:
+        result.forms_generated.append("Form 8959")
+    if result.niit > 0:
+        result.forms_generated.append("Form 8960")
     result.forms_generated.append("IL-1040")
 
     return result

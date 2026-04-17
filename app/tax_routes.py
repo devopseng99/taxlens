@@ -313,6 +313,9 @@ async def download_pdf(
         "schedule_c": "schedule_c.pdf",
         "schedule_d": "schedule_d.pdf",
         "schedule_se": "schedule_se.pdf",
+        "schedule_2": "schedule_2.pdf",
+        "form_8959": "form_8959.pdf",
+        "form_8960": "form_8960.pdf",
         "il_1040": "il_1040.pdf",
     }
 

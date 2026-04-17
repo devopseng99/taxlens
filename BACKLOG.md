@@ -61,6 +61,18 @@ Updated: 2026-04-17
 - [x] 5 hr1 custom drafts recreated
 - [x] Built, deployed, verified (v0.6.0)
 
+## Wave 6b — Schedule 2 / Form 8959 / Form 8960 [COMPLETED]
+- [x] Downloaded official IRS fillable PDFs for Schedule 2, Form 8959, Form 8960
+- [x] Inspected field names via labeled PDF generation (no tooltips on IRS PDFs)
+- [x] Implemented `generate_schedule_2()` — Lines 4 (SE), 11 (Add'l Medicare), 12 (NIIT), 21 (total)
+- [x] Implemented `generate_form_8959()` — Parts I-V (wages, SE, RRTA, total, withholding reconciliation)
+- [x] Implemented `generate_form_8960()` — Parts I-III (investment income, expenses, NIIT computation)
+- [x] Conditional generation: Schedule 2 when any surtax; 8959 only when Add'l Medicare; 8960 only when NIIT
+- [x] Updated `forms_generated` in tax_engine.py and `file_map` in tax_routes.py
+- [x] 6 new unit tests (58 total passing)
+- [x] TC12 smoke test confirms: Schedule 2 + Form 8959 + Form 8960 generated for high-income filer
+- [x] Built, deployed, verified (v0.7.0)
+
 ## Next Work Items
 
 ### 1. Wave 6 — Agentic Intelligence
@@ -76,8 +88,5 @@ python3 -c "from auth import generate_api_key; print(generate_api_key())"
 kubectl create secret generic taxlens-api-keys -n taxlens --from-literal=keys="tlk_xxx,tlk_yyy"
 ```
 
-### 3. Schedule 2 PDF (Form 8959/8960)
-Formal Schedule 2 for NIIT and Additional Medicare Tax. Currently embedded in 1040 line 23.
-
-### 4. Multi-State Support
+### 3. Multi-State Support
 Currently Illinois-only. Add configurable state tax computation.

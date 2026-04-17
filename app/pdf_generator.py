@@ -543,6 +543,162 @@ def generate_schedule_se(result: TaxResult) -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Schedule 2 — Additional Taxes
+# ---------------------------------------------------------------------------
+def generate_schedule_2(result: TaxResult) -> BytesIO:
+    template = str(TEMPLATE_DIR / "f1040s2.pdf")
+    f = {}
+    p1 = "form1[0].Page1[0]."
+    p2 = "form1[0].Page2[0]."
+    filer = result.filer
+
+    f[p1 + "f1_01[0]"] = f"{filer.first_name} {filer.last_name}"
+    f[p1 + "f1_02[0]"] = filer.ssn
+
+    # Line 4: Self-employment tax (from Schedule SE)
+    if result.se_tax > 0:
+        f[p1 + "f1_15[0]"] = _money(result.se_tax)
+
+    # Line 11: Additional Medicare Tax (Form 8959)
+    if result.additional_medicare_tax > 0:
+        f[p1 + "f1_22[0]"] = _money(result.additional_medicare_tax)
+
+    # Line 12: Net investment income tax (Form 8960)
+    if result.niit > 0:
+        f[p1 + "f1_23[0]"] = _money(result.niit)
+
+    # Line 21: Total other taxes (line 4 + lines 7-16 + 18 + 19)
+    # For us: SE tax + Additional Medicare + NIIT
+    total_other = result.se_tax + result.additional_medicare_tax + result.niit
+    f[p2 + "f2_24[0]"] = _money(total_other)
+
+    return _fill_pdf(template, f)
+
+
+# ---------------------------------------------------------------------------
+# Form 8959 — Additional Medicare Tax
+# ---------------------------------------------------------------------------
+def generate_form_8959(result: TaxResult) -> BytesIO:
+    template = str(TEMPLATE_DIR / "f8959.pdf")
+    f = {}
+    p = "topmostSubform[0].Page1[0]."
+    filer = result.filer
+
+    f[p + "f1_1[0]"] = f"{filer.first_name} {filer.last_name}"
+    f[p + "f1_2[0]"] = filer.ssn
+
+    # Part I — Additional Medicare Tax on Medicare Wages
+    medicare_wages = sum(w.medicare_wages for w in result.w2s)
+    f[p + "f1_3[0]"] = _money(medicare_wages)                    # Line 1
+    # Lines 2-3 (unreported tips, Form 8919) — skip
+    f[p + "f1_6[0]"] = _money(medicare_wages)                    # Line 4 (= line 1 for us)
+
+    from tax_config import ADDITIONAL_MEDICARE_THRESHOLD
+    threshold = ADDITIONAL_MEDICARE_THRESHOLD[result.filing_status]
+    f[p + "f1_7[0]"] = _money(threshold)                         # Line 5
+
+    wage_excess = max(0, medicare_wages - threshold)
+    f[p + "f1_8[0]"] = _money(wage_excess)                       # Line 6
+
+    wage_tax = wage_excess * 0.009
+    f[p + "f1_9[0]"] = _money(wage_tax)                          # Line 7
+
+    # Part II — Additional Medicare Tax on Self-Employment Income
+    se_income = result.sched_se_taxable
+    f[p + "f1_10[0]"] = _money(se_income)                        # Line 8
+
+    # Line 9: threshold for SE = threshold - line 4 wages (not below 0)
+    reduced_threshold = max(0, threshold - medicare_wages)
+    f[p + "f1_11[0]"] = _money(reduced_threshold)                # Line 9
+    f[p + "f1_12[0]"] = _money(medicare_wages)                   # Line 10 (= line 4)
+
+    se_excess = max(0, se_income - reduced_threshold)
+    f[p + "f1_13[0]"] = _money(se_excess)                        # Line 11 (line 9 from line 8... wait)
+
+    # Actually: Line 11 = line 10 subtracted from line 9
+    # Line 10 = amount from line 4 (medicare wages)
+    # Line 11 = line 9 - line 10 (reduced threshold)
+    # Line 12 = line 8 - line 11, if > 0
+    remaining_threshold = max(0, threshold - medicare_wages)
+    se_taxable_excess = max(0, se_income - remaining_threshold)
+    f[p + "f1_13[0]"] = _money(remaining_threshold)              # Line 11
+    f[p + "f1_14[0]"] = _money(se_taxable_excess)                # Line 12
+
+    se_tax_8959 = se_taxable_excess * 0.009
+    f[p + "f1_15[0]"] = _money(se_tax_8959)                      # Line 13
+
+    # Part III — RRTA (skip, lines 14-17)
+
+    # Part IV — Total Additional Medicare Tax
+    total_add_medicare = wage_tax + se_tax_8959
+    f[p + "f1_20[0]"] = _money(total_add_medicare)               # Line 18
+
+    # Part V — Withholding Reconciliation
+    medicare_withheld = sum(w.medicare_withheld for w in result.w2s)
+    f[p + "f1_21[0]"] = _money(medicare_withheld)                # Line 19
+    f[p + "f1_22[0]"] = _money(medicare_wages)                   # Line 20
+    regular_medicare = medicare_wages * 0.0145
+    f[p + "f1_23[0]"] = _money(regular_medicare)                 # Line 21
+    excess_withholding = max(0, medicare_withheld - regular_medicare)
+    f[p + "f1_24[0]"] = _money(excess_withholding)               # Line 22
+    # Line 23 RRTA — skip
+    f[p + "f1_26[0]"] = _money(excess_withholding)               # Line 24
+
+    return _fill_pdf(template, f)
+
+
+# ---------------------------------------------------------------------------
+# Form 8960 — Net Investment Income Tax
+# ---------------------------------------------------------------------------
+def generate_form_8960(result: TaxResult) -> BytesIO:
+    template = str(TEMPLATE_DIR / "f8960.pdf")
+    f = {}
+    p = "topmostSubform[0].Page1[0]."
+    filer = result.filer
+
+    f[p + "f1_1[0]"] = f"{filer.first_name} {filer.last_name}"
+    f[p + "f1_2[0]"] = filer.ssn
+
+    # Part I — Investment Income
+    f[p + "f1_3[0]"] = _money(result.line_2b_taxable_interest)   # Line 1 (interest)
+    f[p + "f1_4[0]"] = _money(result.line_3b_ordinary_dividends) # Line 2 (dividends)
+    # Lines 3 (annuities), 4a-4c (rental/partnerships) — skip
+
+    # Line 5a: Net gain from disposition of property (capital gains)
+    net_cap_gain = max(0, result.sched_d_net_gain)
+    f[p + "f1_9[0]"] = _money(net_cap_gain)                      # Line 5a
+    f[p + "f1_12[0]"] = _money(net_cap_gain)                     # Line 5d (= 5a for us)
+
+    # Line 8: Total investment income
+    total_investment = (
+        result.line_2b_taxable_interest
+        + result.line_3b_ordinary_dividends
+        + net_cap_gain
+    )
+    f[p + "f1_15[0]"] = _money(total_investment)                  # Line 8
+
+    # Part II — Investment Expenses (skip, lines 9-11)
+
+    # Part III — Tax Computation
+    f[p + "f1_22[0]"] = _money(total_investment)                  # Line 12 (net investment income)
+
+    from tax_config import NIIT_THRESHOLD
+    threshold = NIIT_THRESHOLD[result.filing_status]
+    f[p + "f1_23[0]"] = _money(result.line_11_agi)               # Line 13 (MAGI = AGI)
+    f[p + "f1_24[0]"] = _money(threshold)                        # Line 14 (threshold)
+
+    agi_excess = max(0, result.line_11_agi - threshold)
+    f[p + "f1_25[0]"] = _money(agi_excess)                       # Line 15
+
+    niit_base = min(total_investment, agi_excess)
+    f[p + "f1_26[0]"] = _money(niit_base)                        # Line 16
+
+    f[p + "f1_27[0]"] = _money(result.niit)                      # Line 17 (NIIT)
+
+    return _fill_pdf(template, f)
+
+
+# ---------------------------------------------------------------------------
 # IL-1040 — Illinois Individual Income Tax Return
 # ---------------------------------------------------------------------------
 def generate_il1040(result: TaxResult) -> BytesIO:
@@ -660,6 +816,25 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "schedule_d.pdf"
         p.write_bytes(buf.read())
         paths["schedule_d"] = str(p)
+
+    # Schedule 2 + Form 8959 + Form 8960 (if surtaxes apply)
+    if result.niit > 0 or result.additional_medicare_tax > 0 or result.se_tax > 0:
+        buf = generate_schedule_2(result)
+        p = out / "schedule_2.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_2"] = str(p)
+
+    if result.additional_medicare_tax > 0:
+        buf = generate_form_8959(result)
+        p = out / "form_8959.pdf"
+        p.write_bytes(buf.read())
+        paths["form_8959"] = str(p)
+
+    if result.niit > 0:
+        buf = generate_form_8960(result)
+        p = out / "form_8960.pdf"
+        p.write_bytes(buf.read())
+        paths["form_8960"] = str(p)
 
     # IL-1040 (official IL template)
     buf = generate_il1040(result)

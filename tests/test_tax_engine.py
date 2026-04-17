@@ -426,3 +426,70 @@ class TestRefundOrOwed:
         # Underpaid → should owe
         assert r.line_37_owed > 0
         assert r.line_34_overpaid == 0
+
+
+# ---------------------------------------------------------------------------
+# Schedule 2 / Form 8959 / Form 8960 form generation
+# ---------------------------------------------------------------------------
+class TestSchedule2Forms:
+    """Verify Schedule 2, Form 8959, Form 8960 appear in forms_generated."""
+
+    def test_no_sched2_low_income(self):
+        """Low-income filer: no SE, no surtaxes → no Schedule 2."""
+        r = simple_compute(wages=50000)
+        assert "Schedule 2" not in r.forms_generated
+        assert "Form 8959" not in r.forms_generated
+        assert "Form 8960" not in r.forms_generated
+
+    def test_sched2_from_se_only(self):
+        """SE filer below surtax thresholds → Schedule 2 only (no 8959/8960)."""
+        biz = BusinessIncome(business_name="Freelance", gross_receipts=60000)
+        r = simple_compute(businesses=[biz])
+        assert r.se_tax > 0
+        assert "Schedule 2" in r.forms_generated
+        assert "Form 8959" not in r.forms_generated
+        assert "Form 8960" not in r.forms_generated
+
+    def test_sched2_with_8959(self):
+        """High W-2 earner → Additional Medicare Tax → Schedule 2 + Form 8959."""
+        r = simple_compute(wages=285000)
+        assert r.additional_medicare_tax > 0
+        assert "Schedule 2" in r.forms_generated
+        assert "Form 8959" in r.forms_generated
+
+    def test_sched2_with_8960(self):
+        """High AGI + investment income → NIIT → Schedule 2 + Form 8960."""
+        cap = [CapitalTransaction(description="Stock", proceeds=50000, cost_basis=20000, is_long_term=True)]
+        r = simple_compute(wages=220000, interest=5000, dividends=3000, cap_txns=cap)
+        assert r.niit > 0
+        assert "Schedule 2" in r.forms_generated
+        assert "Form 8960" in r.forms_generated
+
+    def test_all_three_forms(self):
+        """High earner with SE + investments → all three forms."""
+        biz = BusinessIncome(business_name="Consulting", gross_receipts=100000)
+        cap = [CapitalTransaction(description="AAPL", proceeds=30000, cost_basis=15000, is_long_term=True)]
+        r = simple_compute(wages=250000, interest=5000, dividends=5000, cap_txns=cap, businesses=[biz])
+        assert r.se_tax > 0
+        assert r.niit > 0
+        assert r.additional_medicare_tax > 0
+        assert "Schedule 2" in r.forms_generated
+        assert "Form 8959" in r.forms_generated
+        assert "Form 8960" in r.forms_generated
+
+    def test_pdf_generation_schedule2(self):
+        """Verify PDF files are actually generated for Schedule 2 forms."""
+        import tempfile
+        from pdf_generator import generate_all_pdfs
+        cap = [CapitalTransaction(description="ETF", proceeds=40000, cost_basis=25000, is_long_term=True)]
+        r = simple_compute(wages=260000, interest=8000, dividends=4000, cap_txns=cap)
+        tmpdir = tempfile.mkdtemp()
+        paths = generate_all_pdfs(r, tmpdir)
+        assert "schedule_2" in paths
+        assert "form_8959" in paths
+        assert "form_8960" in paths
+        # Verify files exist and have reasonable size
+        import os
+        for key in ["schedule_2", "form_8959", "form_8960"]:
+            assert os.path.exists(paths[key])
+            assert os.path.getsize(paths[key]) > 50000  # > 50KB (filled IRS PDF)
