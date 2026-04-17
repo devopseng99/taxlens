@@ -51,16 +51,9 @@ setup_ocr_fixture() {
         return 1
     fi
 
-    # Now we need to inject the OCR fixture via kubectl
-    local fixture_content
-    fixture_content=$(cat "$fixture_file")
-
-    kubectl exec -n taxlens deploy/taxlens-api -- sh -c \
-        "echo '${fixture_content}' > /data/documents/${username}/${real_proc_id}/ocr_result.json" 2>/dev/null || {
-        # Fallback: write via heredoc for large JSON
-        kubectl exec -n taxlens deploy/taxlens-api -i -- sh -c \
-            "cat > /data/documents/${username}/${real_proc_id}/ocr_result.json" < "$fixture_file" 2>/dev/null
-    }
+    # Inject OCR fixture via stdin pipe (avoids shell quoting issues)
+    kubectl exec -n taxlens deploy/taxlens-api -i -- sh -c \
+        "cat > /data/documents/${username}/${real_proc_id}/ocr_result.json" < "$fixture_file" 2>/dev/null
 
     echo "$real_proc_id"
 }
@@ -68,7 +61,7 @@ setup_ocr_fixture() {
 # ---------------------------------------------------------------------------
 # Test 1: Parse W-2 fixture → compute single filer
 # ---------------------------------------------------------------------------
-log "=== OCR-F1: Single filer with W-2 OCR ($72,500 wages) ==="
+log "=== OCR-F1: Single filer with W-2 OCR (72500 wages) ==="
 
 W2_PROC=$(setup_ocr_fixture "ocrtest" "" "${FIXTURES}/w2_sample.json")
 if [[ -n "$W2_PROC" ]]; then
@@ -85,9 +78,9 @@ if [[ -n "$W2_PROC" ]]; then
     total_income=$(echo "$resp" | jq -r '.total_income // 0')
     fed_withholding=$(echo "$resp" | jq -r '.federal_withholding // 0')
 
-    if [[ -n "$draft_id" ]] && (( $(echo "$total_income > 72000" | bc -l) )); then
+    if [[ -n "$draft_id" ]] && (( $(python3 -c "print(1 if $total_income > 72000 else 0)") )); then
         # Verify withholding pulled from W-2
-        if (( $(echo "$fed_withholding > 10000" | bc -l) )); then
+        if (( $(python3 -c "print(1 if $fed_withholding > 10000 else 0)") )); then
             pass "OCR-F1: W-2 parse OK — draft=$draft_id income=$total_income withheld=$fed_withholding"
         else
             fail "OCR-F1: W-2 withholding not parsed — got $fed_withholding, expected ~10875"
@@ -102,7 +95,7 @@ fi
 # ---------------------------------------------------------------------------
 # Test 2: Parse W-2 high earner → verify Additional Medicare Tax kicks in
 # ---------------------------------------------------------------------------
-log "=== OCR-F2: High earner W-2 ($285K) + Additional Medicare Tax ==="
+log "=== OCR-F2: High earner W-2 (285K) + Additional Medicare Tax ==="
 
 W2H_PROC=$(setup_ocr_fixture "ocrtest" "" "${FIXTURES}/w2_high_earner.json")
 if [[ -n "$W2H_PROC" ]]; then
@@ -124,14 +117,14 @@ if [[ -n "$W2H_PROC" ]]; then
     if [[ -n "$draft_id" ]]; then
         errors=""
         # AGI > $200K single → NIIT should trigger on investment income
-        if (( $(echo "$niit > 0" | bc -l) )); then
+        if (( $(python3 -c "print(1 if $niit > 0 else 0)") )); then
             niit_ok="NIIT=$niit"
         else
             niit_ok="NIIT=0(EXPECTED>0)"
             errors="niit "
         fi
         # Medicare wages $285K > $200K → Additional Medicare should trigger
-        if (( $(echo "$add_medicare > 0" | bc -l) )); then
+        if (( $(python3 -c "print(1 if $add_medicare > 0 else 0)") )); then
             med_ok="AddMed=$add_medicare"
         else
             med_ok="AddMed=0(EXPECTED>0)"
@@ -153,7 +146,7 @@ fi
 # ---------------------------------------------------------------------------
 # Test 3: Parse 1099-INT fixture → verify interest extracted
 # ---------------------------------------------------------------------------
-log "=== OCR-F3: 1099-INT OCR ($2,450 interest) ==="
+log "=== OCR-F3: 1099-INT OCR (2450 interest) ==="
 
 INT_PROC=$(setup_ocr_fixture "ocrtest" "" "${FIXTURES}/1099int_sample.json")
 if [[ -n "$INT_PROC" ]]; then
@@ -169,8 +162,8 @@ if [[ -n "$INT_PROC" ]]; then
     draft_id=$(echo "$resp" | jq -r '.draft_id // empty')
     total_income=$(echo "$resp" | jq -r '.total_income // 0')
 
-    if [[ -n "$draft_id" ]] && (( $(echo "$total_income >= 2450" | bc -l) )); then
-        pass "OCR-F3: 1099-INT parse OK — draft=$draft_id income=$total_income (includes $2,450 interest)"
+    if [[ -n "$draft_id" ]] && (( $(python3 -c "print(1 if $total_income >= 2450 else 0)") )); then
+        pass "OCR-F3: 1099-INT parse OK — draft=$draft_id income=$total_income (includes 2450 interest)"
     else
         fail "OCR-F3: Interest not extracted — income=$total_income, expected ≥2450"
     fi
@@ -210,7 +203,7 @@ if [[ -n "$W2C_PROC" && -n "$INTC_PROC" ]]; then
 
     if [[ -n "$draft_id" ]]; then
         # Income should be: wages(72500) + interest(2450) + dividends(3500) + capgain(5000) = ~83450
-        if (( $(echo "$total_income > 80000" | bc -l) )); then
+        if (( $(python3 -c "print(1 if $total_income > 80000 else 0)") )); then
             # Check PDFs generated
             pdfs_resp=$(curl -sk "${API}/tax-draft/${draft_id}/pdfs?username=ocrtest" 2>&1)
             pdf_count=$(echo "$pdfs_resp" | jq '.pdfs | length')
