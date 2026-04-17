@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "Employee": {
+      "type": "object",
+      "value": {
+        "Name": {"type": "string", "value": "Robert K Chen", "confidence": 0.95},
+        "SocialSecurityNumber": {"type": "string", "value": "987-65-4321", "confidence": 0.92}
+      }
+    },
+    "Employer": {
+      "type": "object",
+      "value": {
+        "Name": {"type": "string", "value": "TechGiant Inc", "confidence": 0.96},
+        "IdNumber": {"type": "string", "value": "20-9876543", "confidence": 0.94}
+      }
+    },
+    "WagesTipsAndOtherCompensation": {"type": "number", "value": "$285,000.00", "confidence": 0.97},
+    "FederalIncomeTaxWithheld": {"type": "number", "value": "$68,400.00", "confidence": 0.96},
+    "SocialSecurityWages": {"type": "number", "value": "$176,100.00", "confidence": 0.95},
+    "SocialSecurityTaxWithheld": {"type": "number", "value": "$10,918.20", "confidence": 0.95},
+    "MedicareWagesAndTips": {"type": "number", "value": "$285,000.00", "confidence": 0.95},
+    "MedicareTaxWithheld": {"type": "number", "value": "$4,132.50", "confidence": 0.95},
+    "StateTaxInfos": {
+      "type": "array",
+      "value": [
+        {
+          "type": "object",
+          "value": {
+            "State": {"type": "string", "value": "IL", "confidence": 0.94},
+            "StateWages": {"type": "number", "value": "$285,000.00", "confidence": 0.93},
+            "StateIncomeTax": {"type": "number", "value": "$14,107.50", "confidence": 0.93}
+          }
+        }
+      ]
+    },
+    "LocalTaxInfos": {"type": "array", "value": []}
+  }
+}

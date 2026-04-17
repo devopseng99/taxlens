@@ -1,0 +1,43 @@
+{
+  "fields": {
+    "Employee": {
+      "type": "object",
+      "value": {
+        "Name": {"type": "string", "value": "Jane M Doe", "confidence": 0.95},
+        "SocialSecurityNumber": {"type": "string", "value": "123-45-6789", "confidence": 0.92},
+        "Address": {"type": "string", "value": "456 Oak St, Springfield IL 62704", "confidence": 0.90}
+      }
+    },
+    "Employer": {
+      "type": "object",
+      "value": {
+        "Name": {"type": "string", "value": "Acme Corp", "confidence": 0.96},
+        "IdNumber": {"type": "string", "value": "36-1234567", "confidence": 0.94},
+        "Address": {"type": "string", "value": "100 Main St, Chicago IL 60601", "confidence": 0.93}
+      }
+    },
+    "WagesTipsAndOtherCompensation": {"type": "number", "value": "72500.00", "confidence": 0.97},
+    "FederalIncomeTaxWithheld": {"type": "number", "value": "10875.00", "confidence": 0.96},
+    "SocialSecurityWages": {"type": "number", "value": "72500.00", "confidence": 0.95},
+    "SocialSecurityTaxWithheld": {"type": "number", "value": "4495.00", "confidence": 0.95},
+    "MedicareWagesAndTips": {"type": "number", "value": "72500.00", "confidence": 0.95},
+    "MedicareTaxWithheld": {"type": "number", "value": "1051.25", "confidence": 0.95},
+    "StateTaxInfos": {
+      "type": "array",
+      "value": [
+        {
+          "type": "object",
+          "value": {
+            "State": {"type": "string", "value": "IL", "confidence": 0.94},
+            "StateWages": {"type": "number", "value": "72500.00", "confidence": 0.93},
+            "StateIncomeTax": {"type": "number", "value": "3588.75", "confidence": 0.93}
+          }
+        }
+      ]
+    },
+    "LocalTaxInfos": {
+      "type": "array",
+      "value": []
+    }
+  }
+}

@@ -164,6 +164,8 @@ class TaxResult:
     line_16_tax: float = 0.0             # Ordinary income tax
     capital_gains_tax: float = 0.0       # Preferential rate on LTCG/QD
     se_tax: float = 0.0                  # Self-employment tax (Schedule SE)
+    niit: float = 0.0                    # Net Investment Income Tax (3.8%)
+    additional_medicare_tax: float = 0.0 # Additional Medicare Tax (0.9%)
     qbi_deduction: float = 0.0           # Section 199A QBI deduction
     line_24_total_tax: float = 0.0
 
@@ -238,6 +240,8 @@ class TaxResult:
             "taxable_income": round(self.line_15_taxable_income, 2),
             "business_income": round(self.sched_c_total_profit, 2),
             "se_tax": round(self.se_tax, 2),
+            "niit": round(self.niit, 2),
+            "additional_medicare_tax": round(self.additional_medicare_tax, 2),
             "qbi_deduction": round(self.qbi_deduction, 2),
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
@@ -602,10 +606,42 @@ def compute_tax(
     # If there were short-term gains, they're part of taxable_income and taxed at ordinary rates
 
     # =======================================================================
+    # NET INVESTMENT INCOME TAX (NIIT) — 3.8% surtax
+    # =======================================================================
+
+    niit_threshold = NIIT_THRESHOLD[filing_status]
+    if result.line_11_agi > niit_threshold:
+        # Net investment income = interest + dividends + capital gains + other investment income
+        net_investment_income = (
+            result.line_2b_taxable_interest
+            + result.line_3b_ordinary_dividends
+            + max(0, result.sched_d_net_gain)
+        )
+        # NIIT is 3.8% on the LESSER of net investment income OR AGI exceeding threshold
+        niit_base = min(net_investment_income, result.line_11_agi - niit_threshold)
+        result.niit = max(0, niit_base * NIIT_RATE)
+
+    # =======================================================================
+    # ADDITIONAL MEDICARE TAX — 0.9% on earnings above threshold
+    # =======================================================================
+
+    amt_threshold = ADDITIONAL_MEDICARE_THRESHOLD[filing_status]
+    total_medicare_wages = sum(w.medicare_wages for w in w2s) + result.sched_se_taxable
+    if total_medicare_wages > amt_threshold:
+        # 0.9% on the excess — W-2 withholding already covers base Medicare
+        result.additional_medicare_tax = (total_medicare_wages - amt_threshold) * ADDITIONAL_MEDICARE_RATE
+
+    # =======================================================================
     # TOTAL TAX (Line 24)
     # =======================================================================
 
-    result.line_24_total_tax = result.line_16_tax + result.capital_gains_tax + result.se_tax
+    result.line_24_total_tax = (
+        result.line_16_tax
+        + result.capital_gains_tax
+        + result.se_tax
+        + result.niit
+        + result.additional_medicare_tax
+    )
 
     # =======================================================================
     # CREDITS

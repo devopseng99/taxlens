@@ -185,6 +185,10 @@ def generate_summary_page(result: TaxResult) -> BytesIO:
     y = draw_line(c, "", "Taxable income", result.line_15_taxable_income, y)
     if result.se_tax > 0:
         y = draw_line(c, "", "  Self-employment tax", result.se_tax, y)
+    if result.niit > 0:
+        y = draw_line(c, "", "  Net Investment Income Tax (3.8%)", result.niit, y)
+    if result.additional_medicare_tax > 0:
+        y = draw_line(c, "", "  Additional Medicare Tax (0.9%)", result.additional_medicare_tax, y)
     y = draw_line(c, "", "Total federal tax", result.line_24_total_tax, y, bold=True)
     y = draw_line(c, "", "Total withholding + payments", result.line_33_total_payments, y)
     if result.line_34_overpaid > 0:
@@ -300,6 +304,10 @@ def generate_1040(result: TaxResult) -> BytesIO:
     # Page 2
     p2 = "topmostSubform[0].Page2[0]."
     f[p2 + "f2_02[0]"] = _money(result.line_16_tax + result.capital_gains_tax)  # Line 16
+    # Schedule 2 taxes (NIIT + Additional Medicare) go on line 23
+    sched2_tax = result.niit + result.additional_medicare_tax
+    if sched2_tax > 0:
+        f[p2 + "f2_09[0]"] = _money(sched2_tax)                     # Line 23
     f[p2 + "f2_10[0]"] = _money(result.line_24_total_tax)           # Line 24
 
     f[p2 + "f2_11[0]"] = _money(result.line_25_federal_withheld)    # Line 25a
@@ -441,6 +449,14 @@ def generate_schedule_c(result: TaxResult) -> BytesIO:
     f[lines2 + "f1_36[0]"] = _money(total_util)                     # Line 25 utilities
     f[lines2 + "f1_38[0]"] = _money(total_other)                    # Line 27a other
 
+    # Home office deduction (Line 30)
+    total_home_office = 0.0
+    for b in biz_list:
+        if b.home_total_sqft > 0 and b.home_office_sqft > 0:
+            total_home_office += b.home_expenses * (b.home_office_sqft / b.home_total_sqft)
+    if total_home_office > 0:
+        f[p1 + "f1_40[0]"] = _money(total_home_office)              # Line 30 home office
+
     # Totals
     f[p1 + "f1_41[0]"] = _money(total_expenses)                     # Line 28
     f[p1 + "f1_42[0]"] = _money(total_net)                          # Line 31 net profit
@@ -473,7 +489,10 @@ def generate_schedule_d(result: TaxResult) -> BytesIO:
         f[p1 + row_base + f"f1_{idx_start}[0]"] = t.description
         f[p1 + row_base + f"f1_{idx_start+1}[0]"] = t.date_acquired
         f[p1 + row_base + f"f1_{idx_start+2}[0]"] = t.date_sold
-        # proceeds and cost_basis in gain/loss
+        f[p1 + row_base + f"f1_{idx_start+3}[0]"] = _money(t.proceeds)
+        # Cost basis and gain in adjacent columns
+        f[p1 + row_base + f"f1_{idx_start+4}[0]"] = _money(t.cost_basis)
+        f[p1 + row_base + f"f1_{idx_start+6}[0]"] = _money(t.gain_loss)
     f[p1 + "f1_19[0]"] = _money(result.sched_d_short_term_gain)     # Line 7
 
     # Part II — Long-term (rows 8a-10, then line 15)
@@ -484,6 +503,9 @@ def generate_schedule_d(result: TaxResult) -> BytesIO:
         f[p1 + row_base + f"f1_{idx_start}[0]"] = t.description
         f[p1 + row_base + f"f1_{idx_start+1}[0]"] = t.date_acquired
         f[p1 + row_base + f"f1_{idx_start+2}[0]"] = t.date_sold
+        f[p1 + row_base + f"f1_{idx_start+3}[0]"] = _money(t.proceeds)
+        f[p1 + row_base + f"f1_{idx_start+4}[0]"] = _money(t.cost_basis)
+        f[p1 + row_base + f"f1_{idx_start+6}[0]"] = _money(t.gain_loss)
     f[p1 + "f1_39[0]"] = _money(result.sched_d_long_term_gain)      # Line 15
 
     # Part III

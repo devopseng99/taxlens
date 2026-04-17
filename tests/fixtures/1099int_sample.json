@@ -1,0 +1,17 @@
+{
+  "fields": {
+    "Transactions": {
+      "type": "array",
+      "value": [
+        {
+          "type": "object",
+          "value": {
+            "Payer": {"type": "string", "value": "First National Bank", "confidence": 0.95},
+            "Box1": {"type": "number", "value": "$2,450.00", "confidence": 0.96},
+            "Box3": {"type": "number", "value": "$0.00", "confidence": 0.90}
+          }
+        }
+      ]
+    }
+  }
+}
