@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from ocr import analyze_document
 from bridge import ocr_to_w2_payload, write_populated_data
 from tax_routes import router as tax_router
+from auth import require_auth, AUTH_ENABLED
 
 app = FastAPI(
     title="TaxLens Document Intake API",
@@ -77,7 +78,12 @@ def doc_dir(username: str, proc_id: str) -> Path:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "storage_root": str(STORAGE_ROOT), "writable": STORAGE_ROOT.exists()}
+    return {
+        "status": "ok",
+        "storage_root": str(STORAGE_ROOT),
+        "writable": STORAGE_ROOT.exists(),
+        "auth_enabled": AUTH_ENABLED,
+    }
 
 
 @app.post("/upload", response_model=DocumentMetadata)
@@ -85,6 +91,7 @@ async def upload_document(
     file: UploadFile = File(...),
     username: str = Form(...),
     doc_type: str = Form(default="auto"),
+    _auth: str = Depends(require_auth),
 ):
     """Upload a tax document (PDF, image). Stored locally on PVC."""
 
@@ -135,6 +142,7 @@ async def analyze(
     proc_id: str,
     username: str = Query(...),
     model_id: str = Query(default="prebuilt-tax.us"),
+    _auth: str = Depends(require_auth),
 ):
     """Run Azure Document Intelligence OCR on an uploaded document."""
 
@@ -233,6 +241,7 @@ async def bridge_to_openfile(
     proc_id: str,
     username: str = Query(...),
     tax_return_id: str = Query(...),
+    _auth: str = Depends(require_auth),
 ):
     """Bridge OCR results to OpenFile populated_data table."""
     dest = doc_dir(username, proc_id)
@@ -273,7 +282,7 @@ async def preview_bridge(
 
 
 @app.delete("/documents/{username}/{proc_id}")
-async def delete_document(username: str, proc_id: str):
+async def delete_document(username: str, proc_id: str, _auth: str = Depends(require_auth)):
     """Delete a document and all associated files."""
     dest = doc_dir(username, proc_id)
     if not dest.exists():

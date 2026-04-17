@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,7 @@ from tax_engine import (
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
 )
 from pdf_generator import generate_all_pdfs
+from auth import require_auth
 
 router = APIRouter(prefix="/tax-draft", tags=["Tax Drafts"])
 
@@ -127,7 +128,7 @@ def get_draft_dir(username: str, draft_id: str) -> Path:
 # Endpoints
 # ---------------------------------------------------------------------------
 @router.post("")
-async def create_tax_draft(req: TaxDraftRequest):
+async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_auth)):
     """Create a complete tax draft from OCR data + supplemental info.
 
     Computes federal 1040 + Illinois IL-1040, generates PDF forms,
