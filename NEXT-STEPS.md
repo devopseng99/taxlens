@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-21 (v0.8.5)
+Updated: 2026-04-21 (v0.9.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -33,14 +33,12 @@ Updated: 2026-04-21 (v0.8.5)
 - [x] Auto-detect form type from Azure doc_type
 - [x] 26 new parser unit tests + 5 fixtures + 4 smoke tests (126 total tests, 29 smoke tests)
 - [x] Built, deployed, verified (v0.8.5)
+- [x] MCP server with 7 tools + 2 resources via StreamableHTTP at `/api/mcp`
+- [x] DNS rebinding protection, stateless HTTP, FastAPI lifespan integration
+- [x] 19 MCP tool handler unit tests (145 total tests, 29 smoke tests)
+- [x] Built, deployed, verified (v0.9.0)
 
 ## Ready to Build
-
-### Wave 8 — Agentic Intelligence (MCP Server)
-Expose tax engine as MCP server via StreamableHTTP at `/mcp`.
-
-**Tools:** compute_tax, compare_scenarios, estimate_impact, optimize_deductions, list_documents, get_draft, upload_document
-**Resources:** taxlens://drafts/{username}, taxlens://states, taxlens://documents/{username}
 
 ### Wave 10 — Plaid Financial Institution Integration
 Auto-import W-2s, 1099s, investment transactions from banks/brokerages via Plaid Link.

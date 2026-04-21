@@ -100,17 +100,20 @@ Updated: 2026-04-17
 - [x] 4 new smoke tests (TC26-TC29: dividends+brokerage, freelancer, homeowner, combined pipeline)
 - [x] Built, deployed, verified (v0.8.5)
 
+## Wave 8 — Agentic Intelligence (MCP Server) [COMPLETED]
+- [x] MCP server (`app/mcp_server.py`) with 7 tools: compute_tax_scenario, compare_scenarios, estimate_impact, optimize_deductions, get_draft, list_user_drafts, list_states
+- [x] 2 MCP resources: taxlens://states, taxlens://drafts/{username}
+- [x] StreamableHTTP at `/api/mcp` via FastAPI ASGI mount (not Starlette sub-app)
+- [x] DNS rebinding protection with TransportSecuritySettings (allowed_hosts)
+- [x] stateless_http=True (no server-side session state)
+- [x] FastAPI lifespan manages MCP session_manager.run()
+- [x] 19 unit tests for MCP tool handlers (145 total passing)
+- [x] Live verified: initialize, tools/list, compute_tax_scenario all working
+- [x] Built, deployed, verified (v0.9.0)
+
 ## Next Work Items
 
-### 1. Wave 8 — Agentic Intelligence (MCP Server)
-**NOT a custom chat UI** — expose tax engine as MCP server.
-
-**Key deliverables:**
-- MCP server (`app/mcp_server.py`) with tools: compute_tax, compare_scenarios, optimize_deductions
-- MCP resources for drafts, documents, state configs
-- StreamableHTTP at `/mcp`
-
-### 3. Wave 10 — Plaid Financial Institution Integration
+### 1. Wave 10 — Plaid Financial Institution Integration
 Auto-import W-2s, 1099s, investment transactions from banks/brokerages.
 
 **Key deliverables:**
@@ -118,7 +121,7 @@ Auto-import W-2s, 1099s, investment transactions from banks/brokerages.
 - Investment transactions → CapitalTransaction, dividends → DividendIncome
 - Auto-download + OCR tax document PDFs from connected institutions
 
-### 4. Enable Auth in Production
+### 2. Enable Auth in Production
 Generate API keys, set TAXLENS_API_KEYS in K8s secret, update frontend to send header.
 
 ```bash

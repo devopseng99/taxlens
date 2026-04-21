@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-21 (v0.8.5)
+Updated: 2026-04-21 (v0.9.0)
 
 ## Architecture
 
@@ -57,6 +57,12 @@ Updated: 2026-04-21 (v0.8.5)
 24. **1099-DIV capital gain distributions as LTCG** — Box 2a from 1099-DIV (capital gain distributions) are treated as long-term capital gains and injected as a synthetic `CapitalTransaction` into Schedule D. This matches IRS rules — mutual fund capital gain distributions are always long-term regardless of holding period.
 
 25. **additional_withholding param for non-W-2 withholding** — 1099-DIV (Box 4) and 1099-NEC (Box 4) federal withholding flows through a separate `additional_withholding` parameter to `compute_tax()`, added to `line_25_federal_withheld` alongside W-2 withholding. Keeps the W-2 summation clean while supporting any number of 1099 withholding sources.
+
+26. **MCP mounted as raw ASGI Route, not Starlette sub-app** — Mounting FastMCP's `streamable_http_app()` as a Starlette sub-application causes double-lifespan conflict (FastAPI's lifespan and Starlette's compete for session_manager). Instead, FastAPI lifespan manages `mcp.session_manager.run()` directly, and `StreamableHTTPASGIApp(mcp.session_manager)` is mounted via `Route("/mcp", ...)` for minimal ASGI passthrough.
+
+27. **DNS rebinding protection for MCP** — MCP SDK enables DNS rebinding protection by default, rejecting requests where the Host header doesn't match localhost. Production requires explicit `TransportSecuritySettings(allowed_hosts=["dropit.istayintek.com", ...])` to accept requests through the CF tunnel.
+
+28. **Stateless MCP over StreamableHTTP** — `stateless_http=True` means no server-side session state between requests. Each MCP call is independent. This simplifies scaling (any pod can handle any request) and avoids session affinity requirements behind the load balancer.
 
 ## PDF Template Provenance
 
