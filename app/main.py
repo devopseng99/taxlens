@@ -16,12 +16,26 @@ from ocr import analyze_document
 from bridge import ocr_to_w2_payload, write_populated_data
 from tax_routes import router as tax_router
 from auth import require_auth, AUTH_ENABLED
+from contextlib import asynccontextmanager
+from mcp_server import mcp
+
+# Create MCP Starlette app (initializes session_manager lazily)
+_mcp_starlette = mcp.streamable_http_app()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    """Start MCP session manager (required for StreamableHTTP transport)."""
+    async with mcp.session_manager.run():
+        yield
+
 
 app = FastAPI(
     title="TaxLens Document Intake API",
     version="0.1.0",
     docs_url="/docs",
     root_path="/api",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -40,6 +54,16 @@ MAX_FILE_SIZE = int(os.getenv("TAXLENS_MAX_FILE_MB", "30")) * 1024 * 1024  # 30M
 
 # Mount tax draft routes
 app.include_router(tax_router)
+
+# Mount MCP server (StreamableHTTP at /mcp)
+# Accessible at https://dropit.istayintek.com/api/mcp
+# Session manager lifecycle managed by FastAPI lifespan above
+from starlette.routing import Mount, Route
+from mcp.server.fastmcp.server import StreamableHTTPASGIApp
+
+_mcp_asgi = StreamableHTTPASGIApp(mcp.session_manager)
+app.router.routes.append(Route("/mcp", endpoint=_mcp_asgi))
+app.router.routes.append(Route("/mcp/", endpoint=_mcp_asgi))
 
 
 # --- Models ---
@@ -122,6 +146,7 @@ async def health():
         "storage_root": str(STORAGE_ROOT),
         "writable": STORAGE_ROOT.exists(),
         "auth_enabled": AUTH_ENABLED,
+        "mcp_endpoint": "/api/mcp",
     }
 
 
