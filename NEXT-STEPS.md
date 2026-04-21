@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-20 (v0.7.0)
+Updated: 2026-04-17 (v0.8.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -21,38 +21,45 @@ Updated: 2026-04-20 (v0.7.0)
 - [x] Form 8959 PDF — Additional Medicare Tax (Parts I-V with withholding reconciliation)
 - [x] Form 8960 PDF — Net Investment Income Tax (Parts I-III for individuals)
 - [x] Conditional form generation (only when surtaxes apply)
-- [x] 6 new unit tests for Schedule 2 form generation logic
 - [x] 58 total unit tests passing (49 engine + 9 auth)
+- [x] Multi-state support — 10 states (IL, CA, NY, NJ, PA, NC, GA, OH, TX, FL)
+- [x] Multi-state worker orchestration (nonresident + resident with credits)
+- [x] Reciprocal agreements (IL↔WI/IA/KY/MI, NJ↔PA, PA↔OH/IN/MD/VA/WV)
+- [x] StateWageInfo + W-2 OCR StateTaxInfos parsing
+- [x] Generic ReportLab state PDF summary for non-IL states
+- [x] 42 new state tax tests + 5 new smoke tests (100 total tests, 25 smoke tests)
+- [x] Built, deployed, verified (v0.8.0)
 
 ## Ready to Build
 
-### AMT (Alternative Minimum Tax)
-- Would need AMT exemption amounts, phase-out, and preference items
-- Complex but relevant for high-income business owners
+### Wave 9 — Extended OCR Parsers (Next)
+Parse all common tax document types so users can upload any form and auto-fill computation.
 
-### Enable Auth in Production
-- Generate API keys, set TAXLENS_API_KEYS env var
-- Update frontend to send X-API-Key header
+**New parsers:**
+- `parse_1099div_from_ocr()` — Azure `prebuilt-tax.us.1099DIV` → DividendIncome dataclass
+  - Box 1a (ordinary dividends), 1b (qualified), 2a (cap gain dist), 4 (withheld), 5 (199A)
+- `parse_1099nec_from_ocr()` — Azure `prebuilt-tax.us.1099NEC` → BusinessIncome
+  - Box 1 (NEC → gross_receipts), Payer.Name → business_name, Box 4 (withheld)
+- `parse_1098_from_ocr()` — generic `prebuilt-document` → float (mortgage interest)
+  - Box 1 simple extraction
+- `parse_1099b_from_structured()` — JSON/CSV import → list[CapitalTransaction]
+  - NOT OCR — brokerage tables too complex for OCR. Structured import from Plaid or manual
 
-### Wave 7 — Multi-State Support (Modular)
-- Pluggable state config modules (`state_configs/{state}.py`)
-- Generic `compute_state_tax()` dispatcher (flat + graduated models)
-- Wave 1 states: IL (existing), CA, NY, TX, FL, PA, NC, GA, NJ, OH (~60% US pop)
-- Generic ReportLab state summary PDF for states without official fillable templates
-- Backward compat: `il_*` fields remain as aliases into `state_results["IL"]`
+**Tasks:** 9 new parsers/handlers, 15+ unit tests, 4 OCR fixture tests, TaxDraftRequest extensions
 
 ### Wave 8 — Agentic Intelligence (MCP Server)
-- **NOT a custom chat UI** — expose tax engine as MCP server
-- MCP tools: `compute_tax`, `compare_scenarios`, `estimate_impact`, `list_documents`, `get_draft`, `optimize_deductions`
-- Any MCP client (Claude Desktop, Claude Code, custom agents) gets native tax tools
-- REST API remains for direct integration; MCP adds agentic layer for free
-- Tax optimization: scenario comparison (filing status, itemized vs standard, estimated payments)
-- Multi-document correlation: auto-match W-2s to employers via MCP resources
+Expose tax engine as MCP server via StreamableHTTP at `/mcp`.
+
+**Tools:** compute_tax, compare_scenarios, estimate_impact, optimize_deductions, list_documents, get_draft, upload_document
+**Resources:** taxlens://drafts/{username}, taxlens://states, taxlens://documents/{username}
+
+### Wave 10 — Plaid Financial Institution Integration
+Auto-import W-2s, 1099s, investment transactions from banks/brokerages via Plaid Link.
+
+**Flow:** Create link token → user authenticates → exchange token → sync investments + statements → auto-OCR downloaded PDFs → merge into tax computation
 
 ### Enable Auth in Production
-- Generate API keys, set TAXLENS_API_KEYS env var
-- Update frontend to send X-API-Key header
+Generate API keys, set TAXLENS_API_KEYS env var, update frontend.
 
 ### AMT (Alternative Minimum Tax)
-- Would need AMT exemption amounts, phase-out, and preference items
-- Complex but relevant for high-income business owners
+AMT exemption amounts, phase-out, preference items. Complex but relevant for high-income business owners.

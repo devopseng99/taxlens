@@ -73,37 +73,49 @@ Updated: 2026-04-17
 - [x] TC12 smoke test confirms: Schedule 2 + Form 8959 + Form 8960 generated for high-income filer
 - [x] Built, deployed, verified (v0.7.0)
 
+## Wave 7 — Multi-State Support [COMPLETED]
+- [x] `app/state_configs/` — pluggable state config modules (one file per state)
+- [x] `app/state_tax_engine.py` — generic dispatcher (flat, graduated, none)
+- [x] 10 states: IL, CA, NY, NJ, PA, NC, GA, OH, TX, FL
+- [x] Multi-state worker orchestration (nonresident + resident with credits)
+- [x] Reciprocal agreement handling (IL↔WI/IA/KY/MI, NJ↔PA, PA↔OH/IN/MD/VA/WV)
+- [x] StateWageInfo dataclass + W-2 OCR StateTaxInfos parsing
+- [x] Days-worked allocation fallback
+- [x] Generic ReportLab state PDF summary for non-IL states
+- [x] IL backward compat (il_* fields, illinois_* JSON keys)
+- [x] 42 new state tax unit tests (100 total passing)
+- [x] 5 new smoke tests (TC21-TC25: CA, TX, PA, NJ→NY, IL→WI)
+- [x] Built, deployed, verified (v0.8.0)
+
 ## Next Work Items
 
-### 1. Wave 7 — Multi-State Support (Modular)
-Pluggable state tax modules. See NEXT-STEPS.md for details.
+### 1. Wave 9 — Extended OCR Parsers
+Parse all common tax document types: 1099-DIV, 1099-NEC, 1098, 1099-B structured import.
 
 **Key deliverables:**
-- `app/state_configs/` directory — one module per state (ca.py, ny.py, etc.)
-- `app/state_tax_engine.py` — generic compute_state_tax() dispatcher
-- Refactor IL hardcode out of tax_engine.py
-- 10 states in Wave 1: IL, CA, NY, TX, FL, PA, NC, GA, NJ, OH
+- `parse_1099div_from_ocr()` — Azure `prebuilt-tax.us.1099DIV` → DividendIncome
+- `parse_1099nec_from_ocr()` — Azure `prebuilt-tax.us.1099NEC` → BusinessIncome
+- `parse_1098_from_ocr()` — generic model → mortgage interest
+- `parse_1099b_from_structured()` — JSON/CSV import → CapitalTransaction list
+- 15+ unit tests, 4 OCR fixture tests
 
 ### 2. Wave 8 — Agentic Intelligence (MCP Server)
 **NOT a custom chat UI** — expose tax engine as MCP server.
 
 **Key deliverables:**
 - MCP server (`app/mcp_server.py`) with tools: compute_tax, compare_scenarios, optimize_deductions
-- Any MCP client (Claude Desktop, Claude Code) gets native tax tools
-- REST API unchanged; MCP adds agentic layer
+- MCP resources for drafts, documents, state configs
+- StreamableHTTP at `/mcp`
 
-```bash
-# Example MCP config for Claude Desktop:
-# {
-#   "mcpServers": {
-#     "taxlens": {
-#       "url": "https://dropit.istayintek.com/mcp"
-#     }
-#   }
-# }
-```
+### 3. Wave 10 — Plaid Financial Institution Integration
+Auto-import W-2s, 1099s, investment transactions from banks/brokerages.
 
-### 3. Enable Auth in Production
+**Key deliverables:**
+- Plaid Link flow (create-link-token → exchange → sync)
+- Investment transactions → CapitalTransaction, dividends → DividendIncome
+- Auto-download + OCR tax document PDFs from connected institutions
+
+### 4. Enable Auth in Production
 Generate API keys, set TAXLENS_API_KEYS in K8s secret, update frontend to send header.
 
 ```bash
