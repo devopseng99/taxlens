@@ -122,6 +122,9 @@ class TaxDraftRequest(BaseModel):
     # Structured brokerage data (1099-B — JSON import, not OCR)
     brokerage_transactions: list[BrokerageTransactionInput] = Field(default=[], description="Structured 1099-B transactions")
 
+    # Plaid connected accounts — pull investment data from synced Plaid items
+    plaid_item_ids: list[str] = Field(default=[], description="Plaid item_ids to include (must be synced first)")
+
     # Business income (Schedule C)
     businesses: list[BusinessIncomeInput] = Field(default=[], description="Self-employment / business income")
 
@@ -209,6 +212,33 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         [t.model_dump() for t in req.brokerage_transactions]
     ) if req.brokerage_transactions else []
 
+    # --- Load Plaid investment data (if connected) ---
+    plaid_cap_txns = []
+    plaid_ordinary_div = 0.0
+    plaid_qualified_div = 0.0
+    plaid_cap_gain_dist = 0.0
+    if req.plaid_item_ids:
+        from plaid_routes import load_plaid_tax_data
+        for item_id in req.plaid_item_ids:
+            tax_data = load_plaid_tax_data(req.username, item_id)
+            if tax_data is None:
+                raise HTTPException(400, f"Plaid item {item_id} not synced. Run POST /plaid/sync/{item_id} first.")
+            # Capital transactions from sells
+            for t in tax_data.get("capital_transactions", []):
+                plaid_cap_txns.append(CapitalTransaction(
+                    description=t["description"],
+                    date_acquired=t.get("date_acquired", "Various"),
+                    date_sold=t.get("date_sold", "2025"),
+                    proceeds=t["proceeds"],
+                    cost_basis=t["cost_basis"],
+                    is_long_term=t.get("is_long_term", False),
+                ))
+            # Dividend income
+            div = tax_data.get("dividend_income", {})
+            plaid_ordinary_div += div.get("ordinary_dividends", 0)
+            plaid_qualified_div += div.get("qualified_dividends", 0)
+            plaid_cap_gain_dist += div.get("capital_gain_dist", 0)
+
     # --- Build additional income ---
     cap_txns = [
         CapitalTransaction(
@@ -220,9 +250,20 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
             is_long_term=t.is_long_term,
         )
         for t in req.additional_income.capital_transactions
-    ] + brokerage_txns
+    ] + brokerage_txns + plaid_cap_txns
 
     # Cap gain distributions from 1099-DIV are long-term
+    # Cap gain distributions from Plaid are also long-term
+    if plaid_cap_gain_dist > 0:
+        cap_txns.append(CapitalTransaction(
+            description="Plaid Capital Gain Distributions",
+            date_acquired="Various",
+            date_sold="2025",
+            proceeds=plaid_cap_gain_dist,
+            cost_basis=0.0,
+            is_long_term=True,
+        ))
+
     if ocr_cap_gain_dist > 0:
         cap_txns.append(CapitalTransaction(
             description="1099-DIV Capital Gain Distributions",
@@ -235,8 +276,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
 
     additional = AdditionalIncome(
         other_interest=ocr_interest + req.additional_income.other_interest,
-        ordinary_dividends=ocr_ordinary_div + req.additional_income.ordinary_dividends,
-        qualified_dividends=ocr_qualified_div + req.additional_income.qualified_dividends,
+        ordinary_dividends=ocr_ordinary_div + plaid_ordinary_div + req.additional_income.ordinary_dividends,
+        qualified_dividends=ocr_qualified_div + plaid_qualified_div + req.additional_income.qualified_dividends,
         capital_transactions=cap_txns,
         other_income=req.additional_income.other_income,
         other_income_description=req.additional_income.other_income_description,
@@ -349,6 +390,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         "nec_1099_proc_ids": req.nec_1099_proc_ids,
         "mortgage_1098_proc_ids": req.mortgage_1098_proc_ids,
         "brokerage_transactions": [t.model_dump() for t in req.brokerage_transactions],
+        "plaid_item_ids": req.plaid_item_ids,
         "businesses": [b.model_dump() for b in req.businesses + nec_businesses],
         "additional_income": req.additional_income.model_dump(),
         "deductions": req.deductions.model_dump(),

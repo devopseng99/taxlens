@@ -1,0 +1,94 @@
+{
+  "investment_transactions": [
+    {
+      "investment_transaction_id": "txn_001",
+      "account_id": "acct_001",
+      "security_id": "sec_aapl",
+      "date": "2025-03-15",
+      "name": "SELL AAPL",
+      "type": "sell",
+      "subtype": "sell",
+      "quantity": -50,
+      "amount": -8750.00,
+      "price": 175.00,
+      "cost_basis": 7500.00
+    },
+    {
+      "investment_transaction_id": "txn_002",
+      "account_id": "acct_001",
+      "security_id": "sec_tsla",
+      "date": "2025-06-20",
+      "name": "SELL TSLA",
+      "type": "sell",
+      "subtype": "sell",
+      "quantity": -10,
+      "amount": -2800.00,
+      "price": 280.00,
+      "cost_basis": 3200.00
+    },
+    {
+      "investment_transaction_id": "txn_003",
+      "account_id": "acct_001",
+      "security_id": "sec_vti",
+      "date": "2025-09-15",
+      "name": "DIVIDEND VTI",
+      "type": "cash",
+      "subtype": "dividend",
+      "quantity": 0,
+      "amount": 1245.67,
+      "price": 0
+    },
+    {
+      "investment_transaction_id": "txn_004",
+      "account_id": "acct_001",
+      "security_id": "sec_vti",
+      "date": "2025-12-15",
+      "name": "QUALIFIED DIVIDEND VTI",
+      "type": "cash",
+      "subtype": "qualified dividend",
+      "quantity": 0,
+      "amount": 890.50,
+      "price": 0
+    },
+    {
+      "investment_transaction_id": "txn_005",
+      "account_id": "acct_001",
+      "security_id": "sec_spy",
+      "date": "2025-12-20",
+      "name": "CAPITAL GAIN DISTRIBUTION SPY",
+      "type": "cash",
+      "subtype": "capital gain (long term)",
+      "quantity": 0,
+      "amount": 450.00,
+      "price": 0
+    },
+    {
+      "investment_transaction_id": "txn_006",
+      "account_id": "acct_001",
+      "security_id": "sec_msft",
+      "date": "2025-11-01",
+      "name": "BUY MSFT",
+      "type": "buy",
+      "subtype": "buy",
+      "quantity": 20,
+      "amount": 8400.00,
+      "price": 420.00
+    }
+  ],
+  "securities": [
+    {"security_id": "sec_aapl", "name": "Apple Inc.", "ticker_symbol": "AAPL", "type": "equity"},
+    {"security_id": "sec_tsla", "name": "Tesla Inc.", "ticker_symbol": "TSLA", "type": "equity"},
+    {"security_id": "sec_vti", "name": "Vanguard Total Stock Market ETF", "ticker_symbol": "VTI", "type": "etf"},
+    {"security_id": "sec_spy", "name": "SPDR S&P 500 ETF Trust", "ticker_symbol": "SPY", "type": "etf"},
+    {"security_id": "sec_msft", "name": "Microsoft Corporation", "ticker_symbol": "MSFT", "type": "equity"}
+  ],
+  "accounts": [
+    {
+      "account_id": "acct_001",
+      "name": "Brokerage Account",
+      "type": "investment",
+      "subtype": "brokerage"
+    }
+  ],
+  "total_investment_transactions": 6
+}

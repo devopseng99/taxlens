@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-21 (v0.9.0)
+Updated: 2026-04-21 (v1.0.0)
 
 ## Architecture
 
@@ -63,6 +63,14 @@ Updated: 2026-04-21 (v0.9.0)
 27. **DNS rebinding protection for MCP** — MCP SDK enables DNS rebinding protection by default, rejecting requests where the Host header doesn't match localhost. Production requires explicit `TransportSecuritySettings(allowed_hosts=["dropit.istayintek.com", ...])` to accept requests through the CF tunnel.
 
 28. **Stateless MCP over StreamableHTTP** — `stateless_http=True` means no server-side session state between requests. Each MCP call is independent. This simplifies scaling (any pod can handle any request) and avoids session affinity requirements behind the load balancer.
+
+29. **Plaid access_token encrypted with Fernet** — Plaid persistent access_tokens are encrypted at rest with Fernet (AES-128-CBC + HMAC) and stored on the PVC. The Fernet key is injected via K8s secret (`PLAID_FERNET_KEY`). This prevents plaintext credential exposure if the PVC is compromised.
+
+30. **Plaid integration gracefully disabled** — When `PLAID_CLIENT_ID` or `PLAID_FERNET_KEY` are not set, `PLAID_ENABLED=False` and all Plaid endpoints return 503. The rest of the app functions normally. This allows the same image to run with or without Plaid credentials.
+
+31. **Plaid investment_transactions for tax data, not statements** — The Plaid statements API (for downloading 1099 PDFs) is a premium product requiring special access. Instead, we use `investments/transactions/get` which provides sell transactions (→ Schedule D) and dividends (→ Schedule B) directly as structured data — no OCR needed. This is more reliable than OCR and available in the free sandbox tier.
+
+32. **Plaid data stored as tax_data.json per item** — Each synced Plaid item gets `transactions.json` (raw API response) and `tax_data.json` (parsed CapitalTransactions + DividendIncome). TaxDraftRequest references items by ID and loads the parsed file, avoiding re-parsing on every draft computation.
 
 ## PDF Template Provenance
 

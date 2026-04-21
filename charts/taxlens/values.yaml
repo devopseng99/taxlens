@@ -25,6 +25,14 @@ azure:
   endpointKey: endpoint
   apiKeyKey: key
 
+plaid:
+  enabled: false
+  secretName: plaid-credentials
+  clientIdKey: client-id
+  secretKey: secret
+  fernetKeyKey: fernet-key
+  env: sandbox
+
 openfileDb:
   host: openfile-postgresql.openfile.svc.cluster.local
   port: "5432"

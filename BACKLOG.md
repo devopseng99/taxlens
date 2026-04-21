@@ -111,17 +111,21 @@ Updated: 2026-04-17
 - [x] Live verified: initialize, tools/list, compute_tax_scenario all working
 - [x] Built, deployed, verified (v0.9.0)
 
+## Wave 10 — Plaid Financial Institution Integration [COMPLETED]
+- [x] Plaid client wrapper (`app/plaid_client.py`) — create_link_token, exchange, investments, remove
+- [x] Plaid parsers (`app/plaid_parsers.py`) — sell → CapitalTransaction, dividend → DividendIncome
+- [x] Plaid routes (`app/plaid_routes.py`) — link token, exchange+encrypt, sync, accounts, disconnect
+- [x] Fernet encryption for access_token storage on PVC
+- [x] TaxDraftRequest extended: plaid_item_ids merges Plaid data into computation
+- [x] Frontend Plaid Link UI — connect/sync/disconnect in Documents tab
+- [x] K8s secrets template + Helm values for Plaid credentials
+- [x] 18 unit tests (163 total passing)
+- [x] 2 new smoke tests (TC30-TC31: Plaid status + empty accounts)
+- [x] Built, deployed, verified (v1.0.0)
+
 ## Next Work Items
 
-### 1. Wave 10 — Plaid Financial Institution Integration
-Auto-import W-2s, 1099s, investment transactions from banks/brokerages.
-
-**Key deliverables:**
-- Plaid Link flow (create-link-token → exchange → sync)
-- Investment transactions → CapitalTransaction, dividends → DividendIncome
-- Auto-download + OCR tax document PDFs from connected institutions
-
-### 2. Enable Auth in Production
+### 1. Enable Auth in Production
 Generate API keys, set TAXLENS_API_KEYS in K8s secret, update frontend to send header.
 
 ```bash
@@ -130,3 +134,18 @@ python3 -c "from auth import generate_api_key; print(generate_api_key())"
 # Set in K8s:
 kubectl create secret generic taxlens-api-keys -n taxlens --from-literal=keys="tlk_xxx,tlk_yyy"
 ```
+
+### 2. Configure Plaid Credentials
+Set up Plaid sandbox (or production) credentials to enable the Plaid integration:
+
+```bash
+# Generate Fernet key:
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Create K8s secret:
+bash scripts/setup-plaid-secrets.sh <client_id> <secret> <fernet_key>
+# Enable in Helm:
+# Set plaid.enabled: true in values.yaml, then helm upgrade
+```
+
+### 3. AMT (Alternative Minimum Tax)
+AMT exemption amounts, phase-out, preference items. Complex but relevant for high-income business owners.

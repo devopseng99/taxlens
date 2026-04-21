@@ -868,6 +868,29 @@ run_test "TC29: Full pipeline (div + brokerage + business + mortgage)" '{
 
 
 # ===========================================================================
+# TC30: Plaid status endpoint
+# ===========================================================================
+log "=== TC30: Plaid Status ==="
+PLAID_RES=$(curl -sk "${API}/plaid/status" 2>&1)
+if echo "$PLAID_RES" | jq -e '.enabled != null' >/dev/null 2>&1; then
+    PLAID_ENV=$(echo "$PLAID_RES" | jq -r '.environment')
+    pass "TC30: Plaid status endpoint — enabled=$(echo "$PLAID_RES" | jq -r '.enabled'), env=${PLAID_ENV}"
+else
+    fail "TC30: Plaid status endpoint failed"
+fi
+
+# ===========================================================================
+# TC31: Plaid accounts (empty — no connected accounts)
+# ===========================================================================
+log "=== TC31: Plaid Accounts (empty) ==="
+ACCT_RES=$(curl -sk "${API}/plaid/accounts/smoketest" 2>&1)
+if echo "$ACCT_RES" | jq -e '.accounts | length == 0' >/dev/null 2>&1; then
+    pass "TC31: Empty Plaid accounts list for new user"
+else
+    fail "TC31: Expected empty accounts list"
+fi
+
+# ===========================================================================
 # SUMMARY
 # ===========================================================================
 echo ""

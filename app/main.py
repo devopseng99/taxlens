@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from ocr import analyze_document
 from bridge import ocr_to_w2_payload, write_populated_data
 from tax_routes import router as tax_router
+from plaid_routes import router as plaid_router
 from auth import require_auth, AUTH_ENABLED
 from contextlib import asynccontextmanager
 from mcp_server import mcp
@@ -54,6 +55,9 @@ MAX_FILE_SIZE = int(os.getenv("TAXLENS_MAX_FILE_MB", "30")) * 1024 * 1024  # 30M
 
 # Mount tax draft routes
 app.include_router(tax_router)
+
+# Mount Plaid integration routes
+app.include_router(plaid_router)
 
 # Mount MCP server (StreamableHTTP at /mcp)
 # Accessible at https://dropit.istayintek.com/api/mcp
@@ -141,12 +145,14 @@ def _detect_form_type(doc_type: str | None, model_id: str) -> str | None:
 
 @app.get("/health")
 async def health():
+    from plaid_routes import PLAID_ENABLED
     return {
         "status": "ok",
         "storage_root": str(STORAGE_ROOT),
         "writable": STORAGE_ROOT.exists(),
         "auth_enabled": AUTH_ENABLED,
         "mcp_endpoint": "/api/mcp",
+        "plaid_enabled": PLAID_ENABLED,
     }
 
 

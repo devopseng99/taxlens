@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-21 (v0.9.0)
+Updated: 2026-04-21 (v1.0.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -37,13 +37,13 @@ Updated: 2026-04-21 (v0.9.0)
 - [x] DNS rebinding protection, stateless HTTP, FastAPI lifespan integration
 - [x] 19 MCP tool handler unit tests (145 total tests, 29 smoke tests)
 - [x] Built, deployed, verified (v0.9.0)
+- [x] Plaid integration — connect brokerages, sync investment transactions + dividends
+- [x] Fernet-encrypted access_token storage, Plaid Link frontend, K8s secrets template
+- [x] plaid_item_ids in TaxDraftRequest merges Plaid data into tax computation
+- [x] 18 Plaid unit tests + 2 smoke tests (163 total tests, 31 smoke tests)
+- [x] Built, deployed, verified (v1.0.0)
 
 ## Ready to Build
-
-### Wave 10 — Plaid Financial Institution Integration
-Auto-import W-2s, 1099s, investment transactions from banks/brokerages via Plaid Link.
-
-**Flow:** Create link token → user authenticates → exchange token → sync investments + statements → auto-OCR downloaded PDFs → merge into tax computation
 
 ### Enable Auth in Production
 Generate API keys, set TAXLENS_API_KEYS env var, update frontend.

@@ -263,6 +263,19 @@
         <h2>Documents</h2>
         <div id="docsList"><div class="empty-state">No documents yet. Upload one above.</div></div>
       </div>
+      <div class="card" id="plaidCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin-bottom:0;">Connected Accounts (Plaid)</h2>
+          <div>
+            <button class="btn-primary btn-sm" id="plaidConnectBtn" onclick="connectPlaid()">Connect Bank/Brokerage</button>
+            <button class="btn-sm" style="margin-left:0.5rem;" onclick="loadPlaidAccounts()">Refresh</button>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem;">
+          Connect your brokerage to auto-import investment transactions (sells, dividends) for tax computation.
+        </p>
+        <div id="plaidAccountsList"><div class="empty-state">No connected accounts.</div></div>
+      </div>
     </div>
 
     <!-- =================== Tax Drafts Tab =================== -->
@@ -751,11 +764,131 @@
       setTimeout(() => el.classList.remove('show'), 3000);
     }
 
+    // =================== Plaid Integration ===================
+    let plaidEnabled = false;
+
+    async function checkPlaidStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/plaid/status`);
+        const data = await res.json();
+        plaidEnabled = data.enabled;
+        const btn = document.getElementById('plaidConnectBtn');
+        if (!plaidEnabled) {
+          btn.disabled = true;
+          btn.textContent = 'Plaid Not Configured';
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    async function loadPlaidAccounts() {
+      const username = getUsername();
+      if (!username) return;
+      const el = document.getElementById('plaidAccountsList');
+      try {
+        const res = await fetch(`${API_BASE}/plaid/accounts/${username}`);
+        const data = await res.json();
+        if (!data.accounts || data.accounts.length === 0) {
+          el.innerHTML = '<div class="empty-state">No connected accounts. Click "Connect Bank/Brokerage" to get started.</div>';
+          return;
+        }
+        let html = '<table><thead><tr><th>Institution</th><th>Connected</th><th>Synced</th><th>Actions</th></tr></thead><tbody>';
+        for (const acct of data.accounts) {
+          const ts = new Date(acct.connected_at).toLocaleDateString();
+          const synced = acct.has_sync ? '<span style="color:var(--success)">Yes</span>' : '<span style="color:var(--muted)">No</span>';
+          html += `<tr>
+            <td><strong>${acct.institution_name || acct.item_id}</strong></td>
+            <td>${ts}</td>
+            <td>${synced}</td>
+            <td>
+              <button class="btn-sm" onclick="syncPlaidItem('${acct.item_id}')">Sync</button>
+              <button class="btn-sm btn-danger" onclick="disconnectPlaid('${acct.item_id}')">Disconnect</button>
+            </td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = `<div class="empty-state" style="color:var(--danger)">Error loading accounts: ${e.message}</div>`;
+      }
+    }
+
+    async function connectPlaid() {
+      if (!plaidEnabled) { toast('Plaid integration not configured', 'error'); return; }
+      const username = getUsername();
+      if (!username) { toast('Enter a username first', 'error'); return; }
+      try {
+        const res = await fetch(`${API_BASE}/plaid/create-link-token?username=${username}`, { method: 'POST' });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.detail || res.statusText); }
+        const data = await res.json();
+        // Load Plaid Link and open
+        if (!window.Plaid) {
+          toast('Loading Plaid Link...', 'success');
+          await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+            s.onload = resolve; s.onerror = reject;
+            document.head.appendChild(s);
+          });
+        }
+        const handler = window.Plaid.create({
+          token: data.link_token,
+          onSuccess: async (publicToken, metadata) => {
+            try {
+              const xRes = await fetch(`${API_BASE}/plaid/exchange-token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  public_token: publicToken,
+                  username: username,
+                  institution_name: metadata.institution ? metadata.institution.name : 'Unknown',
+                }),
+              });
+              if (!xRes.ok) throw new Error('Exchange failed');
+              const xData = await xRes.json();
+              toast(`Connected: ${xData.institution_name || xData.item_id}`, 'success');
+              loadPlaidAccounts();
+            } catch (e) { toast(`Connection failed: ${e.message}`, 'error'); }
+          },
+          onExit: (err) => { if (err) toast(`Plaid Link exited: ${err.error_message}`, 'error'); },
+        });
+        handler.open();
+      } catch (e) { toast(`Failed to start Plaid Link: ${e.message}`, 'error'); }
+    }
+
+    async function syncPlaidItem(itemId) {
+      const username = getUsername();
+      try {
+        toast('Syncing investment data...', 'success');
+        const res = await fetch(`${API_BASE}/plaid/sync/${itemId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, tax_year: 2025 }),
+        });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.detail || res.statusText); }
+        const data = await res.json();
+        toast(`Synced: ${data.sell_transactions} sells, $${fmtNum(data.ordinary_dividends)} dividends`, 'success');
+        loadPlaidAccounts();
+      } catch (e) { toast(`Sync failed: ${e.message}`, 'error'); }
+    }
+
+    async function disconnectPlaid(itemId) {
+      if (!confirm('Disconnect this account? Synced data will be removed.')) return;
+      const username = getUsername();
+      try {
+        const res = await fetch(`${API_BASE}/plaid/accounts/${itemId}?username=${username}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        toast('Account disconnected', 'success');
+        loadPlaidAccounts();
+      } catch (e) { toast(`Disconnect failed: ${e.message}`, 'error'); }
+    }
+
     // =================== Init ===================
     checkHealth();
+    checkPlaidStatus();
     loadDocuments();
+    loadPlaidAccounts();
     setInterval(checkHealth, 30000);
-    document.getElementById('username').addEventListener('change', () => { loadDocuments(); });
+    document.getElementById('username').addEventListener('change', () => { loadDocuments(); loadPlaidAccounts(); });
   </script>
 </body>
 </html>

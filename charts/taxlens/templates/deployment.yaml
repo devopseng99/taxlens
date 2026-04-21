@@ -41,6 +41,25 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.azure.secretName }}
                   key: {{ .Values.azure.apiKeyKey }}
+            {{- if .Values.plaid.enabled }}
+            - name: PLAID_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.plaid.secretName }}
+                  key: {{ .Values.plaid.clientIdKey }}
+            - name: PLAID_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.plaid.secretName }}
+                  key: {{ .Values.plaid.secretKey }}
+            - name: PLAID_FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.plaid.secretName }}
+                  key: {{ .Values.plaid.fernetKeyKey }}
+            - name: PLAID_ENV
+              value: {{ .Values.plaid.env | quote }}
+            {{- end }}
             - name: OPENFILE_DB_HOST
               value: {{ .Values.openfileDb.host | quote }}
             - name: OPENFILE_DB_PORT
