@@ -75,10 +75,35 @@ Updated: 2026-04-17
 
 ## Next Work Items
 
-### 1. Wave 6 — Agentic Intelligence
-Chat interface, tax optimization, multi-doc correlation. See NEXT-STEPS.md.
+### 1. Wave 7 — Multi-State Support (Modular)
+Pluggable state tax modules. See NEXT-STEPS.md for details.
 
-### 2. Enable Auth in Production
+**Key deliverables:**
+- `app/state_configs/` directory — one module per state (ca.py, ny.py, etc.)
+- `app/state_tax_engine.py` — generic compute_state_tax() dispatcher
+- Refactor IL hardcode out of tax_engine.py
+- 10 states in Wave 1: IL, CA, NY, TX, FL, PA, NC, GA, NJ, OH
+
+### 2. Wave 8 — Agentic Intelligence (MCP Server)
+**NOT a custom chat UI** — expose tax engine as MCP server.
+
+**Key deliverables:**
+- MCP server (`app/mcp_server.py`) with tools: compute_tax, compare_scenarios, optimize_deductions
+- Any MCP client (Claude Desktop, Claude Code) gets native tax tools
+- REST API unchanged; MCP adds agentic layer
+
+```bash
+# Example MCP config for Claude Desktop:
+# {
+#   "mcpServers": {
+#     "taxlens": {
+#       "url": "https://dropit.istayintek.com/mcp"
+#     }
+#   }
+# }
+```
+
+### 3. Enable Auth in Production
 Generate API keys, set TAXLENS_API_KEYS in K8s secret, update frontend to send header.
 
 ```bash
@@ -87,6 +112,3 @@ python3 -c "from auth import generate_api_key; print(generate_api_key())"
 # Set in K8s:
 kubectl create secret generic taxlens-api-keys -n taxlens --from-literal=keys="tlk_xxx,tlk_yyy"
 ```
-
-### 3. Multi-State Support
-Currently Illinois-only. Add configurable state tax computation.

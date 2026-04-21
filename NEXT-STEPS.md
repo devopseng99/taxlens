@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-17 (v0.7.0)
+Updated: 2026-04-20 (v0.7.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -34,12 +34,25 @@ Updated: 2026-04-17 (v0.7.0)
 - Generate API keys, set TAXLENS_API_KEYS env var
 - Update frontend to send X-API-Key header
 
-### Multi-State Support
-- Currently Illinois-only
-- Add configurable state tax computation
+### Wave 7 — Multi-State Support (Modular)
+- Pluggable state config modules (`state_configs/{state}.py`)
+- Generic `compute_state_tax()` dispatcher (flat + graduated models)
+- Wave 1 states: IL (existing), CA, NY, TX, FL, PA, NC, GA, NJ, OH (~60% US pop)
+- Generic ReportLab state summary PDF for states without official fillable templates
+- Backward compat: `il_*` fields remain as aliases into `state_results["IL"]`
 
-## Wave 6 — Agentic Intelligence (Deferred)
-- Chat interface for tax Q&A
-- Tax optimization suggestions (e.g., "itemize vs standard", "estimated payment recommendations")
-- Multi-document correlation (auto-match W-2s to employers)
-- Year-over-year comparison
+### Wave 8 — Agentic Intelligence (MCP Server)
+- **NOT a custom chat UI** — expose tax engine as MCP server
+- MCP tools: `compute_tax`, `compare_scenarios`, `estimate_impact`, `list_documents`, `get_draft`, `optimize_deductions`
+- Any MCP client (Claude Desktop, Claude Code, custom agents) gets native tax tools
+- REST API remains for direct integration; MCP adds agentic layer for free
+- Tax optimization: scenario comparison (filing status, itemized vs standard, estimated payments)
+- Multi-document correlation: auto-match W-2s to employers via MCP resources
+
+### Enable Auth in Production
+- Generate API keys, set TAXLENS_API_KEYS env var
+- Update frontend to send X-API-Key header
+
+### AMT (Alternative Minimum Tax)
+- Would need AMT exemption amounts, phase-out, and preference items
+- Complex but relevant for high-income business owners
