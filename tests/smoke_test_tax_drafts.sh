@@ -793,6 +793,81 @@ run_test "TC25: IL→WI reciprocal" '{
 
 
 # ===========================================================================
+# Wave 9 — Extended OCR Parser Scenarios (TC26-TC29)
+# ===========================================================================
+
+log "=== TC26: Investor with dividends + brokerage (1099-DIV + 1099-B) ==="
+run_test "TC26: Dividends + Brokerage" '{
+    "filing_status": "single",
+    "username": "smoketest",
+    "residence_state": "CA",
+    "filer": {"first_name": "Morgan", "last_name": "Wells", "ssn": "XXX-XX-0027",
+              "address_street": "600 Market St", "address_city": "San Francisco", "address_state": "CA", "address_zip": "94105"},
+    "additional_income": {
+        "ordinary_dividends": 3245.67,
+        "qualified_dividends": 2100.00,
+        "other_interest": 500
+    },
+    "brokerage_transactions": [
+        {"description": "AAPL", "proceeds": 15000, "cost_basis": 10000, "is_long_term": true},
+        {"description": "TSLA", "proceeds": 8000, "cost_basis": 9500, "is_long_term": false},
+        {"description": "MSFT", "proceeds": 25000, "cost_basis": 18000, "is_long_term": true}
+    ],
+    "deductions": {"state_income_tax_paid": 5000}
+}' "" "1040,Schedule A,Schedule B,Schedule D,CA-540" ""
+
+log "=== TC27: Freelancer with 1099-NEC income ==="
+run_test "TC27: 1099-NEC Freelancer" '{
+    "filing_status": "single",
+    "username": "smoketest",
+    "residence_state": "NY",
+    "filer": {"first_name": "Dana", "last_name": "Rivera", "ssn": "XXX-XX-0028",
+              "address_street": "700 Broadway", "address_city": "New York", "address_state": "NY", "address_zip": "10003"},
+    "businesses": [
+        {"business_name": "TechConsult LLC", "gross_receipts": 45000, "office_expense": 2000, "supplies": 1500},
+        {"business_name": "Design Gigs", "gross_receipts": 12000, "car_expenses": 3000}
+    ],
+    "additional_income": {"other_interest": 200}
+}' "owed" "1040,Schedule C,Schedule SE,IT-201" "yes"
+
+log "=== TC28: Homeowner with mortgage (1098 deductions) ==="
+run_test "TC28: Homeowner with mortgage" '{
+    "filing_status": "mfj",
+    "username": "smoketest",
+    "residence_state": "PA",
+    "filer": {"first_name": "James", "last_name": "Cooper", "ssn": "XXX-XX-0029",
+              "address_street": "800 Oak Ln", "address_city": "Philadelphia", "address_state": "PA", "address_zip": "19103"},
+    "spouse": {"first_name": "Sarah", "last_name": "Cooper", "ssn": "XXX-XX-0030"},
+    "num_dependents": 2,
+    "additional_income": {"ordinary_dividends": 1500, "qualified_dividends": 1200},
+    "deductions": {"mortgage_interest": 18750, "property_tax": 8500, "state_income_tax_paid": 4000, "charitable_cash": 3000}
+}' "refund" "1040,Schedule A,Schedule B,PA-40" ""
+
+log "=== TC29: Combined pipeline — all new form types ==="
+run_test "TC29: Full pipeline (div + brokerage + business + mortgage)" '{
+    "filing_status": "mfj",
+    "username": "smoketest",
+    "residence_state": "NJ",
+    "work_states": ["NY"],
+    "filer": {"first_name": "Pat", "last_name": "Kim", "ssn": "XXX-XX-0031",
+              "address_street": "900 River Rd", "address_city": "Edgewater", "address_state": "NJ", "address_zip": "07020"},
+    "spouse": {"first_name": "Lee", "last_name": "Kim", "ssn": "XXX-XX-0032"},
+    "num_dependents": 1,
+    "businesses": [{"business_name": "Kim Consulting", "gross_receipts": 35000, "office_expense": 3000, "supplies": 1000}],
+    "additional_income": {
+        "ordinary_dividends": 5000,
+        "qualified_dividends": 3500,
+        "other_interest": 1200
+    },
+    "brokerage_transactions": [
+        {"description": "VTI ETF", "proceeds": 20000, "cost_basis": 15000, "is_long_term": true},
+        {"description": "QQQ ETF", "proceeds": 5000, "cost_basis": 6000, "is_long_term": false}
+    ],
+    "deductions": {"mortgage_interest": 22000, "property_tax": 10000, "state_income_tax_paid": 8000, "charitable_cash": 5000}
+}' "" "1040,Schedule A,Schedule B,Schedule C,Schedule D,Schedule SE,IT-201,NJ-1040" "yes"
+
+
+# ===========================================================================
 # SUMMARY
 # ===========================================================================
 echo ""

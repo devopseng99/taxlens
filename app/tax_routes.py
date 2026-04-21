@@ -11,8 +11,10 @@ from pydantic import BaseModel, Field
 
 from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
-    AdditionalIncome, Payments, TaxResult,
+    AdditionalIncome, DividendIncome, Payments, TaxResult,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
+    parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
+    parse_1099b_from_structured,
 )
 from pdf_generator import generate_all_pdfs
 from auth import require_auth
@@ -83,6 +85,16 @@ class BusinessIncomeInput(BaseModel):
     other_expenses_description: str = ""
 
 
+class BrokerageTransactionInput(BaseModel):
+    """Structured 1099-B transaction (JSON import, not OCR)."""
+    description: str = "Security Sale"
+    date_acquired: str = "Various"
+    date_sold: str = "2025"
+    proceeds: float = 0.0
+    cost_basis: float = 0.0
+    is_long_term: bool = False
+
+
 class PaymentsInput(BaseModel):
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -103,6 +115,12 @@ class TaxDraftRequest(BaseModel):
     # OCR document references — pull W-2/1099 data from existing TaxLens documents
     w2_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded W-2s with OCR results")
     interest_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-INTs with OCR")
+    div_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-DIVs with OCR")
+    nec_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-NECs with OCR")
+    mortgage_1098_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1098s with OCR")
+
+    # Structured brokerage data (1099-B — JSON import, not OCR)
+    brokerage_transactions: list[BrokerageTransactionInput] = Field(default=[], description="Structured 1099-B transactions")
 
     # Business income (Schedule C)
     businesses: list[BusinessIncomeInput] = Field(default=[], description="Self-employment / business income")
@@ -155,6 +173,42 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         fields = ocr_data.get("fields", {})
         ocr_interest += parse_1099int_from_ocr(fields)
 
+    # --- Parse 1099-DIV dividends from OCR ---
+    ocr_ordinary_div = 0.0
+    ocr_qualified_div = 0.0
+    ocr_cap_gain_dist = 0.0
+    ocr_div_withheld = 0.0
+    for proc_id in req.div_1099_proc_ids:
+        ocr_data = load_ocr_result(req.username, proc_id)
+        fields = ocr_data.get("fields", {})
+        div = parse_1099div_from_ocr(fields)
+        ocr_ordinary_div += div.ordinary_dividends
+        ocr_qualified_div += div.qualified_dividends
+        ocr_cap_gain_dist += div.capital_gain_dist
+        ocr_div_withheld += div.federal_withheld
+
+    # --- Parse 1099-NEC nonemployee compensation from OCR ---
+    nec_businesses = []
+    nec_withheld = 0.0
+    for proc_id in req.nec_1099_proc_ids:
+        ocr_data = load_ocr_result(req.username, proc_id)
+        fields = ocr_data.get("fields", {})
+        biz, withheld = parse_1099nec_from_ocr(fields)
+        nec_businesses.append(biz)
+        nec_withheld += withheld
+
+    # --- Parse 1098 mortgage interest from OCR ---
+    ocr_mortgage = 0.0
+    for proc_id in req.mortgage_1098_proc_ids:
+        ocr_data = load_ocr_result(req.username, proc_id)
+        fields = ocr_data.get("fields", {})
+        ocr_mortgage += parse_1098_from_ocr(fields)
+
+    # --- Parse 1099-B structured brokerage transactions ---
+    brokerage_txns = parse_1099b_from_structured(
+        [t.model_dump() for t in req.brokerage_transactions]
+    ) if req.brokerage_transactions else []
+
     # --- Build additional income ---
     cap_txns = [
         CapitalTransaction(
@@ -166,12 +220,23 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
             is_long_term=t.is_long_term,
         )
         for t in req.additional_income.capital_transactions
-    ]
+    ] + brokerage_txns
+
+    # Cap gain distributions from 1099-DIV are long-term
+    if ocr_cap_gain_dist > 0:
+        cap_txns.append(CapitalTransaction(
+            description="1099-DIV Capital Gain Distributions",
+            date_acquired="Various",
+            date_sold="2025",
+            proceeds=ocr_cap_gain_dist,
+            cost_basis=0.0,
+            is_long_term=True,
+        ))
 
     additional = AdditionalIncome(
         other_interest=ocr_interest + req.additional_income.other_interest,
-        ordinary_dividends=req.additional_income.ordinary_dividends,
-        qualified_dividends=req.additional_income.qualified_dividends,
+        ordinary_dividends=ocr_ordinary_div + req.additional_income.ordinary_dividends,
+        qualified_dividends=ocr_qualified_div + req.additional_income.qualified_dividends,
         capital_transactions=cap_txns,
         other_income=req.additional_income.other_income,
         other_income_description=req.additional_income.other_income_description,
@@ -179,7 +244,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
 
     # --- Build deductions ---
     deductions = Deductions(
-        mortgage_interest=req.deductions.mortgage_interest,
+        mortgage_interest=ocr_mortgage + req.deductions.mortgage_interest,
         property_tax=req.deductions.property_tax,
         state_income_tax_paid=req.deductions.state_income_tax_paid,
         charitable_cash=req.deductions.charitable_cash,
@@ -251,10 +316,11 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         payments=payments,
         spouse=spouse,
         num_dependents=req.num_dependents,
-        businesses=biz_list,
+        businesses=biz_list + nec_businesses,
         residence_state=req.residence_state,
         work_states=req.work_states,
         days_worked_by_state=req.days_worked_by_state or None,
+        additional_withholding=ocr_div_withheld + nec_withheld,
     )
 
     # --- Generate PDFs ---
@@ -279,7 +345,11 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         "num_dependents": req.num_dependents,
         "w2_proc_ids": req.w2_proc_ids,
         "interest_1099_proc_ids": req.interest_1099_proc_ids,
-        "businesses": [b.model_dump() for b in req.businesses],
+        "div_1099_proc_ids": req.div_1099_proc_ids,
+        "nec_1099_proc_ids": req.nec_1099_proc_ids,
+        "mortgage_1098_proc_ids": req.mortgage_1098_proc_ids,
+        "brokerage_transactions": [t.model_dump() for t in req.brokerage_transactions],
+        "businesses": [b.model_dump() for b in req.businesses + nec_businesses],
         "additional_income": req.additional_income.model_dump(),
         "deductions": req.deductions.model_dump(),
         "payments": req.payments.model_dump(),

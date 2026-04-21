@@ -1,0 +1,34 @@
+[
+  {
+    "description": "AAPL - Apple Inc",
+    "date_acquired": "2023-01-15",
+    "date_sold": "2025-03-20",
+    "proceeds": 15000.00,
+    "cost_basis": 10000.00,
+    "is_long_term": true
+  },
+  {
+    "description": "TSLA - Tesla Inc",
+    "date_acquired": "2025-01-05",
+    "date_sold": "2025-06-15",
+    "proceeds": 8000.00,
+    "cost_basis": 9500.00,
+    "is_long_term": false
+  },
+  {
+    "description": "MSFT - Microsoft Corp",
+    "date_acquired": "2022-06-01",
+    "date_sold": "2025-09-10",
+    "proceeds": 25000.00,
+    "cost_basis": 18000.00,
+    "is_long_term": "long"
+  },
+  {
+    "description": "BTC - Bitcoin",
+    "date_acquired": "2025-02-01",
+    "date_sold": "2025-04-01",
+    "proceeds": 12000.00,
+    "cost_basis": 14000.00,
+    "is_long_term": "short"
+  }
+]

@@ -119,6 +119,17 @@ class BusinessIncome:
 
 
 @dataclass
+class DividendIncome:
+    """1099-DIV — Dividends and Distributions from a single payer."""
+    payer_name: str = ""
+    ordinary_dividends: float = 0.0    # Box 1a — taxed as ordinary income
+    qualified_dividends: float = 0.0   # Box 1b — preferential 0/15/20% rates
+    capital_gain_dist: float = 0.0     # Box 2a — long-term capital gain distributions
+    section_199a: float = 0.0          # Box 5 — Section 199A dividends (QBI)
+    federal_withheld: float = 0.0      # Box 4
+
+
+@dataclass
 class AdditionalIncome:
     other_interest: float = 0.0
     ordinary_dividends: float = 0.0
@@ -447,6 +458,139 @@ def parse_1099int_from_ocr(ocr_fields: dict) -> float:
         return 0.0
 
 
+def _parse_money(s: str) -> float:
+    """Parse a dollar string like '$2,450.00' to float."""
+    if not s:
+        return 0.0
+    cleaned = s.replace("$", "").replace(",", "").replace(" ", "").strip()
+    try:
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _get_field_value(ocr_fields: dict, name: str) -> str:
+    """Extract the value string from an Azure DI field."""
+    f = ocr_fields.get(name, {})
+    v = f.get("value")
+    return str(v) if v is not None else ""
+
+
+def parse_1099div_from_ocr(ocr_fields: dict) -> DividendIncome:
+    """Extract dividend income from 1099-DIV OCR result.
+
+    Azure model: prebuilt-tax.us.1099DIV
+    Handles both flat field layout and Transactions array format.
+    """
+    # Try Transactions array format first (some Azure responses wrap in array)
+    transactions = ocr_fields.get("Transactions", {})
+    if transactions.get("type") == "array" and isinstance(transactions.get("value"), list):
+        result = DividendIncome()
+        for item in transactions["value"]:
+            val = item.get("value", item) if isinstance(item, dict) else {}
+            if isinstance(val, dict):
+                result.payer_name = result.payer_name or str(val.get("Payer", {}).get("value", ""))
+                result.ordinary_dividends += _parse_money(str(val.get("Box1a", {}).get("value", "")))
+                result.qualified_dividends += _parse_money(str(val.get("Box1b", {}).get("value", "")))
+                result.capital_gain_dist += _parse_money(str(val.get("Box2a", {}).get("value", "")))
+                result.federal_withheld += _parse_money(str(val.get("Box4", {}).get("value", "")))
+                result.section_199a += _parse_money(str(val.get("Box5", {}).get("value", "")))
+        return result
+
+    # Flat field layout
+    payer = ocr_fields.get("Payer", {})
+    payer_name = ""
+    if isinstance(payer.get("value"), dict):
+        payer_name = str(payer["value"].get("Name", {}).get("value", ""))
+    elif isinstance(payer.get("value"), str):
+        payer_name = payer["value"]
+
+    return DividendIncome(
+        payer_name=payer_name,
+        ordinary_dividends=_parse_money(_get_field_value(ocr_fields, "Box1a")),
+        qualified_dividends=_parse_money(_get_field_value(ocr_fields, "Box1b")),
+        capital_gain_dist=_parse_money(_get_field_value(ocr_fields, "Box2a")),
+        federal_withheld=_parse_money(_get_field_value(ocr_fields, "Box4")),
+        section_199a=_parse_money(_get_field_value(ocr_fields, "Box5")),
+    )
+
+
+def parse_1099nec_from_ocr(ocr_fields: dict) -> tuple[BusinessIncome, float]:
+    """Extract nonemployee compensation from 1099-NEC OCR result.
+
+    Azure model: prebuilt-tax.us.1099NEC
+    Returns (BusinessIncome, federal_withheld).
+    """
+    # Payer name
+    payer = ocr_fields.get("Payer", {})
+    payer_name = ""
+    if isinstance(payer.get("value"), dict):
+        payer_name = str(payer["value"].get("Name", {}).get("value", ""))
+    elif isinstance(payer.get("value"), str):
+        payer_name = payer["value"]
+
+    nec = _parse_money(_get_field_value(ocr_fields, "Box1"))
+    withheld = _parse_money(_get_field_value(ocr_fields, "Box4"))
+
+    biz = BusinessIncome(
+        business_name=payer_name or "1099-NEC Income",
+        gross_receipts=nec,
+    )
+    return biz, withheld
+
+
+def parse_1098_from_ocr(ocr_fields: dict) -> float:
+    """Extract mortgage interest from 1098 OCR result.
+
+    Azure model: prebuilt-tax.us.1098
+    Returns mortgage interest paid (Box 1).
+    """
+    # Try direct Box1 field
+    val = _parse_money(_get_field_value(ocr_fields, "Box1"))
+    if val > 0:
+        return val
+
+    # Try MortgageInterest field (some Azure responses use descriptive names)
+    val = _parse_money(_get_field_value(ocr_fields, "MortgageInterest"))
+    if val > 0:
+        return val
+
+    # Try Transactions array fallback
+    transactions = ocr_fields.get("Transactions", {})
+    if transactions.get("type") == "array" and isinstance(transactions.get("value"), list):
+        for item in transactions["value"]:
+            v = item.get("value", item) if isinstance(item, dict) else {}
+            if isinstance(v, dict):
+                box1 = _parse_money(str(v.get("Box1", {}).get("value", "")))
+                if box1 > 0:
+                    return box1
+
+    return 0.0
+
+
+def parse_1099b_from_structured(data: list[dict]) -> list[CapitalTransaction]:
+    """Parse structured 1099-B transaction data (JSON/CSV import, not OCR).
+
+    Each dict should have: description, date_acquired, date_sold, proceeds,
+    cost_basis, is_long_term (bool or "long"/"short" string).
+    """
+    transactions = []
+    for row in data:
+        is_lt = row.get("is_long_term", False)
+        if isinstance(is_lt, str):
+            is_lt = is_lt.lower() in ("true", "long", "yes", "l", "1")
+
+        transactions.append(CapitalTransaction(
+            description=str(row.get("description", "Security Sale")),
+            date_acquired=str(row.get("date_acquired", "Various")),
+            date_sold=str(row.get("date_sold", "2025")),
+            proceeds=float(row.get("proceeds", 0)),
+            cost_basis=float(row.get("cost_basis", 0)),
+            is_long_term=bool(is_lt),
+        ))
+    return transactions
+
+
 # ---------------------------------------------------------------------------
 # Main computation
 # ---------------------------------------------------------------------------
@@ -463,6 +607,7 @@ def compute_tax(
     residence_state: str = "IL",
     work_states: list[str] | None = None,
     days_worked_by_state: dict[str, int] | None = None,
+    additional_withholding: float = 0.0,
 ) -> TaxResult:
     """Compute full federal + state tax return."""
 
@@ -715,7 +860,7 @@ def compute_tax(
     # PAYMENTS (Lines 25-33)
     # =======================================================================
 
-    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s)
+    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding
     result.estimated_payments = payments.estimated_federal
     result.line_33_total_payments = (
         result.line_25_federal_withheld

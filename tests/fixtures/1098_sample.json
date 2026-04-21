@@ -1,0 +1,7 @@
+{
+  "fields": {
+    "Box1": {"type": "number", "value": "$18,750.00", "confidence": 0.97},
+    "Box2": {"type": "number", "value": "$285,000.00", "confidence": 0.95},
+    "Box5": {"type": "number", "value": "$4,200.00", "confidence": 0.93}
+  }
+}

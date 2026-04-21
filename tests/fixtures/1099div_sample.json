@@ -1,0 +1,16 @@
+{
+  "fields": {
+    "Payer": {
+      "type": "object",
+      "value": {
+        "Name": {"type": "string", "value": "Vanguard Brokerage Services", "confidence": 0.95},
+        "TIN": {"type": "string", "value": "23-1945930", "confidence": 0.93}
+      }
+    },
+    "Box1a": {"type": "number", "value": "$3,245.67", "confidence": 0.97},
+    "Box1b": {"type": "number", "value": "$2,100.00", "confidence": 0.96},
+    "Box2a": {"type": "number", "value": "$1,500.00", "confidence": 0.95},
+    "Box4": {"type": "number", "value": "$487.50", "confidence": 0.94},
+    "Box5": {"type": "number", "value": "$850.00", "confidence": 0.93}
+  }
+}

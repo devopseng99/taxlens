@@ -57,6 +57,7 @@ class DocumentMetadata(BaseModel):
 class OcrResult(BaseModel):
     proc_id: str
     model_id: str
+    form_type: str | None = None
     fields: dict
     confidence: float
     pages: int
@@ -72,6 +73,44 @@ def user_dir(username: str) -> Path:
 
 def doc_dir(username: str, proc_id: str) -> Path:
     return user_dir(username) / proc_id
+
+
+# Azure doc_type strings → simplified form type
+_DOC_TYPE_MAP = {
+    "tax.us.w2": "W-2",
+    "tax.us.1099Int": "1099-INT",
+    "tax.us.1099Div": "1099-DIV",
+    "tax.us.1099Nec": "1099-NEC",
+    "tax.us.1099Misc": "1099-MISC",
+    "tax.us.1098": "1098",
+    "tax.us.1099B": "1099-B",
+    "tax.us.1040": "1040",
+}
+
+
+def _detect_form_type(doc_type: str | None, model_id: str) -> str | None:
+    """Detect tax form type from Azure doc_type or model_id."""
+    if doc_type:
+        # Azure auto-detect returns e.g. "tax.us.w2", "tax.us.1099Div"
+        for key, form in _DOC_TYPE_MAP.items():
+            if key.lower() in doc_type.lower():
+                return form
+        # If doc_type is present but unrecognized, use it as-is
+        return doc_type
+
+    # Fall back to model_id hints
+    model_lower = model_id.lower()
+    if "w2" in model_lower:
+        return "W-2"
+    if "1099int" in model_lower:
+        return "1099-INT"
+    if "1099div" in model_lower:
+        return "1099-DIV"
+    if "1099nec" in model_lower:
+        return "1099-NEC"
+    if "1098" in model_lower:
+        return "1098"
+    return None
 
 
 # --- Endpoints ---
@@ -163,13 +202,19 @@ async def analyze(
     except Exception as e:
         raise HTTPException(502, f"Azure OCR failed: {str(e)}")
 
-    # Save OCR result
+    # Detect form type from Azure response
+    form_type = _detect_form_type(result.get("doc_type", ""), model_id)
+
+    # Save OCR result (include form_type for downstream parsers)
+    raw_data = result["raw"]
+    raw_data["form_type"] = form_type
     ocr_path = dest / "ocr_result.json"
-    ocr_path.write_text(json.dumps(result["raw"], indent=2, default=str))
+    ocr_path.write_text(json.dumps(raw_data, indent=2, default=str))
 
     ocr = OcrResult(
         proc_id=proc_id,
         model_id=model_id,
+        form_type=form_type,
         fields=result["fields"],
         confidence=result["confidence"],
         pages=result["pages"],

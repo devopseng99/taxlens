@@ -73,8 +73,10 @@ async def analyze_document(file_path: Path, model_id: str = "prebuilt-tax.us") -
         )
         return {"value": val, "confidence": field.confidence, "type": ft}
 
+    doc_type = None
     if result.documents:
         doc = result.documents[0]
+        doc_type = doc.doc_type if hasattr(doc, "doc_type") else None
         for name, field in (doc.fields or {}).items():
             extracted = extract_field(field)
             fields[name] = extracted
@@ -88,11 +90,13 @@ async def analyze_document(file_path: Path, model_id: str = "prebuilt-tax.us") -
         "fields": fields,
         "confidence": round(avg_confidence, 4),
         "pages": len(result.pages) if result.pages else 0,
+        "doc_type": doc_type,
         "raw": {
             "model_id": result.model_id,
             "api_version": result.api_version if hasattr(result, "api_version") else None,
             "document_count": len(result.documents) if result.documents else 0,
             "page_count": len(result.pages) if result.pages else 0,
+            "doc_type": doc_type,
             "fields": fields,
         },
     }

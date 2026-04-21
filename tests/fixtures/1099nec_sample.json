@@ -1,0 +1,13 @@
+{
+  "fields": {
+    "Payer": {
+      "type": "object",
+      "value": {
+        "Name": {"type": "string", "value": "TechConsult LLC", "confidence": 0.96},
+        "TIN": {"type": "string", "value": "47-8901234", "confidence": 0.93}
+      }
+    },
+    "Box1": {"type": "number", "value": "$45,000.00", "confidence": 0.97},
+    "Box4": {"type": "number", "value": "$6,750.00", "confidence": 0.95}
+  }
+}

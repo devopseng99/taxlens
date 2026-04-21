@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "Transactions": {
+      "type": "array",
+      "value": [
+        {
+          "type": "object",
+          "value": {
+            "Payer": {"type": "string", "value": "Fidelity Investments", "confidence": 0.95},
+            "Box1a": {"type": "number", "value": "$1,200.00", "confidence": 0.97},
+            "Box1b": {"type": "number", "value": "$800.00", "confidence": 0.96},
+            "Box2a": {"type": "number", "value": "$500.00", "confidence": 0.95},
+            "Box4": {"type": "number", "value": "$180.00", "confidence": 0.94},
+            "Box5": {"type": "number", "value": "$300.00", "confidence": 0.93}
+          }
+        },
+        {
+          "type": "object",
+          "value": {
+            "Payer": {"type": "string", "value": "Charles Schwab", "confidence": 0.95},
+            "Box1a": {"type": "number", "value": "$2,500.00", "confidence": 0.97},
+            "Box1b": {"type": "number", "value": "$1,800.00", "confidence": 0.96},
+            "Box2a": {"type": "number", "value": "$0.00", "confidence": 0.95},
+            "Box4": {"type": "number", "value": "$375.00", "confidence": 0.94},
+            "Box5": {"type": "number", "value": "$0.00", "confidence": 0.93}
+          }
+        }
+      ]
+    }
+  }
+}
