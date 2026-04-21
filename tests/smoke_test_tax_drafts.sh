@@ -720,6 +720,79 @@ run_test "TC13c: Original HoH (revalidation)" '{
 
 
 # ===========================================================================
+# MULTI-STATE TESTS (Wave 7)
+# ===========================================================================
+
+log "=== TC21: CA Resident — High Earner (graduated + surtax) ==="
+run_test "TC21: CA high earner" '{
+    "filing_status": "single",
+    "username": "smoketest",
+    "residence_state": "CA",
+    "filer": {"first_name": "Maria", "last_name": "Gonzalez", "ssn": "XXX-XX-0021",
+              "address_street": "100 Market St", "address_city": "San Francisco", "address_state": "CA", "address_zip": "94105"},
+    "additional_income": {
+        "other_interest": 5000,
+        "ordinary_dividends": 15000,
+        "qualified_dividends": 10000,
+        "capital_transactions": [
+            {"description": "AAPL stock", "proceeds": 200000, "cost_basis": 80000, "is_long_term": true}
+        ]
+    },
+    "deductions": {
+        "mortgage_interest": 22000,
+        "property_tax": 12000,
+        "charitable_cash": 5000
+    }
+}' "" "1040,Schedule D,CA-540" ""
+
+log "=== TC22: TX Resident — No State Tax ==="
+run_test "TC22: TX no state tax" '{
+    "filing_status": "single",
+    "username": "smoketest",
+    "residence_state": "TX",
+    "filer": {"first_name": "Jake", "last_name": "Austin", "ssn": "XXX-XX-0022",
+              "address_street": "200 Congress Ave", "address_city": "Austin", "address_state": "TX", "address_zip": "78701"},
+    "additional_income": {"other_interest": 500}
+}' "" "1040" ""
+
+log "=== TC23: PA Resident — Flat Rate ==="
+run_test "TC23: PA flat rate" '{
+    "filing_status": "mfj",
+    "username": "smoketest",
+    "residence_state": "PA",
+    "filer": {"first_name": "Sarah", "last_name": "Miller", "ssn": "XXX-XX-0023",
+              "address_street": "300 Broad St", "address_city": "Philadelphia", "address_state": "PA", "address_zip": "19102"},
+    "spouse": {"first_name": "Tom", "last_name": "Miller", "ssn": "XXX-XX-0024"},
+    "num_dependents": 1,
+    "additional_income": {"other_interest": 1200},
+    "deductions": {"mortgage_interest": 15000, "property_tax": 6000}
+}' "" "1040,PA-40" ""
+
+log "=== TC24: NJ Resident, NY Worker (multi-state) ==="
+run_test "TC24: NJ→NY multi-state" '{
+    "filing_status": "single",
+    "username": "smoketest",
+    "residence_state": "NJ",
+    "work_states": ["NY"],
+    "filer": {"first_name": "Alex", "last_name": "Park", "ssn": "XXX-XX-0025",
+              "address_street": "400 Park Ave", "address_city": "Hoboken", "address_state": "NJ", "address_zip": "07030"},
+    "additional_income": {"other_interest": 800},
+    "deductions": {"mortgage_interest": 18000, "property_tax": 9000}
+}' "" "1040,IT-201,NJ-1040" ""
+
+log "=== TC25: IL Resident, WI Worker (reciprocal — no WI return) ==="
+run_test "TC25: IL→WI reciprocal" '{
+    "filing_status": "single",
+    "username": "smoketest",
+    "residence_state": "IL",
+    "work_states": ["WI"],
+    "filer": {"first_name": "Chris", "last_name": "Johnson", "ssn": "XXX-XX-0026",
+              "address_street": "500 Lake Shore Dr", "address_city": "Chicago", "address_state": "IL", "address_zip": "60601"},
+    "additional_income": {"other_interest": 300}
+}' "" "1040,IL-1040" ""
+
+
+# ===========================================================================
 # SUMMARY
 # ===========================================================================
 echo ""
