@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-17 (v0.8.0)
+Updated: 2026-04-21 (v0.8.5)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -29,23 +29,12 @@ Updated: 2026-04-17 (v0.8.0)
 - [x] Generic ReportLab state PDF summary for non-IL states
 - [x] 42 new state tax tests + 5 new smoke tests (100 total tests, 25 smoke tests)
 - [x] Built, deployed, verified (v0.8.0)
+- [x] Extended OCR parsers: 1099-DIV, 1099-NEC, 1098, 1099-B structured import
+- [x] Auto-detect form type from Azure doc_type
+- [x] 26 new parser unit tests + 5 fixtures + 4 smoke tests (126 total tests, 29 smoke tests)
+- [x] Built, deployed, verified (v0.8.5)
 
 ## Ready to Build
-
-### Wave 9 — Extended OCR Parsers (Next)
-Parse all common tax document types so users can upload any form and auto-fill computation.
-
-**New parsers:**
-- `parse_1099div_from_ocr()` — Azure `prebuilt-tax.us.1099DIV` → DividendIncome dataclass
-  - Box 1a (ordinary dividends), 1b (qualified), 2a (cap gain dist), 4 (withheld), 5 (199A)
-- `parse_1099nec_from_ocr()` — Azure `prebuilt-tax.us.1099NEC` → BusinessIncome
-  - Box 1 (NEC → gross_receipts), Payer.Name → business_name, Box 4 (withheld)
-- `parse_1098_from_ocr()` — generic `prebuilt-document` → float (mortgage interest)
-  - Box 1 simple extraction
-- `parse_1099b_from_structured()` — JSON/CSV import → list[CapitalTransaction]
-  - NOT OCR — brokerage tables too complex for OCR. Structured import from Plaid or manual
-
-**Tasks:** 9 new parsers/handlers, 15+ unit tests, 4 OCR fixture tests, TaxDraftRequest extensions
 
 ### Wave 8 — Agentic Intelligence (MCP Server)
 Expose tax engine as MCP server via StreamableHTTP at `/mcp`.

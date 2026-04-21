@@ -87,19 +87,22 @@ Updated: 2026-04-17
 - [x] 5 new smoke tests (TC21-TC25: CA, TX, PA, NJ→NY, IL→WI)
 - [x] Built, deployed, verified (v0.8.0)
 
+## Wave 9 — Extended OCR Parsers [COMPLETED]
+- [x] DividendIncome dataclass + `parse_1099div_from_ocr()` (Box1a/1b/2a/4/5, flat + array formats)
+- [x] `parse_1099nec_from_ocr()` → BusinessIncome + withholding (Schedule C + SE)
+- [x] `parse_1098_from_ocr()` → mortgage interest (Schedule A)
+- [x] `parse_1099b_from_structured()` → list[CapitalTransaction] (JSON import for brokerage)
+- [x] TaxDraftRequest extended: div_1099_proc_ids, nec_1099_proc_ids, mortgage_1098_proc_ids, brokerage_transactions
+- [x] additional_withholding param for 1099 Box 4 amounts
+- [x] Auto-detect form type in Azure OCR flow (doc_type → form_type in ocr_result.json)
+- [x] 5 test fixtures (1099-DIV flat/array, 1099-NEC, 1098, 1099-B)
+- [x] 26 new unit tests (126 total passing)
+- [x] 4 new smoke tests (TC26-TC29: dividends+brokerage, freelancer, homeowner, combined pipeline)
+- [x] Built, deployed, verified (v0.8.5)
+
 ## Next Work Items
 
-### 1. Wave 9 — Extended OCR Parsers
-Parse all common tax document types: 1099-DIV, 1099-NEC, 1098, 1099-B structured import.
-
-**Key deliverables:**
-- `parse_1099div_from_ocr()` — Azure `prebuilt-tax.us.1099DIV` → DividendIncome
-- `parse_1099nec_from_ocr()` — Azure `prebuilt-tax.us.1099NEC` → BusinessIncome
-- `parse_1098_from_ocr()` — generic model → mortgage interest
-- `parse_1099b_from_structured()` — JSON/CSV import → CapitalTransaction list
-- 15+ unit tests, 4 OCR fixture tests
-
-### 2. Wave 8 — Agentic Intelligence (MCP Server)
+### 1. Wave 8 — Agentic Intelligence (MCP Server)
 **NOT a custom chat UI** — expose tax engine as MCP server.
 
 **Key deliverables:**
