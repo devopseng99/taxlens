@@ -95,6 +95,11 @@ class TaxDraftRequest(BaseModel):
     spouse: Optional[PersonInput] = None
     num_dependents: int = 0
 
+    # Multi-state support
+    residence_state: str = Field(default="IL", description="Two-letter state code where filer lives")
+    work_states: list[str] = Field(default=[], description="Additional states where filer earned income")
+    days_worked_by_state: dict[str, int] = Field(default={}, description="Manual allocation: {state: days_worked}")
+
     # OCR document references — pull W-2/1099 data from existing TaxLens documents
     w2_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded W-2s with OCR results")
     interest_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-INTs with OCR")
@@ -131,7 +136,7 @@ def get_draft_dir(username: str, draft_id: str) -> Path:
 async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_auth)):
     """Create a complete tax draft from OCR data + supplemental info.
 
-    Computes federal 1040 + Illinois IL-1040, generates PDF forms,
+    Computes federal 1040 + state returns, generates PDF forms,
     and stores everything on the PVC for private access.
     """
 
@@ -247,6 +252,9 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         spouse=spouse,
         num_dependents=req.num_dependents,
         businesses=biz_list,
+        residence_state=req.residence_state,
+        work_states=req.work_states,
+        days_worked_by_state=req.days_worked_by_state or None,
     )
 
     # --- Generate PDFs ---
@@ -264,6 +272,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
     # Store the original request input for review
     result_json["input"] = {
         "filing_status": req.filing_status,
+        "residence_state": req.residence_state,
+        "work_states": req.work_states,
         "filer": req.filer.model_dump(),
         "spouse": req.spouse.model_dump() if req.spouse else None,
         "num_dependents": req.num_dependents,

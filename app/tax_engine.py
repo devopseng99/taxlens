@@ -1,4 +1,4 @@
-"""Tax computation engine — Federal 1040 + Illinois IL-1040 for tax year 2025."""
+"""Tax computation engine — Federal 1040 + multi-state for tax year 2025."""
 
 from __future__ import annotations
 import json
@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 from tax_config import *
+from state_tax_engine import compute_state_tax, compute_all_state_returns
+from state_configs import StateTaxResult, NO_TAX_STATES
 
 
 # ---------------------------------------------------------------------------
@@ -26,6 +28,15 @@ class PersonInfo:
 
 
 @dataclass
+class StateWageInfo:
+    """Per-state wage/withholding from a single W-2."""
+    state: str = ""                  # Two-letter state code (e.g., "NY", "NJ")
+    state_wages: float = 0.0
+    state_withheld: float = 0.0
+    state_ein: str = ""
+
+
+@dataclass
 class W2Income:
     employer_name: str = ""
     employer_ein: str = ""
@@ -35,10 +46,11 @@ class W2Income:
     ss_withheld: float = 0.0
     medicare_wages: float = 0.0
     medicare_withheld: float = 0.0
-    state_wages: float = 0.0
-    state_withheld: float = 0.0
+    state_wages: float = 0.0        # Sum of all states (backward compat)
+    state_withheld: float = 0.0     # Sum of all states (backward compat)
     local_wages: float = 0.0
     local_withheld: float = 0.0
+    state_wage_infos: list = field(default_factory=list)  # list[StateWageInfo]
 
 
 @dataclass
@@ -218,6 +230,10 @@ class TaxResult:
     il_refund: float = 0.0
     il_owed: float = 0.0
 
+    # Multi-state
+    residence_state: str = "IL"
+    state_returns: list = field(default_factory=list)
+
     # Detail for forms
     w2s: list = field(default_factory=list)
     businesses: list = field(default_factory=list)
@@ -228,11 +244,30 @@ class TaxResult:
     pdf_paths: dict = field(default_factory=dict)
 
     def to_summary(self) -> dict:
-        return {
+        # Build state_taxes array from state_returns
+        state_taxes = []
+        for sr in self.state_returns:
+            state_taxes.append({
+                "state": sr.state_code,
+                "state_name": sr.state_name,
+                "return_type": sr.return_type,
+                "tax": round(sr.total_tax, 2),
+                "withholding": round(sr.withholding, 2),
+                "credit_for_other_states": round(sr.credit_for_other_states, 2),
+                "refund": round(sr.refund, 2),
+                "owed": round(sr.owed, 2),
+            })
+
+        # Total state refunds/owed across all states
+        total_state_refund = sum(sr.refund for sr in self.state_returns)
+        total_state_owed = sum(sr.owed for sr in self.state_returns)
+
+        summary = {
             "draft_id": self.draft_id,
             "filing_status": self.filing_status,
             "tax_year": self.tax_year,
             "filer_name": f"{self.filer.first_name} {self.filer.last_name}" if self.filer else "",
+            "residence_state": self.residence_state,
             "total_income": round(self.line_9_total_income, 2),
             "agi": round(self.line_11_agi, 2),
             "deduction_type": self.deduction_type,
@@ -247,13 +282,20 @@ class TaxResult:
             "federal_withholding": round(self.line_25_federal_withheld, 2),
             "federal_refund": round(self.line_34_overpaid, 2),
             "federal_owed": round(self.line_37_owed, 2),
+            # Backward compat: IL-specific keys
             "illinois_tax": round(self.il_line_11_tax, 2),
             "illinois_withholding": round(self.il_line_18_withheld, 2),
             "illinois_refund": round(self.il_refund, 2),
             "illinois_owed": round(self.il_owed, 2),
-            "net_refund": round(self.line_34_overpaid + self.il_refund - self.line_37_owed - self.il_owed, 2),
+            # New: generic state taxes array
+            "state_taxes": state_taxes,
+            "net_refund": round(
+                self.line_34_overpaid + total_state_refund
+                - self.line_37_owed - total_state_owed, 2
+            ),
             "forms_generated": self.forms_generated,
         }
+        return summary
 
 
 # ---------------------------------------------------------------------------
@@ -330,11 +372,12 @@ def parse_w2_from_ocr(ocr_fields: dict) -> W2Income:
         except (ValueError, TypeError):
             return 0.0
 
-    # State tax info
+    # State tax info — extract per-state breakdowns
     state_wages = 0.0
     state_withheld = 0.0
     local_wages = 0.0
     local_withheld = 0.0
+    state_wage_infos = []
 
     state_info = ocr_fields.get("StateTaxInfos", {})
     if state_info.get("type") == "array" and isinstance(state_info.get("value"), list):
@@ -342,8 +385,15 @@ def parse_w2_from_ocr(ocr_fields: dict) -> W2Income:
             if isinstance(item, dict):
                 val = item.get("value", item)
                 if isinstance(val, dict):
-                    state_wages += parse_money(str(val.get("StateWages", {}).get("value", "")))
-                    state_withheld += parse_money(str(val.get("StateIncomeTax", {}).get("value", "")))
+                    sw = parse_money(str(val.get("StateWages", {}).get("value", "")))
+                    swh = parse_money(str(val.get("StateIncomeTax", {}).get("value", "")))
+                    st_code = str(val.get("State", {}).get("value", "")).upper().strip()
+                    state_wages += sw
+                    state_withheld += swh
+                    if st_code:
+                        state_wage_infos.append(StateWageInfo(
+                            state=st_code, state_wages=sw, state_withheld=swh,
+                        ))
 
     local_info = ocr_fields.get("LocalTaxInfos", {})
     if local_info.get("type") == "array" and isinstance(local_info.get("value"), list):
@@ -367,6 +417,7 @@ def parse_w2_from_ocr(ocr_fields: dict) -> W2Income:
         state_withheld=state_withheld,
         local_wages=local_wages,
         local_withheld=local_withheld,
+        state_wage_infos=state_wage_infos,
     )
 
 
@@ -409,8 +460,11 @@ def compute_tax(
     spouse: Optional[PersonInfo] = None,
     num_dependents: int = 0,
     businesses: list[BusinessIncome] | None = None,
+    residence_state: str = "IL",
+    work_states: list[str] | None = None,
+    days_worked_by_state: dict[str, int] | None = None,
 ) -> TaxResult:
-    """Compute full federal + Illinois tax return."""
+    """Compute full federal + state tax return."""
 
     if filing_status not in FILING_STATUSES:
         raise ValueError(f"Invalid filing status: {filing_status}")
@@ -689,42 +743,72 @@ def compute_tax(
     result.sched_b_dividends_total = result.line_3b_ordinary_dividends
 
     # =======================================================================
-    # ILLINOIS IL-1040
+    # STATE TAX COMPUTATION (multi-state support)
     # =======================================================================
 
-    result.il_line_1_federal_agi = result.line_11_agi
+    work_states = work_states or []
+    residence_state = residence_state.upper() if residence_state else "IL"
 
-    # IL additions: none for most filers (could add back municipal bond interest)
-    result.il_line_3_additions = 0.0
+    # Build per-state wage/withholding maps from W-2s
+    w2_state_wages: dict[str, float] = {}
+    w2_state_withheld: dict[str, float] = {}
+    for w in w2s:
+        # Use per-state breakdowns if available, otherwise default to residence state
+        if hasattr(w, 'state_wage_infos') and w.state_wage_infos:
+            for swi in w.state_wage_infos:
+                st = swi.state.upper()
+                w2_state_wages[st] = w2_state_wages.get(st, 0.0) + swi.state_wages
+                w2_state_withheld[st] = w2_state_withheld.get(st, 0.0) + swi.state_withheld
+        else:
+            # Legacy: single state_wages/state_withheld → assign to residence state
+            w2_state_wages[residence_state] = w2_state_wages.get(residence_state, 0.0) + w.state_wages
+            w2_state_withheld[residence_state] = w2_state_withheld.get(residence_state, 0.0) + w.state_withheld
 
-    # IL base income
-    result.il_line_7_base_income = result.il_line_1_federal_agi + result.il_line_3_additions
-
-    # Exemptions: filer + spouse (if MFJ) + dependents
     num_exemptions = 1
     if filing_status == MFJ and spouse:
         num_exemptions = 2
     num_exemptions += num_dependents
-    result.il_line_9_exemptions = num_exemptions * IL_PERSONAL_EXEMPTION
 
-    # IL taxable income
-    result.il_line_10_taxable = max(0, result.il_line_7_base_income - result.il_line_9_exemptions)
+    state_returns = compute_all_state_returns(
+        residence_state=residence_state,
+        work_states=work_states,
+        filing_status=filing_status,
+        federal_agi=result.line_11_agi,
+        w2_state_wages=w2_state_wages,
+        w2_state_withheld=w2_state_withheld,
+        estimated_state_payments=payments.estimated_state,
+        num_exemptions=num_exemptions,
+        days_worked_by_state=days_worked_by_state,
+        total_wages=result.line_1a_wages,
+    )
 
-    # IL tax (flat rate)
-    result.il_line_11_tax = round(result.il_line_10_taxable * IL_FLAT_RATE, 2)
+    result.state_returns = state_returns
+    result.residence_state = residence_state
 
-    # IL withholding from W-2s
-    result.il_line_18_withheld = sum(w.state_withheld for w in w2s)
-    result.il_estimated_payments = payments.estimated_state
+    # Backward compatibility: map IL results to il_* fields
+    il_result = None
+    for sr in state_returns:
+        if sr.state_code == "IL" and sr.return_type == "resident":
+            il_result = sr
+            break
+    if il_result is None:
+        # Check nonresident IL too
+        for sr in state_returns:
+            if sr.state_code == "IL":
+                il_result = sr
+                break
 
-    il_payments = result.il_line_18_withheld + result.il_estimated_payments
-    il_diff = il_payments - result.il_line_11_tax
-    if il_diff >= 0:
-        result.il_refund = il_diff
-        result.il_owed = 0.0
-    else:
-        result.il_refund = 0.0
-        result.il_owed = abs(il_diff)
+    if il_result:
+        result.il_line_1_federal_agi = il_result.federal_agi
+        result.il_line_3_additions = il_result.additions
+        result.il_line_7_base_income = il_result.base_income
+        result.il_line_9_exemptions = il_result.exemptions
+        result.il_line_10_taxable = il_result.taxable_income
+        result.il_line_11_tax = il_result.total_tax
+        result.il_line_18_withheld = il_result.withholding
+        result.il_estimated_payments = il_result.estimated_payments
+        result.il_refund = il_result.refund
+        result.il_owed = il_result.owed
 
     # =======================================================================
     # FORMS LIST
@@ -746,6 +830,9 @@ def compute_tax(
         result.forms_generated.append("Form 8959")
     if result.niit > 0:
         result.forms_generated.append("Form 8960")
-    result.forms_generated.append("IL-1040")
+    # State forms
+    for sr in state_returns:
+        if sr.form_name:
+            result.forms_generated.append(sr.form_name)
 
     return result
