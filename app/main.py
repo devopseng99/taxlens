@@ -1,13 +1,14 @@
-"""TaxLens Document Intake API — local-first tax document storage + Azure OCR."""
+"""TaxLens Agentic Tax Intelligence Platform — multi-tenant SaaS with Dolt + MCP OAuth."""
 
 import os
 import uuid
 import hashlib
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -16,9 +17,15 @@ from ocr import analyze_document
 from bridge import ocr_to_w2_payload, write_populated_data
 from tax_routes import router as tax_router
 from plaid_routes import router as plaid_router
+from admin_routes import router as admin_router
 from auth import require_auth, AUTH_ENABLED
 from contextlib import asynccontextmanager
 from mcp_server import mcp
+from db.connection import init_pool, close_pool, DOLT_ENABLED
+from db.migrate import run_migrations
+from middleware.tenant_context import TenantContextMiddleware
+
+logger = logging.getLogger(__name__)
 
 # Create MCP Starlette app (initializes session_manager lazily)
 _mcp_starlette = mcp.streamable_http_app()
@@ -26,24 +33,38 @@ _mcp_starlette = mcp.streamable_http_app()
 
 @asynccontextmanager
 async def lifespan(app):
-    """Start MCP session manager (required for StreamableHTTP transport)."""
+    """Initialize DB pool, run migrations, start MCP session manager."""
+    # Initialize Dolt connection pool and run schema migrations
+    if DOLT_ENABLED:
+        await init_pool()
+        await run_migrations()
+        logger.info("Dolt database initialized and migrations applied")
+
     async with mcp.session_manager.run():
         yield
 
+    # Shutdown
+    if DOLT_ENABLED:
+        await close_pool()
+
 
 app = FastAPI(
-    title="TaxLens Document Intake API",
-    version="0.1.0",
+    title="TaxLens Agentic Tax Intelligence Platform",
+    version="2.0.0",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
 )
+
+# Multi-tenant context middleware (must be added before CORS)
+app.add_middleware(TenantContextMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://taxlens.istayintek.com",
         "https://dropit.istayintek.com",
+        "https://portal.taxlens.istayintek.com",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,6 +79,9 @@ app.include_router(tax_router)
 
 # Mount Plaid integration routes
 app.include_router(plaid_router)
+
+# Mount admin/provisioning routes
+app.include_router(admin_router)
 
 # Mount MCP server (StreamableHTTP at /mcp)
 # Accessible at https://dropit.istayintek.com/api/mcp
@@ -148,11 +172,24 @@ async def health():
     from plaid_routes import PLAID_ENABLED
     return {
         "status": "ok",
+        "version": "2.0.0",
         "storage_root": str(STORAGE_ROOT),
         "writable": STORAGE_ROOT.exists(),
         "auth_enabled": AUTH_ENABLED,
+        "dolt_enabled": DOLT_ENABLED,
         "mcp_endpoint": "/api/mcp",
         "plaid_enabled": PLAID_ENABLED,
+    }
+
+
+@app.get("/whoami")
+async def whoami(request: Request, _auth: str = Depends(require_auth)):
+    """Return the authenticated tenant/user context."""
+    return {
+        "tenant_id": getattr(request.state, "tenant_id", None),
+        "tenant_slug": getattr(request.state, "tenant_slug", None),
+        "user_id": getattr(request.state, "user_id", None),
+        "dolt_enabled": DOLT_ENABLED,
     }
 
 

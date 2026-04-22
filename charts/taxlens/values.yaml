@@ -33,6 +33,26 @@ plaid:
   fernetKeyKey: fernet-key
   env: sandbox
 
+dolt:
+  enabled: true
+  image: docker.io/dolthub/dolt-sql-server
+  tag: latest
+  port: 3306
+  pvc:
+    name: taxlens-dolt
+    size: 5Gi
+    storageClass: my-local-storage
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+admin:
+  secretName: taxlens-admin
+  adminKeyKey: admin-key
+
 openfileDb:
   host: openfile-postgresql.openfile.svc.cluster.local
   port: "5432"
@@ -45,10 +65,10 @@ nodeSelector:
 
 resources:
   limits:
-    memory: 512Mi
+    memory: 384Mi
   requests:
     cpu: 100m
-    memory: 256Mi
+    memory: 192Mi
 
 startupProbe:
   httpGet:

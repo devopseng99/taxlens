@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-21 (v1.0.0)
+Updated: 2026-04-22 (v2.0.0)
 
 ## Architecture
 
@@ -20,7 +20,7 @@ Updated: 2026-04-21 (v1.0.0)
 
 8. **QBI deduction (Section 199A)** — Simplified: 20% of qualified business income, capped at taxable income. Full phase-out rules for high earners not implemented (would need SSTB classification, W-2/UBIA limits).
 
-9. **Draft storage on PVC** — Each draft gets a unique directory under `{STORAGE_ROOT}/{username}/drafts/{draft_id}/`. PDFs + result.json stored together. Private per-user via path isolation.
+9. **Draft storage on PVC** — Each draft gets a unique directory under `{STORAGE_ROOT}/{tenant_id}/{username}/drafts/{draft_id}/`. PDFs + result.json stored together. Multi-tenant path isolation.
 
 10. **OCR-first, manual-supplement** — W-2 and 1099-INT data extracted from Azure OCR results. All other income/deduction types entered manually via API. This allows hybrid automated+manual filing.
 
@@ -71,6 +71,34 @@ Updated: 2026-04-21 (v1.0.0)
 31. **Plaid investment_transactions for tax data, not statements** — The Plaid statements API (for downloading 1099 PDFs) is a premium product requiring special access. Instead, we use `investments/transactions/get` which provides sell transactions (→ Schedule D) and dividends (→ Schedule B) directly as structured data — no OCR needed. This is more reliable than OCR and available in the free sandbox tier.
 
 32. **Plaid data stored as tax_data.json per item** — Each synced Plaid item gets `transactions.json` (raw API response) and `tax_data.json` (parsed CapitalTransactions + DividendIncome). TaxDraftRequest references items by ID and loads the parsed file, avoiding re-parsing on every draft computation.
+
+## Multi-Tenant Database (Wave 11)
+
+33. **Dolt over PostgreSQL for versioned data** — Dolt provides MySQL-compatible SQL with git-like version control (branch, merge, diff, log, rollback) built in. Every schema change and tenant mutation is automatically committed to Dolt's internal git log. This gives audit trails and per-tenant rollback without building custom versioning. Trade-off: smaller community than PostgreSQL, but the versioning benefit outweighs this for a multi-tenant tax platform where data provenance matters.
+
+34. **aiomysql async driver** — Dolt speaks MySQL wire protocol. aiomysql provides async connection pooling (min=2, max=5) compatible with FastAPI's async handlers. No need for an ORM — raw SQL via repository pattern keeps queries transparent and Dolt-specific features (CALL dolt_commit, dolt_diff) accessible.
+
+35. **Repository pattern over ORM** — Each table gets a dedicated repo module (`tenant_repo.py`, `user_repo.py`, etc.) with plain async functions wrapping parameterized SQL. This avoids ORM overhead, keeps Dolt-specific SQL (CALL dolt_commit, AS OF queries) first-class, and makes the data layer easy to test with mock patches.
+
+36. **`plan_tier` not `plan` — MySQL reserved word** — `PLAN` is a reserved keyword in MySQL/Dolt. Using it as a column name causes cryptic syntax errors. Renamed to `plan_tier` across schema and all repository code. Lesson: always check MySQL reserved word list when naming columns.
+
+37. **`key_prefix` VARCHAR(12) not VARCHAR(8)** — API keys use `tlk_` prefix (4 chars) + 8 chars of the key = 12 chars for the prefix. Original schema had VARCHAR(8) which caused silent INSERT failures in Dolt (no truncation, hard error). Always size VARCHAR to match the actual generated content.
+
+38. **Graceful degradation: Dolt optional** — When `DOLT_HOST` env var is empty, the entire DB layer is skipped. Middleware sets `tenant_id="default"`, auth falls back to legacy `TAXLENS_API_KEYS` env var, routes use file-based storage. This allows the same image to run single-tenant (no database) or multi-tenant (with Dolt). Critical for zero-downtime migration.
+
+39. **SHA-256 hashed API keys** — API keys stored as SHA-256 hashes, never plaintext. The raw key is shown exactly once at creation. Validation: hash the incoming key, compare against stored hash, join with tenants table to verify tenant is active. `last_used_at` updated on every successful validation for audit.
+
+40. **Multi-tenant middleware extracts tenant context** — `TenantContextMiddleware` runs before every request. Validates X-API-Key header against Dolt, sets `request.state.tenant_id`, `tenant_slug`, `user_id`. Skips auth for /health, /docs, /openapi.json, /mcp paths. Admin routes use separate X-Admin-Key header.
+
+41. **Admin key from K8s secret, not Dolt** — The platform admin key (`TAXLENS_ADMIN_KEY`) comes from a K8s secret, not the database. This avoids chicken-and-egg: you need the admin key to create the first tenant, but you'd need a tenant to authenticate against Dolt. External secret bootstraps the admin.
+
+42. **Dolt version control on significant mutations** — Not every INSERT gets a Dolt commit. Commits happen on: schema migration, tenant creation, tenant suspension/activation. Individual API key creates and draft saves use autocommit (MySQL-level) but don't create Dolt version control commits. This keeps the Dolt log meaningful (not one commit per API call).
+
+43. **SQL comment stripping before semicolon split in migration** — Schema SQL files have `--` comment lines. The migration parser splits on `;` first, then filters blocks starting with `--`. Problem: a comment block followed by a CREATE TABLE (no intervening `;`) makes the entire block appear to start with `--`, silently skipping the first table. Fix: strip comment lines BEFORE splitting on semicolons.
+
+44. **Dolt StatefulSet with init container for `dolt init`** — Dolt requires a database directory to be initialized before the server starts. Init container checks for `.dolt` dir; if missing, runs `dolt init` + creates the database + creates the remote-access user. This is idempotent — subsequent pod restarts skip init when data already exists on the PV.
+
+45. **busybox wait-for-dolt init container** — API deployment includes a busybox init container that loops `nc -z taxlens-dolt 3306` until Dolt is ready. This ensures the API pod doesn't start (and fail migration) before Dolt accepts connections. Simple, no additional dependencies.
 
 ## PDF Template Provenance
 

@@ -11,7 +11,12 @@ ssh -i "$SSH_KEY" "$NODE_IP" <<'REMOTE'
 sudo mkdir -p /opt/k8s-pers/vol1/taxlens-docs
 sudo chown 1000:1000 /opt/k8s-pers/vol1/taxlens-docs
 sudo chmod 755 /opt/k8s-pers/vol1/taxlens-docs
-echo "Created /opt/k8s-pers/vol1/taxlens-docs"
+
+sudo mkdir -p /opt/k8s-pers/vol1/taxlens-dolt
+sudo chown 1000:1000 /opt/k8s-pers/vol1/taxlens-dolt
+sudo chmod 755 /opt/k8s-pers/vol1/taxlens-dolt
+
+echo "Provisioned directories:"
 ls -la /opt/k8s-pers/vol1/ | grep taxlens
 REMOTE
 

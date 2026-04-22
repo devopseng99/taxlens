@@ -10,6 +10,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'app'))
 import pytest
 
 
+from unittest.mock import MagicMock
+
+
+def _mock_request(tenant_id=None):
+    """Create a mock Request with state attributes."""
+    req = MagicMock()
+    req.state.tenant_id = tenant_id
+    req.state.tenant_slug = None
+    req.state.user_id = None
+    return req
+
+
 class TestAuthDisabled:
     """When TAXLENS_API_KEYS is not set, auth is disabled."""
 
@@ -22,7 +34,8 @@ class TestAuthDisabled:
         importlib.reload(auth)
 
         import asyncio
-        result = asyncio.get_event_loop().run_until_complete(auth.require_auth(None))
+        result = asyncio.get_event_loop().run_until_complete(
+            auth.require_auth(_mock_request(), None))
         assert result == "anonymous"
 
     def test_auth_enabled_flag(self):
@@ -52,13 +65,13 @@ class TestAuthEnabled:
     def test_valid_key(self):
         import asyncio
         result = asyncio.get_event_loop().run_until_complete(
-            self.auth.require_auth("test-key-1"))
+            self.auth.require_auth(_mock_request(), "test-key-1"))
         assert result == "test-key-1"
 
     def test_valid_key_2(self):
         import asyncio
         result = asyncio.get_event_loop().run_until_complete(
-            self.auth.require_auth("test-key-2"))
+            self.auth.require_auth(_mock_request(), "test-key-2"))
         assert result == "test-key-2"
 
     def test_invalid_key(self):
@@ -66,7 +79,7 @@ class TestAuthEnabled:
         from fastapi import HTTPException
         with pytest.raises(HTTPException) as exc:
             asyncio.get_event_loop().run_until_complete(
-                self.auth.require_auth("bad-key"))
+                self.auth.require_auth(_mock_request(), "bad-key"))
         assert exc.value.status_code == 403
 
     def test_missing_key(self):
@@ -74,7 +87,7 @@ class TestAuthEnabled:
         from fastapi import HTTPException
         with pytest.raises(HTTPException) as exc:
             asyncio.get_event_loop().run_until_complete(
-                self.auth.require_auth(None))
+                self.auth.require_auth(_mock_request(), None))
         assert exc.value.status_code == 401
 
 

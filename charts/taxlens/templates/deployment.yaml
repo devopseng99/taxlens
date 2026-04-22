@@ -19,6 +19,28 @@ spec:
     spec:
       nodeSelector:
         {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- if .Values.dolt.enabled }}
+      initContainers:
+        - name: wait-for-dolt
+          image: docker.io/library/busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Dolt to be ready..."
+              until nc -z taxlens-dolt {{ .Values.dolt.port }}; do
+                echo "Dolt not ready, retrying in 2s..."
+                sleep 2
+              done
+              echo "Dolt is ready."
+          resources:
+            limits:
+              memory: 16Mi
+            requests:
+              cpu: 10m
+              memory: 8Mi
+      {{- end }}
       containers:
         - name: api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -60,6 +82,22 @@ spec:
             - name: PLAID_ENV
               value: {{ .Values.plaid.env | quote }}
             {{- end }}
+            {{- if .Values.dolt.enabled }}
+            - name: DOLT_HOST
+              value: "taxlens-dolt"
+            - name: DOLT_PORT
+              value: {{ .Values.dolt.port | quote }}
+            - name: DOLT_DATABASE
+              value: "taxlens"
+            - name: DOLT_USER
+              value: "taxlens"
+            {{- end }}
+            - name: TAXLENS_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.admin.secretName }}
+                  key: {{ .Values.admin.adminKeyKey }}
+                  optional: true
             - name: OPENFILE_DB_HOST
               value: {{ .Values.openfileDb.host | quote }}
             - name: OPENFILE_DB_PORT
