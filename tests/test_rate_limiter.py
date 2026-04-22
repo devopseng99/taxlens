@@ -100,7 +100,7 @@ class TestRateLimiter:
 
     @pytest.mark.asyncio
     async def test_check_api_rate_allowed(self):
-        with patch("rate_limiter.DOLT_ENABLED", False):
+        with patch("rate_limiter.DB_ENABLED", False):
             rl = RateLimiter()
             allowed, headers = await rl.check_api_rate("tenant1")
             assert allowed
@@ -108,7 +108,7 @@ class TestRateLimiter:
 
     @pytest.mark.asyncio
     async def test_check_api_rate_denied_after_burst(self):
-        with patch("rate_limiter.DOLT_ENABLED", False):
+        with patch("rate_limiter.DB_ENABLED", False):
             rl = RateLimiter()
             # Exhaust all tokens (starter = 30 RPM)
             for _ in range(31):
@@ -119,7 +119,7 @@ class TestRateLimiter:
 
     @pytest.mark.asyncio
     async def test_check_computation_limit(self):
-        with patch("rate_limiter.DOLT_ENABLED", False):
+        with patch("rate_limiter.DB_ENABLED", False):
             rl = RateLimiter()
             allowed, remaining = await rl.check_computation("tenant1")
             assert allowed
@@ -127,7 +127,7 @@ class TestRateLimiter:
 
     @pytest.mark.asyncio
     async def test_computation_limit_exhausted(self):
-        with patch("rate_limiter.DOLT_ENABLED", False):
+        with patch("rate_limiter.DB_ENABLED", False):
             rl = RateLimiter()
             for _ in range(50):
                 await rl.check_computation("tenant1")
@@ -137,7 +137,7 @@ class TestRateLimiter:
 
     @pytest.mark.asyncio
     async def test_get_tenant_usage(self):
-        with patch("rate_limiter.DOLT_ENABLED", False):
+        with patch("rate_limiter.DB_ENABLED", False):
             rl = RateLimiter()
             await rl.check_api_rate("tenant1")
             await rl.check_computation("tenant1")
@@ -147,7 +147,7 @@ class TestRateLimiter:
 
     @pytest.mark.asyncio
     async def test_separate_tenant_limits(self):
-        with patch("rate_limiter.DOLT_ENABLED", False):
+        with patch("rate_limiter.DB_ENABLED", False):
             rl = RateLimiter()
             # Exhaust tenant1 computation
             for _ in range(50):

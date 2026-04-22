@@ -3,20 +3,51 @@
 Extracts tenant_id from the request authentication (API key or Bearer token)
 and injects it into request.state for downstream handlers.
 
+Uses an in-memory LRU cache for API key validation to avoid repeated
+PostgREST roundtrips for the same key.
+
 Paths that skip tenant context: /health, /docs, /openapi.json, /mcp (MCP has its own auth).
 """
 
+import hashlib
 import logging
+import time
+from collections import OrderedDict
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from db.connection import DOLT_ENABLED
+from db.postgrest_client import postgrest, DB_ENABLED
 
 logger = logging.getLogger(__name__)
 
 # Paths that don't require tenant context
 _SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/mcp", "/mcp/"}
+
+# --- Auth Cache ---
+_AUTH_CACHE_MAX = 256
+_AUTH_CACHE_TTL = 60  # seconds
+_auth_cache: OrderedDict[str, tuple[dict, float]] = OrderedDict()
+
+
+def _cache_get(key_hash: str) -> dict | None:
+    """Get cached auth result if not expired."""
+    entry = _auth_cache.get(key_hash)
+    if entry is None:
+        return None
+    result, ts = entry
+    if time.monotonic() - ts > _AUTH_CACHE_TTL:
+        _auth_cache.pop(key_hash, None)
+        return None
+    _auth_cache.move_to_end(key_hash)
+    return result
+
+
+def _cache_put(key_hash: str, result: dict) -> None:
+    """Cache an auth result with TTL."""
+    _auth_cache[key_hash] = (result, time.monotonic())
+    if len(_auth_cache) > _AUTH_CACHE_MAX:
+        _auth_cache.popitem(last=False)
 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
@@ -28,43 +59,75 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             request.state.tenant_id = None
             request.state.tenant_slug = None
             request.state.user_id = None
+            request.state.db_token = None
             return await call_next(request)
 
-        # If Dolt is not enabled, run in legacy single-tenant mode
-        if not DOLT_ENABLED:
+        # If DB is not enabled, run in legacy single-tenant mode
+        if not DB_ENABLED:
             request.state.tenant_id = "default"
             request.state.tenant_slug = "default"
             request.state.user_id = None
+            request.state.db_token = None
             return await call_next(request)
 
         # Extract API key from header
         api_key = request.headers.get("X-API-Key", "")
 
         if api_key:
-            from db.api_key_repo import validate_key
-            key_row = await validate_key(api_key)
-            if key_row:
-                request.state.tenant_id = key_row["tenant_id"]
-                request.state.tenant_slug = key_row.get("tenant_slug", "")
-                request.state.user_id = key_row.get("user_id")
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+            # Check cache first
+            cached = _cache_get(key_hash)
+            if cached:
+                request.state.tenant_id = cached["tenant_id"]
+                request.state.tenant_slug = cached.get("tenant_slug", "")
+                request.state.user_id = cached.get("user_id")
+                request.state.db_token = postgrest.mint_jwt(
+                    cached["tenant_id"], cached.get("user_id")
+                )
                 return await call_next(request)
+
+            # Validate via PostgREST RPC (anonymous, no JWT needed)
+            try:
+                rows = await postgrest.rpc("validate_api_key", {"p_key_hash": key_hash})
+                if rows:
+                    row = rows[0]
+                    _cache_put(key_hash, row)
+                    request.state.tenant_id = row["tenant_id"]
+                    request.state.tenant_slug = row.get("tenant_slug", "")
+                    request.state.user_id = row.get("user_id")
+                    request.state.db_token = postgrest.mint_jwt(
+                        row["tenant_id"], row.get("user_id")
+                    )
+                    return await call_next(request)
+            except Exception as e:
+                logger.warning("API key validation failed: %s", e)
 
         # Check Bearer token (OAuth access token)
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-            import hashlib
             token_hash = hashlib.sha256(token.encode()).hexdigest()
-            from db.oauth_repo import load_token
-            token_row = await load_token(token_hash, token_type="access")
-            if token_row:
-                import time
-                if token_row.get("expires_at") and token_row["expires_at"] < int(time.time()):
-                    return JSONResponse({"detail": "Token expired"}, status_code=401)
-                request.state.tenant_id = token_row["tenant_id"]
-                request.state.tenant_slug = ""
-                request.state.user_id = token_row.get("user_id")
-                return await call_next(request)
+            try:
+                admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+                rows = await postgrest.get(
+                    "oauth_tokens",
+                    {"token_hash": f"eq.{token_hash}", "token_type": "eq.access"},
+                    token=admin_token,
+                )
+                if rows:
+                    token_row = rows[0]
+                    if token_row.get("expires_at") and token_row["expires_at"] < int(time.time()):
+                        return JSONResponse({"detail": "Token expired"}, status_code=401)
+                    request.state.tenant_id = token_row["tenant_id"]
+                    request.state.tenant_slug = ""
+                    request.state.user_id = token_row.get("user_id")
+                    request.state.db_token = postgrest.mint_jwt(
+                        token_row["tenant_id"], token_row.get("user_id")
+                    )
+                    return await call_next(request)
+            except Exception as e:
+                logger.warning("Bearer token validation failed: %s", e)
 
         # Admin key bypass — admin endpoints handle their own auth
         admin_key = request.headers.get("X-Admin-Key", "")
@@ -72,11 +135,20 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             request.state.tenant_id = "__admin__"
             request.state.tenant_slug = "__admin__"
             request.state.user_id = None
+            request.state.db_token = postgrest.mint_jwt("__admin__", role="app_admin")
+            return await call_next(request)
+
+        # Billing webhook + plans — no auth needed
+        if path.startswith("/billing/webhook") or path == "/billing/plans":
+            request.state.tenant_id = None
+            request.state.tenant_slug = None
+            request.state.user_id = None
+            request.state.db_token = None
             return await call_next(request)
 
         # No valid auth found — let individual route handlers decide
-        # (some routes like /health don't need auth)
         request.state.tenant_id = None
         request.state.tenant_slug = None
         request.state.user_id = None
+        request.state.db_token = None
         return await call_next(request)

@@ -1,10 +1,7 @@
 """Stripe billing integration — subscriptions, webhooks, metered usage."""
 
-import hashlib
-import json
 import logging
 import os
-import uuid
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -82,7 +79,6 @@ async def report_metered_usage(stripe_subscription_id: str,
     if not price_id:
         return {"reported": False, "reason": f"No metered price for {event_type}"}
 
-    # Find subscription item for this metered price
     sub = stripe.Subscription.retrieve(stripe_subscription_id)
     item_id = None
     for item in sub["items"]["data"]:
@@ -94,9 +90,7 @@ async def report_metered_usage(stripe_subscription_id: str,
         return {"reported": False, "reason": "Metered item not in subscription"}
 
     record = stripe.SubscriptionItem.create_usage_record(
-        item_id,
-        quantity=quantity,
-        action="increment",
+        item_id, quantity=quantity, action="increment",
     )
     return {"reported": True, "usage_record_id": record.id}
 
@@ -110,32 +104,31 @@ def verify_webhook_signature(payload: bytes, sig_header: str) -> dict:
     return event
 
 
-# --- Dolt billing_customers operations ---
+# --- PostgREST-backed billing_customers operations ---
 
 async def save_billing_customer(tenant_id: str, stripe_customer_id: str,
                                 stripe_subscription_id: str, plan_tier: str):
-    """Save or update billing customer in Dolt."""
-    from db.connection import get_conn, DOLT_ENABLED
-    if not DOLT_ENABLED:
+    """Save or update billing customer via PostgREST RPC."""
+    from db.postgrest_client import postgrest, DB_ENABLED
+    if not DB_ENABLED:
         return
-    import aiomysql
-    now = datetime.now(timezone.utc)
-    async with get_conn() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(
-                "REPLACE INTO billing_customers "
-                "(tenant_id, stripe_customer_id, stripe_subscription_id, plan_tier, "
-                "subscription_status, created_at, updated_at) "
-                "VALUES (%s, %s, %s, %s, 'active', %s, %s)",
-                (tenant_id, stripe_customer_id, stripe_subscription_id, plan_tier, now, now),
-            )
+    admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+    await postgrest.rpc("upsert_billing_customer", {
+        "p_tenant_id": tenant_id,
+        "p_stripe_customer_id": stripe_customer_id,
+        "p_stripe_subscription_id": stripe_subscription_id,
+        "p_plan_tier": plan_tier,
+    }, token=admin_token)
 
 
 async def get_billing_customer(tenant_id: str) -> dict | None:
     """Get billing customer by tenant_id."""
-    from db.connection import fetchone
-    return await fetchone(
-        "SELECT * FROM billing_customers WHERE tenant_id = %s", (tenant_id,)
+    from db.postgrest_client import postgrest, DB_ENABLED
+    if not DB_ENABLED:
+        return None
+    admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+    return await postgrest.get_one(
+        "billing_customers", {"tenant_id": f"eq.{tenant_id}"}, token=admin_token,
     )
 
 
@@ -143,22 +136,17 @@ async def update_subscription_status(stripe_customer_id: str, status: str,
                                      plan_tier: str | None = None,
                                      period_end: datetime | None = None):
     """Update subscription status after webhook events."""
-    from db.connection import get_conn, DOLT_ENABLED
-    if not DOLT_ENABLED:
+    from db.postgrest_client import postgrest, DB_ENABLED
+    if not DB_ENABLED:
         return
-    import aiomysql
-    now = datetime.now(timezone.utc)
-    async with get_conn() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            sql = ("UPDATE billing_customers SET subscription_status = %s, "
-                   "updated_at = %s")
-            args = [status, now]
-            if plan_tier:
-                sql += ", plan_tier = %s"
-                args.append(plan_tier)
-            if period_end:
-                sql += ", current_period_end = %s"
-                args.append(period_end)
-            sql += " WHERE stripe_customer_id = %s"
-            args.append(stripe_customer_id)
-            await cur.execute(sql, tuple(args))
+    admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+    data = {"subscription_status": status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if plan_tier:
+        data["plan_tier"] = plan_tier
+    if period_end:
+        data["current_period_end"] = period_end.isoformat()
+    await postgrest.update(
+        "billing_customers",
+        {"stripe_customer_id": f"eq.{stripe_customer_id}"},
+        data, token=admin_token,
+    )

@@ -33,21 +33,10 @@ plaid:
   fernetKeyKey: fernet-key
   env: sandbox
 
-dolt:
-  enabled: true
-  image: docker.io/dolthub/dolt-sql-server
-  tag: latest
-  port: 3306
-  pvc:
-    name: taxlens-dolt
-    size: 5Gi
-    storageClass: my-local-storage
-  resources:
-    limits:
-      memory: 256Mi
-    requests:
-      cpu: 50m
-      memory: 128Mi
+postgrest:
+  url: "http://taxlens-postgrest.taxlens-db.svc:3000"
+  jwtSecretName: taxlens-db-jwt
+  jwtSecretKey: jwt-secret
 
 admin:
   secretName: taxlens-admin

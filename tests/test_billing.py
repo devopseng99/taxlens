@@ -47,16 +47,16 @@ class TestOnboarding:
 
     @pytest.mark.asyncio
     async def test_provision_requires_dolt(self):
-        with patch("onboarding.DOLT_ENABLED", False):
+        with patch("onboarding.DB_ENABLED", False):
             from onboarding import provision_tenant
-            with pytest.raises(RuntimeError, match="Dolt required"):
+            with pytest.raises(RuntimeError, match="Database required"):
                 await provision_tenant("Test Firm")
 
     @pytest.mark.asyncio
     async def test_deactivate_requires_dolt(self):
-        with patch("onboarding.DOLT_ENABLED", False):
+        with patch("onboarding.DB_ENABLED", False):
             from onboarding import deactivate_tenant
-            with pytest.raises(RuntimeError, match="Dolt required"):
+            with pytest.raises(RuntimeError, match="Database required"):
                 await deactivate_tenant("abc123")
 
 

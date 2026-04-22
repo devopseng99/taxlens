@@ -1,0 +1,6 @@
+apiVersion: v2
+name: taxlens-db
+description: TaxLens Database Microservice — PostgreSQL + PostgREST + Flyway
+version: 1.0.0
+appVersion: "16"
+type: application

@@ -1,0 +1,48 @@
+namespace: taxlens-db
+
+postgres:
+  image: docker.io/library/postgres
+  tag: "16-alpine"
+  port: 5432
+  database: taxlens
+  storage:
+    size: 5Gi
+    storageClass: my-local-storage
+    hostPath: /opt/k8s-pers/vol1/psql-taxlens
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  secretName: taxlens-db-credentials
+  passwordKey: postgres-password
+
+postgrest:
+  image: docker.io/postgrest/postgrest
+  tag: "v12.2.3"
+  port: 3000
+  maxRows: 1000
+  dbPool: 10
+  resources:
+    limits:
+      memory: 64Mi
+    requests:
+      cpu: 25m
+      memory: 32Mi
+  jwtSecretName: taxlens-db-jwt
+  jwtSecretKey: jwt-secret
+
+flyway:
+  enabled: true
+  image: localhost/taxlens-api
+  tag: latest
+  resources:
+    limits:
+      memory: 64Mi
+    requests:
+      cpu: 25m
+      memory: 32Mi
+
+nodeSelector:
+  kubernetes.io/hostname: mgplcb05

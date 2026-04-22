@@ -19,15 +19,14 @@ class TestMeteringLogger:
 
     def setup_method(self):
         """Create a fresh logger for each test."""
-        # Patch DOLT_ENABLED before import
-        with patch("db.connection.DOLT_ENABLED", True):
+        with patch("db.postgrest_client.DB_ENABLED", True):
             from metering import MeteringLogger
             self.logger = MeteringLogger(flush_size=3, flush_interval=60.0)
 
     @pytest.mark.asyncio
     async def test_log_buffers_events(self):
         """Events are buffered, not immediately flushed."""
-        with patch("metering.DOLT_ENABLED", True):
+        with patch("metering.DB_ENABLED", True):
             self.logger._buffer = []
             await self.logger.log("tenant1", "api_call", "/health")
             assert len(self.logger._buffer) == 1
@@ -37,7 +36,7 @@ class TestMeteringLogger:
     @pytest.mark.asyncio
     async def test_flush_on_size_limit(self):
         """Buffer flushes when reaching flush_size."""
-        with patch("metering.DOLT_ENABLED", True), \
+        with patch("metering.DB_ENABLED", True), \
              patch.object(self.logger, "_flush_unlocked", new_callable=AsyncMock) as mock_flush:
             # Log flush_size events
             for i in range(3):
@@ -46,9 +45,9 @@ class TestMeteringLogger:
             mock_flush.assert_called()
 
     @pytest.mark.asyncio
-    async def test_log_disabled_when_no_dolt(self):
-        """Events are dropped when DOLT_ENABLED is False."""
-        with patch("metering.DOLT_ENABLED", False):
+    async def test_log_disabled_when_no_db(self):
+        """Events are dropped when DB_ENABLED is False."""
+        with patch("metering.DB_ENABLED", False):
             self.logger._buffer = []
             await self.logger.log("tenant1", "api_call", "/health")
             assert len(self.logger._buffer) == 0
@@ -56,7 +55,7 @@ class TestMeteringLogger:
     @pytest.mark.asyncio
     async def test_event_has_required_fields(self):
         """Buffered events have all required fields."""
-        with patch("metering.DOLT_ENABLED", True):
+        with patch("metering.DB_ENABLED", True):
             self.logger._buffer = []
             await self.logger.log("t1", "tax_computation", "/tax-draft",
                                   metadata={"filing_status": "single"})
@@ -65,13 +64,13 @@ class TestMeteringLogger:
             assert event["tenant_id"] == "t1"
             assert event["event_type"] == "tax_computation"
             assert event["endpoint"] == "/tax-draft"
-            assert event["metadata_json"] == {"filing_status": "single"}
-            assert isinstance(event["created_at"], datetime)
+            assert event["metadata_json"] == json.dumps({"filing_status": "single"})
+            assert isinstance(event["created_at"], str)
 
     @pytest.mark.asyncio
     async def test_multiple_event_types(self):
         """Different event types are all buffered correctly."""
-        with patch("metering.DOLT_ENABLED", True):
+        with patch("metering.DB_ENABLED", True):
             self.logger._buffer = []
             await self.logger.log("t1", "api_call", "/health")
             await self.logger.log("t1", "ocr_page", "/analyze/abc")
@@ -82,7 +81,7 @@ class TestMeteringLogger:
     @pytest.mark.asyncio
     async def test_start_stop(self):
         """Start creates flush task, stop cancels it."""
-        with patch("metering.DOLT_ENABLED", True):
+        with patch("metering.DB_ENABLED", True):
             await self.logger.start()
             assert self.logger._flush_task is not None
             assert not self.logger._flush_task.done()

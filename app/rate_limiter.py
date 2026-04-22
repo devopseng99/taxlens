@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from db.connection import DOLT_ENABLED, fetchall
+from db.postgrest_client import postgrest, DB_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ class TenantLimits:
 
 
 class RateLimiter:
-    """Per-tenant rate limiter with plan-based limits loaded from Dolt."""
+    """Per-tenant rate limiter with plan-based limits loaded from PostgreSQL."""
 
     def __init__(self):
         self._tenants: dict[str, TenantLimits] = {}
@@ -105,19 +105,18 @@ class RateLimiter:
         self._lock = asyncio.Lock()
 
     async def _refresh_plans(self):
-        """Load tenant plan limits from Dolt (cached for 5 min)."""
+        """Load tenant plan limits from PostgreSQL via PostgREST (cached for 5 min)."""
         now = time.monotonic()
         if now - self._cache_refresh < self._cache_ttl:
             return
 
-        if not DOLT_ENABLED:
+        if not DB_ENABLED:
             self._cache_refresh = now
             return
 
         try:
-            rows = await fetchall("SELECT tenant_id, plan_tier, api_calls_per_minute, "
-                                  "computations_per_day, ocr_pages_per_month, "
-                                  "agent_messages_per_day FROM tenant_plans")
+            admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+            rows = await postgrest.get("tenant_plans", token=admin_token)
             for row in rows:
                 self._plans_cache[row["tenant_id"]] = {
                     "plan_tier": row["plan_tier"],

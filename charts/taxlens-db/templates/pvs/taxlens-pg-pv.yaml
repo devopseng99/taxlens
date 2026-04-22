@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: taxlens-pg-pv
+  labels:
+    app.kubernetes.io/name: taxlens-db
+    app.kubernetes.io/component: postgres
+spec:
+  capacity:
+    storage: {{ .Values.postgres.storage.size }}
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.postgres.storage.storageClass }}
+  persistentVolumeReclaimPolicy: Retain
+  claimRef:
+    namespace: {{ .Values.namespace }}
+    name: taxlens-pg-data
+  local:
+    path: {{ .Values.postgres.storage.hostPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ index .Values.nodeSelector "kubernetes.io/hostname" }}

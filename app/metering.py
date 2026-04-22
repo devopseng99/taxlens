@@ -1,12 +1,13 @@
-"""Usage metering — async buffered event logger with periodic flush to Dolt."""
+"""Usage metering — async buffered event logger with periodic flush to PostgreSQL via PostgREST."""
 
 import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from db.connection import DOLT_ENABLED, get_conn
+from db.postgrest_client import postgrest, DB_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,9 @@ EVENT_AGENT_MESSAGE = "agent_message"
 class MeteringLogger:
     """Async buffered usage event logger.
 
-    Buffers events in memory and flushes to Dolt every `flush_interval` seconds
-    or when the buffer reaches `flush_size` events. Call `start()` in app lifespan
-    and `stop()` on shutdown.
+    Buffers events in memory and flushes to PostgreSQL (via PostgREST) every
+    `flush_interval` seconds or when the buffer reaches `flush_size` events.
+    Call `start()` in app lifespan and `stop()` on shutdown.
     """
 
     def __init__(self, flush_size: int = 100, flush_interval: float = 30.0):
@@ -36,7 +37,7 @@ class MeteringLogger:
 
     async def start(self):
         """Start the periodic flush background task."""
-        if not DOLT_ENABLED:
+        if not DB_ENABLED:
             return
         self._flush_task = asyncio.create_task(self._periodic_flush())
         logger.info("MeteringLogger started (flush_size=%d, interval=%.0fs)",
@@ -56,15 +57,15 @@ class MeteringLogger:
     async def log(self, tenant_id: str, event_type: str,
                   endpoint: str = "", metadata: dict | None = None):
         """Buffer a usage event. Non-blocking."""
-        if not DOLT_ENABLED:
+        if not DB_ENABLED:
             return
         event = {
             "id": uuid.uuid4().hex,
             "tenant_id": tenant_id,
             "event_type": event_type,
             "endpoint": endpoint,
-            "metadata_json": metadata,
-            "created_at": datetime.now(timezone.utc),
+            "metadata_json": json.dumps(metadata) if metadata else None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         async with self._lock:
             self._buffer.append(event)
@@ -84,35 +85,19 @@ class MeteringLogger:
             await self._flush_unlocked()
 
     async def _flush_unlocked(self):
-        """Flush buffer to Dolt. Caller must hold self._lock."""
+        """Flush buffer to PostgreSQL via PostgREST. Caller must hold self._lock."""
         if not self._buffer:
             return
         batch = self._buffer[:]
         self._buffer.clear()
 
         try:
-            import json
-            import aiomysql
-            async with get_conn() as conn:
-                async with conn.cursor(aiomysql.DictCursor) as cur:
-                    for event in batch:
-                        await cur.execute(
-                            "INSERT INTO usage_events "
-                            "(id, tenant_id, event_type, endpoint, metadata_json, created_at) "
-                            "VALUES (%s, %s, %s, %s, %s, %s)",
-                            (
-                                event["id"],
-                                event["tenant_id"],
-                                event["event_type"],
-                                event["endpoint"],
-                                json.dumps(event["metadata_json"]) if event["metadata_json"] else None,
-                                event["created_at"],
-                            ),
-                        )
-            logger.debug("Flushed %d usage events to Dolt", len(batch))
+            admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+            await postgrest.create_many("usage_events", batch, token=admin_token)
+            logger.debug("Flushed %d usage events to PostgreSQL", len(batch))
         except Exception as e:
             logger.warning("Failed to flush %d usage events: %s", len(batch), e)
-            # Re-buffer failed events (at front, capped to prevent unbounded growth)
+            # Re-buffer failed events (capped to prevent unbounded growth)
             async with self._lock:
                 self._buffer = batch[:500] + self._buffer[:500]
 

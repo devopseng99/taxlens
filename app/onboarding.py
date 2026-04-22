@@ -1,15 +1,14 @@
 """Self-service tenant onboarding — provision from Stripe checkout or admin API."""
 
+import hashlib
+import json
 import logging
 import re
+import secrets
 import uuid
 from datetime import datetime, timezone
 
-from db.connection import DOLT_ENABLED, execute, fetchone
-from db.tenant_repo import create_tenant
-from db.user_repo import create_user
-from db.api_key_repo import create_key
-from db.versioning import dolt_commit
+from db.postgrest_client import postgrest, DB_ENABLED
 from billing import save_billing_customer
 from rate_limiter import PLAN_DEFAULTS
 
@@ -26,58 +25,70 @@ async def provision_tenant(tenant_name: str, plan_tier: str = "starter",
                            email: str = "", admin_username: str = "admin",
                            stripe_customer_id: str = "",
                            stripe_subscription_id: str = "") -> dict:
-    """Full tenant provisioning:
+    """Full tenant provisioning via PostgREST:
     1. Create tenant record
     2. Create default admin user
     3. Generate API key
     4. Set plan limits
     5. Link Stripe billing (if provided)
-    6. Commit to Dolt
 
     Returns dict with tenant_id, api_key, and connection instructions.
     """
-    if not DOLT_ENABLED:
-        raise RuntimeError("Dolt required for tenant provisioning")
+    if not DB_ENABLED:
+        raise RuntimeError("Database required for tenant provisioning")
 
+    admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
     slug = _slugify(tenant_name)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).isoformat()
 
     # Check slug uniqueness
-    existing = await fetchone("SELECT id FROM tenants WHERE slug = %s", (slug,))
+    existing = await postgrest.get("tenants", {"slug": f"eq.{slug}"}, token=admin_token)
     if existing:
-        # Append random suffix
         slug = f"{slug}-{uuid.uuid4().hex[:6]}"
 
     # 1. Create tenant
-    tenant_id = await create_tenant(tenant_name, slug, plan_tier)
+    tenant_id = uuid.uuid4().hex
+    await postgrest.create("tenants", {
+        "id": tenant_id, "name": tenant_name, "slug": slug,
+        "plan_tier": plan_tier, "status": "active",
+        "created_at": now, "updated_at": now,
+    }, token=admin_token)
 
     # 2. Create admin user
-    user_id = await create_user(tenant_id, admin_username, email, "admin")
+    user_id = uuid.uuid4().hex
+    await postgrest.create("users", {
+        "id": user_id, "tenant_id": tenant_id,
+        "username": admin_username, "email": email,
+        "role": "admin", "created_at": now,
+    }, token=admin_token)
 
     # 3. Generate API key
-    key_result = await create_key(tenant_id, user_id, f"Default key for {tenant_name}")
-    raw_key = key_result["raw_key"]
+    raw_key = f"tlk_{secrets.token_urlsafe(32)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_id = uuid.uuid4().hex
+    await postgrest.create("api_keys", {
+        "id": key_id, "tenant_id": tenant_id, "user_id": user_id,
+        "key_hash": key_hash, "key_prefix": raw_key[:12],
+        "name": f"Default key for {tenant_name}",
+        "scopes": json.dumps([]), "status": "active", "created_at": now,
+    }, token=admin_token)
 
-    # 4. Set plan limits
+    # 4. Set plan limits via RPC
     limits = PLAN_DEFAULTS.get(plan_tier, PLAN_DEFAULTS["starter"])
-    await execute(
-        "REPLACE INTO tenant_plans "
-        "(tenant_id, plan_tier, api_calls_per_minute, computations_per_day, "
-        "ocr_pages_per_month, agent_messages_per_day, updated_at) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-        (tenant_id, plan_tier, limits["api_calls_per_minute"],
-         limits["computations_per_day"], limits["ocr_pages_per_month"],
-         limits["agent_messages_per_day"], now),
-    )
+    await postgrest.rpc("upsert_tenant_plans", {
+        "p_tenant_id": tenant_id,
+        "p_plan_tier": plan_tier,
+        "p_api_calls_per_minute": limits["api_calls_per_minute"],
+        "p_computations_per_day": limits["computations_per_day"],
+        "p_ocr_pages_per_month": limits["ocr_pages_per_month"],
+        "p_agent_messages_per_day": limits["agent_messages_per_day"],
+    }, token=admin_token)
 
     # 5. Link Stripe billing
     if stripe_customer_id:
         await save_billing_customer(
             tenant_id, stripe_customer_id, stripe_subscription_id, plan_tier
         )
-
-    # 6. Commit
-    await dolt_commit(f"onboarding: provisioned tenant {slug} ({plan_tier}) [{tenant_id}]")
 
     logger.info("Provisioned tenant: %s (%s) id=%s", tenant_name, plan_tier, tenant_id)
 
@@ -101,37 +112,31 @@ async def provision_tenant(tenant_name: str, plan_tier: str = "starter",
 
 async def deactivate_tenant(tenant_id: str) -> dict:
     """Deactivate tenant — revoke tokens, mark inactive, retain data."""
-    if not DOLT_ENABLED:
-        raise RuntimeError("Dolt required")
+    if not DB_ENABLED:
+        raise RuntimeError("Database required")
 
-    now = datetime.now(timezone.utc)
+    admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+    now = datetime.now(timezone.utc).isoformat()
 
     # Mark tenant inactive
-    await execute(
-        "UPDATE tenants SET status = 'inactive', updated_at = %s WHERE id = %s",
-        (now, tenant_id),
-    )
+    await postgrest.update("tenants", {"id": f"eq.{tenant_id}"},
+                            {"status": "inactive", "updated_at": now}, token=admin_token)
 
     # Revoke all API keys
-    await execute(
-        "UPDATE api_keys SET status = 'revoked' WHERE tenant_id = %s AND status = 'active'",
-        (tenant_id,),
-    )
+    await postgrest.update("api_keys",
+                            {"tenant_id": f"eq.{tenant_id}", "status": "eq.active"},
+                            {"status": "revoked"}, token=admin_token)
 
     # Revoke all OAuth clients
-    await execute(
-        "UPDATE oauth_clients SET status = 'revoked' WHERE tenant_id = %s AND status = 'active'",
-        (tenant_id,),
-    )
+    await postgrest.update("oauth_clients",
+                            {"tenant_id": f"eq.{tenant_id}", "status": "eq.active"},
+                            {"status": "revoked"}, token=admin_token)
 
     # Update billing status
-    await execute(
-        "UPDATE billing_customers SET subscription_status = 'cancelled', updated_at = %s "
-        "WHERE tenant_id = %s",
-        (now, tenant_id),
-    )
-
-    await dolt_commit(f"onboarding: deactivated tenant [{tenant_id}]")
+    await postgrest.update("billing_customers",
+                            {"tenant_id": f"eq.{tenant_id}"},
+                            {"subscription_status": "cancelled", "updated_at": now},
+                            token=admin_token)
 
     logger.info("Deactivated tenant: %s", tenant_id)
     return {"deactivated": True, "tenant_id": tenant_id}

@@ -1,10 +1,10 @@
-"""TaxLens API authentication — multi-tenant with Dolt-backed keys + env-var fallback.
+"""TaxLens API authentication — multi-tenant with PostgREST-backed keys + env-var fallback.
 
-When Dolt is configured (DOLT_HOST set):
+When PostgREST is configured (POSTGREST_URL set):
   - API keys validated against the api_keys table via TenantContextMiddleware
   - Tenant context available in request.state.tenant_id
 
-When Dolt is NOT configured (dev/legacy mode):
+When PostgREST is NOT configured (dev/legacy mode):
   - Falls back to TAXLENS_API_KEYS env var (comma-separated)
   - Auth disabled entirely when no keys are configured
 
@@ -21,7 +21,7 @@ import secrets
 from fastapi import Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 
-from db.connection import DOLT_ENABLED
+from db.postgrest_client import DB_ENABLED
 
 # API key header name
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -31,7 +31,7 @@ _raw_keys = os.getenv("TAXLENS_API_KEYS", "")
 VALID_KEYS: set[str] = {k.strip() for k in _raw_keys.split(",") if k.strip()}
 
 # Auth enabled when either Dolt or legacy keys exist
-AUTH_ENABLED = DOLT_ENABLED or len(VALID_KEYS) > 0
+AUTH_ENABLED = DB_ENABLED or len(VALID_KEYS) > 0
 
 # Pre-hash valid keys for constant-time comparison (legacy mode)
 _VALID_HASHES = {hashlib.sha256(k.encode()).hexdigest() for k in VALID_KEYS}
@@ -47,7 +47,7 @@ async def require_auth(request: Request, api_key: str = Security(API_KEY_HEADER)
     Raises 401/403 if auth is enabled and key is missing/invalid.
     """
     # If Dolt enabled, TenantContextMiddleware already validated
-    if DOLT_ENABLED:
+    if DB_ENABLED:
         tenant_id = getattr(request.state, "tenant_id", None)
         if tenant_id and tenant_id not in (None, "__admin__"):
             return api_key or "authenticated"
@@ -86,7 +86,7 @@ def get_tenant_id(request: Request) -> str:
     """Get tenant_id from request state. Returns 'default' in legacy mode."""
     tenant_id = getattr(request.state, "tenant_id", None)
     if not tenant_id or tenant_id == "__admin__":
-        if not DOLT_ENABLED:
+        if not DB_ENABLED:
             return "default"
         raise HTTPException(401, "Tenant context not established.")
     return tenant_id

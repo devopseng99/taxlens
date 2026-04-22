@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-22 (v3.0.0)
+Updated: 2026-04-22 (v3.1.0)
 
 ## Architecture
 
@@ -143,6 +143,24 @@ Updated: 2026-04-22 (v3.0.0)
 56. **SSE via sse-starlette** — `EventSourceResponse` from `sse-starlette` for streaming chat responses. Events typed as `text`, `tool_use`, `tool_result`, `done`, `error`. Browser reads with `fetch + ReadableStream`, not EventSource API (POST not supported by EventSource).
 
 57. **Rate limiting in-memory** — Simple dict-based token bucket per tenant. Prunes expired entries on each check. Good enough for single-replica deployment. Will need Redis-backed rate limiting if scaled to multiple replicas (Wave 14).
+
+## Wave 15 — PostgreSQL + PostgREST Migration (v3.1.0)
+
+65. **PostgreSQL + PostgREST over plain PostgreSQL** — Replaces Dolt with an isolated `taxlens-db` namespace running PostgreSQL 16 + PostgREST v12. PostgREST auto-generates a REST API from the schema, eliminates 7 repository files (~600 LOC) replaced by 1 thin HTTP client (~100 LOC), and enforces tenant isolation at the database level via Row-Level Security (RLS). The 64Mi PostgREST memory cost is negligible compared to Dolt's 256Mi, and query latency drops from 30s+ to <10ms.
+
+66. **JWT + RLS role architecture** — 4 PostgreSQL roles: `authenticator` (PostgREST login), `app_anon` (validate_api_key RPC only), `app_tenant` (all tables via RLS — sees only own tenant's data), `app_admin` (bypasses RLS). JWT minted by the API after key validation, PostgREST enforces RLS automatically via `current_setting('request.jwt.claims')::json->>'tenant_id'`.
+
+67. **db-flyway-admin migration engine** — Reusable Flyway-inspired migration module (`db/flyway/`) with versioned SQL files (V001-V004), SHA-256 checksums, schema_history tracking, CLI (`python -m db.flyway migrate|info|validate`). PostgreSQL DDL runs in transactions. Designed for reuse across projects.
+
+68. **Auth cache: in-memory OrderedDict LRU** — 256 entries, 60s TTL, keyed by SHA-256 of API key. Eliminates repeated PostgREST roundtrips for the same key within the TTL window. OrderedDict provides O(1) LRU eviction by moving accessed keys to the end.
+
+69. **PostgREST filter syntax over raw SQL** — PostgREST uses URL query parameters for filtering (e.g., `?status=eq.active&tenant_id=eq.abc`). This is less flexible than raw SQL but eliminates SQL injection by design and keeps the API client stateless. Complex queries use PostgreSQL functions exposed via `/rpc/`.
+
+70. **SECURITY DEFINER for validate_api_key** — The `validate_api_key()` function runs as `app_admin` (bypasses RLS) but is callable by `app_anon`. This allows anonymous key validation without granting `app_anon` direct table access. The function returns only the minimum data needed (tenant_id, slug, user_id, key_id).
+
+71. **Isolated taxlens-db namespace** — PostgreSQL + PostgREST run in their own namespace with NetworkPolicy restricting access to taxlens, taxlens-portal, and taxlens-agent namespaces only. This provides defense-in-depth: even if the API is compromised, the attacker can only reach PostgREST (which enforces RLS), not PostgreSQL directly.
+
+72. **Graceful degradation preserved: DB_ENABLED from POSTGREST_URL** — Same pattern as Dolt (decision #38) but keyed on `POSTGREST_URL` env var. When empty, the app runs in file-only single-tenant mode. All DB operations guarded by `if not DB_ENABLED:` checks.
 
 ## PDF Template Provenance
 

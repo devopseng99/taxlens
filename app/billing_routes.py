@@ -13,8 +13,7 @@ from billing import (
     verify_webhook_signature, save_billing_customer,
     get_billing_customer, update_subscription_status,
 )
-from db.connection import DOLT_ENABLED, fetchone, fetchall, execute
-from db.versioning import dolt_commit
+from db.postgrest_client import postgrest, DB_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -149,14 +148,11 @@ async def _handle_subscription_updated(subscription: dict):
     if plan_tier:
         await _sync_plan_limits(customer_id, plan_tier)
 
-    await dolt_commit(f"billing: subscription updated for customer {customer_id[:8]}")
-
 
 async def _handle_subscription_deleted(subscription: dict):
     """Downgrade tenant when subscription is cancelled."""
     customer_id = subscription.get("customer", "")
     await update_subscription_status(customer_id, "cancelled")
-    await dolt_commit(f"billing: subscription cancelled for customer {customer_id[:8]}")
 
 
 async def _handle_payment_failed(invoice: dict):
@@ -167,27 +163,27 @@ async def _handle_payment_failed(invoice: dict):
 
 async def _sync_plan_limits(stripe_customer_id: str, plan_tier: str):
     """Sync tenant_plans table after plan change."""
-    if not DOLT_ENABLED:
+    if not DB_ENABLED:
         return
     from rate_limiter import PLAN_DEFAULTS
-    customer = await fetchone(
-        "SELECT tenant_id FROM billing_customers WHERE stripe_customer_id = %s",
-        (stripe_customer_id,),
+    admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+    customers = await postgrest.get(
+        "billing_customers",
+        {"stripe_customer_id": f"eq.{stripe_customer_id}"},
+        token=admin_token,
     )
-    if not customer:
+    if not customers:
         return
-    tenant_id = customer["tenant_id"]
+    tenant_id = customers[0]["tenant_id"]
     limits = PLAN_DEFAULTS.get(plan_tier, PLAN_DEFAULTS["starter"])
-    now = datetime.now(timezone.utc)
-    await execute(
-        "REPLACE INTO tenant_plans "
-        "(tenant_id, plan_tier, api_calls_per_minute, computations_per_day, "
-        "ocr_pages_per_month, agent_messages_per_day, updated_at) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-        (tenant_id, plan_tier, limits["api_calls_per_minute"],
-         limits["computations_per_day"], limits["ocr_pages_per_month"],
-         limits["agent_messages_per_day"], now),
-    )
+    await postgrest.rpc("upsert_tenant_plans", {
+        "p_tenant_id": tenant_id,
+        "p_plan_tier": plan_tier,
+        "p_api_calls_per_minute": limits["api_calls_per_minute"],
+        "p_computations_per_day": limits["computations_per_day"],
+        "p_ocr_pages_per_month": limits["ocr_pages_per_month"],
+        "p_agent_messages_per_day": limits["agent_messages_per_day"],
+    }, token=admin_token)
 
 
 # --- Usage endpoints ---
@@ -199,15 +195,16 @@ async def get_usage(request: Request, _auth: str = Depends(require_auth)):
     from rate_limiter import rate_limiter
     usage = rate_limiter.get_tenant_usage(tenant_id)
 
-    customer = await get_billing_customer(tenant_id) if DOLT_ENABLED else None
+    customer = await get_billing_customer(tenant_id) if DB_ENABLED else None
     plan = customer["plan_tier"] if customer else "starter"
 
     daily = []
-    if DOLT_ENABLED:
-        daily = await fetchall(
-            "SELECT event_type, event_date, event_count FROM usage_daily "
-            "WHERE tenant_id = %s ORDER BY event_date DESC LIMIT 30",
-            (tenant_id,),
+    if DB_ENABLED:
+        token = getattr(request.state, "db_token", None) or postgrest.mint_jwt(tenant_id)
+        daily = await postgrest.get(
+            "usage_daily",
+            {"tenant_id": f"eq.{tenant_id}", "order": "event_date.desc", "limit": "30"},
+            token=token,
         )
 
     return {

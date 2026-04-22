@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: taxlens-db-policy
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow PostgREST from taxlens namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: taxlens
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: taxlens-portal
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: taxlens-agent
+      ports:
+        - port: {{ .Values.postgrest.port }}
+          protocol: TCP
+    # Allow internal PG access from PostgREST + Flyway within namespace
+    - from:
+        - podSelector: {}
+      ports:
+        - port: {{ .Values.postgres.port }}
+          protocol: TCP

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-22 (v3.0.0)
+Updated: 2026-04-22 (v3.1.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -98,6 +98,34 @@ Repo: https://github.com/devopseng99/taxlens-agent
 - 8 new E2E tests (T41-T48), 48 total portal E2E tests
 - v3.0.0 deployed and verified
 
+## Wave 15 — PostgreSQL + PostgREST Migration (COMPLETE — v3.1.0)
+
+Replaces Dolt with PostgreSQL 16 + PostgREST v12 in isolated `taxlens-db` namespace.
+
+**Delivered:**
+- db-flyway-admin migration engine (`db/flyway/`) — reusable Flyway-inspired module with CLI
+- 4 PostgreSQL migrations: schema (12 tables), roles + RLS, functions, audit triggers
+- PostgREST HTTP client (`db/postgrest_client.py`) — replaces 7 repo modules + connection.py
+- JWT + RLS role architecture (authenticator, app_anon, app_tenant, app_admin)
+- Auth cache (OrderedDict LRU, 256 entries, 60s TTL)
+- All middleware, routes, services converted from Dolt/aiomysql to PostgREST/httpx
+- Helm chart for taxlens-db namespace (PG StatefulSet + PostgREST Deployment + Flyway Job + NetworkPolicy)
+- Updated taxlens API Helm chart (PostgREST env vars, removed Dolt templates)
+- Data migration script (Dolt → PostgreSQL via PostgREST)
+- E2E test hardening (retry login, 45s timeouts, _ensure_logged_in guards)
+- 27 new unit tests (14 flyway + 7 PostgREST client + 6 auth cache), 242 total
+- Deleted 11 old Dolt files (7 repos + connection + migrate + versioning + schema.sql)
+
+**Pending (Human-in-the-Loop):**
+- [ ] `mkdir -p /opt/k8s-pers/vol1/psql-taxlens && chown 999:999 ... && chmod 700 ...` on mgplcb05
+- [ ] `kubectl create namespace taxlens-db`
+- [ ] Create `taxlens-db-credentials` secret (postgres-password)
+- [ ] Create `taxlens-db-jwt` secret (jwt-secret)
+- [ ] Deploy: `helm install taxlens-db charts/taxlens-db -n taxlens-db`
+- [ ] Rebuild + deploy taxlens API image with new env vars
+- [ ] Run data migration script (if Dolt has existing data)
+- [ ] Verify: `python -m db.flyway info`, PostgREST OpenAPI, auth flow <1s
+
 ### Plan Tiers
 
 | Feature | Starter ($29/mo) | Professional ($99/mo) | Enterprise ($299/mo) |
@@ -108,13 +136,13 @@ Repo: https://github.com/devopseng99/taxlens-agent
 | Agent messages/day | 100 | 500 | Unlimited |
 | MCP OAuth clients | 2 | 10 | Unlimited |
 | Plaid connections | 5 | 50 | Unlimited |
-| Dolt history | 30 days | 1 year | Unlimited |
+| Audit history | 30 days | 1 year | Unlimited |
 
 ## Future Enhancements
 
-- **11.5:** Migrate routes to use Dolt repos for metadata (deferred — file-based fallback working)
-- **11.6:** MCP OAuth 2.0 implementation (deferred — API key auth working)
+- **MCP OAuth 2.0 implementation** (deferred — API key auth working)
 - **Multi-replica rate limiting:** Redis-backed token bucket for horizontal scaling
 - **Production Stripe:** Enable test mode → live mode cutover, real product creation
 - **Prometheus metrics:** Full `/metrics` endpoint with Grafana dashboards
 - **API reference docs:** OpenAPI spec + MCP integration guide
+- **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema

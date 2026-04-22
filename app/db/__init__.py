@@ -1,1 +1,1 @@
-"""TaxLens database layer — Dolt (MySQL-compatible) with git-like version control."""
+"""TaxLens database layer — PostgreSQL via PostgREST REST API with JWT + RLS multi-tenancy."""

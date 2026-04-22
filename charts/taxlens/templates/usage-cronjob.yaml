@@ -25,14 +25,13 @@ spec:
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             command: ["python3", "/app/scripts/aggregate_usage.py"]
             env:
-            - name: DOLT_HOST
-              value: "taxlens-dolt.{{ .Release.Namespace }}.svc.cluster.local"
-            - name: DOLT_PORT
-              value: "3306"
-            - name: DOLT_DATABASE
-              value: "taxlens"
-            - name: DOLT_USER
-              value: "root"
+            - name: POSTGREST_URL
+              value: {{ .Values.postgrest.url | quote }}
+            - name: DB_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgrest.jwtSecretName }}
+                  key: {{ .Values.postgrest.jwtSecretKey }}
             {{- if .Values.stripe.enabled }}
             - name: STRIPE_SECRET_KEY
               valueFrom:

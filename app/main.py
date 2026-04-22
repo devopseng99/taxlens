@@ -1,4 +1,4 @@
-"""TaxLens Agentic Tax Intelligence Platform — multi-tenant SaaS with Dolt + MCP OAuth."""
+"""TaxLens Agentic Tax Intelligence Platform — multi-tenant SaaS with PostgreSQL + PostgREST."""
 
 import os
 import uuid
@@ -23,8 +23,7 @@ from monitoring import router as monitoring_router
 from auth import require_auth, AUTH_ENABLED
 from contextlib import asynccontextmanager
 from mcp_server import mcp
-from db.connection import init_pool, close_pool, DOLT_ENABLED
-from db.migrate import run_migrations
+from db.postgrest_client import postgrest, DB_ENABLED
 from middleware.tenant_context import TenantContextMiddleware
 from metering import metering
 from rate_limiter import rate_limiter
@@ -37,12 +36,10 @@ _mcp_starlette = mcp.streamable_http_app()
 
 @asynccontextmanager
 async def lifespan(app):
-    """Initialize DB pool, run migrations, start MCP session manager, metering."""
-    # Initialize Dolt connection pool and run schema migrations
-    if DOLT_ENABLED:
-        await init_pool()
-        await run_migrations()
-        logger.info("Dolt database initialized and migrations applied")
+    """Initialize PostgREST client, start MCP session manager, metering."""
+    if DB_ENABLED:
+        logger.info("PostgREST database enabled: %s",
+                     os.getenv("POSTGREST_URL", "(default)"))
 
     # Start metering logger
     await metering.start()
@@ -52,13 +49,12 @@ async def lifespan(app):
 
     # Shutdown
     await metering.stop()
-    if DOLT_ENABLED:
-        await close_pool()
+    await postgrest.close()
 
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.0.0",
+    version="3.1.0",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
@@ -197,14 +193,10 @@ _DOC_TYPE_MAP = {
 def _detect_form_type(doc_type: str | None, model_id: str) -> str | None:
     """Detect tax form type from Azure doc_type or model_id."""
     if doc_type:
-        # Azure auto-detect returns e.g. "tax.us.w2", "tax.us.1099Div"
         for key, form in _DOC_TYPE_MAP.items():
             if key.lower() in doc_type.lower():
                 return form
-        # If doc_type is present but unrecognized, use it as-is
         return doc_type
-
-    # Fall back to model_id hints
     model_lower = model_id.lower()
     if "w2" in model_lower:
         return "W-2"
@@ -227,11 +219,12 @@ async def health():
     from billing import STRIPE_ENABLED
     return {
         "status": "ok",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "storage_root": str(STORAGE_ROOT),
         "writable": STORAGE_ROOT.exists(),
         "auth_enabled": AUTH_ENABLED,
-        "dolt_enabled": DOLT_ENABLED,
+        "db_enabled": DB_ENABLED,
+        "db_provider": "postgrest" if DB_ENABLED else "none",
         "stripe_enabled": STRIPE_ENABLED,
         "mcp_endpoint": "/api/mcp",
         "plaid_enabled": PLAID_ENABLED,
@@ -245,7 +238,7 @@ async def whoami(request: Request, _auth: str = Depends(require_auth)):
         "tenant_id": getattr(request.state, "tenant_id", None),
         "tenant_slug": getattr(request.state, "tenant_slug", None),
         "user_id": getattr(request.state, "user_id", None),
-        "dolt_enabled": DOLT_ENABLED,
+        "db_enabled": DB_ENABLED,
     }
 
 
@@ -313,23 +306,19 @@ async def analyze(
     if not dest.exists():
         raise HTTPException(404, f"Document {proc_id} not found for user {username}")
 
-    # Find the uploaded file (not metadata.json)
     files = [f for f in dest.iterdir() if f.name != "metadata.json" and f.name != "ocr_result.json"]
     if not files:
         raise HTTPException(404, f"No document file in {proc_id}")
 
     doc_file = files[0]
 
-    # Call Azure Document Intelligence
     try:
         result = await analyze_document(doc_file, model_id)
     except Exception as e:
         raise HTTPException(502, f"Azure OCR failed: {str(e)}")
 
-    # Detect form type from Azure response
     form_type = _detect_form_type(result.get("doc_type", ""), model_id)
 
-    # Save OCR result (include form_type for downstream parsers)
     raw_data = result["raw"]
     raw_data["form_type"] = form_type
     ocr_path = dest / "ocr_result.json"

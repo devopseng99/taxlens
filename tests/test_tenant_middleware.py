@@ -1,4 +1,4 @@
-"""Tests for multi-tenant context middleware and auth."""
+"""Tests for multi-tenant context middleware and auth (PostgREST backend)."""
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -12,7 +12,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_require_auth_anonymous_when_disabled(self):
         """Auth returns 'anonymous' when neither Dolt nor env keys are configured."""
-        with patch("auth.DOLT_ENABLED", False), \
+        with patch("auth.DB_ENABLED", False), \
              patch("auth.AUTH_ENABLED", False):
             from auth import require_auth
             mock_request = MagicMock()
@@ -22,7 +22,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_require_auth_dolt_with_tenant(self):
         """Auth succeeds when Dolt is enabled and tenant_id is set."""
-        with patch("auth.DOLT_ENABLED", True):
+        with patch("auth.DB_ENABLED", True):
             from auth import require_auth
             mock_request = MagicMock()
             mock_request.state.tenant_id = "tenant123"
@@ -32,7 +32,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_require_auth_dolt_no_tenant_401(self):
         """Auth raises 401 when Dolt is enabled but no key provided."""
-        with patch("auth.DOLT_ENABLED", True):
+        with patch("auth.DB_ENABLED", True):
             from auth import require_auth
             mock_request = MagicMock()
             mock_request.state.tenant_id = None
@@ -60,7 +60,7 @@ class TestAuth:
             assert "403" in str(exc_info.value.status_code)
 
     def test_get_tenant_id_default_mode(self):
-        with patch("auth.DOLT_ENABLED", False):
+        with patch("auth.DB_ENABLED", False):
             from auth import get_tenant_id
             mock_request = MagicMock()
             mock_request.state.tenant_id = None
@@ -68,7 +68,7 @@ class TestAuth:
             assert result == "default"
 
     def test_get_tenant_id_from_state(self):
-        with patch("auth.DOLT_ENABLED", True):
+        with patch("auth.DB_ENABLED", True):
             from auth import get_tenant_id
             mock_request = MagicMock()
             mock_request.state.tenant_id = "t123"
