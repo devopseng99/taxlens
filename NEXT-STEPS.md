@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-22 (v2.0.0)
+Updated: 2026-04-22 (v2.2.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -51,6 +51,12 @@ Updated: 2026-04-22 (v2.0.0)
 - [x] Wave 11b: Graceful degradation (Dolt optional, falls back to legacy single-tenant)
 - [x] Wave 11b: 35 new tests (21 repo + 8 middleware + 6 admin), 198 total
 - [x] Built, deployed, verified (v2.0.0) — 2 test tenants provisioned, Dolt history tracking
+- [x] Wave 12: A2UI Tenant Portal (v2.1.0) — FastAPI+Jinja2+HTMX, 6 pages, dark theme, deployed to taxlens-portal ns
+- [x] Wave 12: Portal chat widget (v2.2.0) — SSE streaming, floating panel, tool indicators, agent URL config
+- [x] Wave 13: Claude Support Agent (v1.0.0) — git-backed JSONL conversations, MCP tool proxy, SSE streaming
+- [x] Wave 13: 31 new tests (20 git store + 11 route), 229 total across platform
+- [x] Wave 13: Deployed to taxlens-agent ns on mgplcb03, CF tunnel route configured
+- [x] Wave 13: Admin oversight API (tenant stats, search via git grep, full conversation read)
 
 ## Wave 11 — Remaining (Deferred)
 
@@ -64,29 +70,31 @@ Implement `OAuthAuthorizationServerProvider` backed by Dolt. PKCE + authorizatio
 
 **Status:** Deferred. API key auth is working. OAuth layers on top once provisioning is battle-tested.
 
-## Wave 12 — A2UI Tenant Portal
+## Wave 12 — A2UI Tenant Portal (COMPLETE — v2.2.0)
 
-Lightweight SSR portal (FastAPI + Jinja2 + HTMX) for tenant management. Separate namespace `taxlens-portal` on mgplcb05. Talks to TaxLens API over ClusterIP. Memory: 48Mi request / 96Mi limit.
+Deployed at https://taxlens-portal.istayintek.com (namespace `taxlens-portal`, mgplcb05).
+Repo: https://github.com/devopseng99/taxlens-portal
 
-**Key deliverables:**
-- Login with API key, encrypted session cookie
-- Dashboard with stats (users, drafts, docs, Plaid)
-- Tax drafts list/detail/PDF download
-- MCP-driven computation forms (auto-generated from tool schemas)
-- Dolt history timeline with row-level diffs and rollback
-- OAuth client management with Claude Desktop config snippet
-- Admin views: all-tenant list, create, suspend, system health
+**Delivered:**
+- Login with API key → /api/whoami → encrypted session cookie (itsdangerous)
+- Dashboard with stats, tax drafts list/detail/PDF proxy
+- MCP-driven computation forms (auto-generated from tool schemas; JSON-RPC blocked by DNS rebinding — deferred)
+- Dolt history timeline, API key/OAuth client management, admin tenant views
+- Chat widget for Claude agent integration (SSE, tool indicators)
 
-## Wave 13 — Git-Backed Claude Support Agent
+## Wave 13 — Git-Backed Claude Support Agent (COMPLETE — v1.0.0)
 
-Separate service in `taxlens-agent` namespace on mgplcb03. Claude API (Anthropic SDK) with tenant-scoped MCP tool access. Git-backed JSONL conversations. SSE streaming. Memory: 128Mi request / 256Mi limit.
+Deployed at https://taxlens-agent.istayintek.com (namespace `taxlens-agent`, mgplcb03).
+Repo: https://github.com/devopseng99/taxlens-agent
 
-**Key deliverables:**
-- Git conversation store (JSONL + auto git commit per message)
-- MCP tool proxy to taxlens-api (tenant-scoped)
-- Claude conversation engine with tax support persona
-- Chat widget in A2UI portal (floating panel, SSE, markdown)
-- Admin oversight API (read conversations, search, stats)
+**Delivered:**
+- Git conversation store (JSONL + auto git commit, fcntl locking, per-tenant repos)
+- MCP tool proxy (JSON-RPC to taxlens-api, tenant username scoping)
+- Claude conversation engine (claude-sonnet-4-20250514, 5-round tool use loop, SSE output)
+- Portal chat widget (floating button, SSE client, tool use indicators)
+- Admin oversight API (tenant stats, full read, git grep search)
+- Rate limiting (10 msg/min per tenant, in-memory)
+- **Known issue:** Requires funded Anthropic account — billing error if credits low
 
 ## Wave 14 — Billing, Metering & Launch
 

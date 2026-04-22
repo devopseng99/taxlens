@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-22 (v2.0.0)
+Updated: 2026-04-22 (v2.2.0)
 
 ## Architecture
 
@@ -99,6 +99,34 @@ Updated: 2026-04-22 (v2.0.0)
 44. **Dolt StatefulSet with init container for `dolt init`** — Dolt requires a database directory to be initialized before the server starts. Init container checks for `.dolt` dir; if missing, runs `dolt init` + creates the database + creates the remote-access user. This is idempotent — subsequent pod restarts skip init when data already exists on the PV.
 
 45. **busybox wait-for-dolt init container** — API deployment includes a busybox init container that loops `nc -z taxlens-dolt 3306` until Dolt is ready. This ensures the API pod doesn't start (and fail migration) before Dolt accepts connections. Simple, no additional dependencies.
+
+## Wave 12 — A2UI Tenant Portal (v2.1.0→v2.2.0)
+
+46. **SSR over SPA** — FastAPI + Jinja2 + HTMX instead of React SPA. Portal is a thin management layer, not a complex interactive app. SSR keeps the image under 96Mi and eliminates a build step. HTMX handles dynamic updates without full page reloads.
+
+47. **Starlette 1.0 TemplateResponse API** — `templates.TemplateResponse(request, "template.html", {context})` — `request` is first positional arg, not inside the context dict. Breaking change from pre-1.0 Starlette. Failure mode: `TypeError: unhashable type: 'dict'` in Jinja2 cache.
+
+48. **itsdangerous session cookies** — `URLSafeTimedSerializer` with `SESSION_SECRET` from K8s secret. 8-hour max age, secure=True, httponly=True. Simpler than JWT for a server-rendered portal where the server owns both creation and validation.
+
+49. **Single-level subdomain for wildcard cert** — `taxlens-portal.istayintek.com` instead of `portal.taxlens.istayintek.com`. Wildcard cert `*.istayintek.com` only covers one level. Three-level subdomains fail TLS handshake silently.
+
+50. **Jinja2 globals for config** — `templates.env.globals["config"] = {...}` to pass config values to all templates. Avoids repeating config in every route's template context.
+
+## Wave 13 — Claude Support Agent (v1.0.0)
+
+51. **Git-backed JSONL over database** — Conversations stored as JSONL files in per-tenant git repos instead of Dolt tables. Git provides versioning, branching, and `git grep` search for free. JSONL is append-friendly with `fcntl.flock` for concurrent writes. Tradeoff: slower queries at scale (100+ tenants), but good enough for MVP.
+
+52. **Separate service on mgplcb03** — Agent runs on control plane node (38% memory) to spread load from mgplcb05 (31%). Requires image import to mgplcb03 (not mgplcb05). The PV is local on mgplcb03.
+
+53. **Non-streaming Claude API with tool use loop** — Uses `messages.create()` (not streaming) with a `while` loop for up to 5 tool call rounds. Each round: collect text + tool_use blocks, execute tools, append results, call Claude again. Simpler than streaming with tool use. SSE chunks are sent per-block, not per-token.
+
+54. **MCP JSON-RPC proxy (not MCP SDK)** — Agent talks to TaxLens MCP via raw JSON-RPC over HTTP (initialize → tools/list → tools/call) instead of importing the MCP SDK. Keeps the agent image lightweight and avoids MCP SDK version coupling. Same pattern as the portal's compute.py.
+
+55. **python:3.11-slim needs git package** — GitPython requires the `git` binary. `python:3.11-slim` doesn't include it. ImportError at startup: "Bad git executable." Fix: `apt-get install -y --no-install-recommends git` in Dockerfile.
+
+56. **SSE via sse-starlette** — `EventSourceResponse` from `sse-starlette` for streaming chat responses. Events typed as `text`, `tool_use`, `tool_result`, `done`, `error`. Browser reads with `fetch + ReadableStream`, not EventSource API (POST not supported by EventSource).
+
+57. **Rate limiting in-memory** — Simple dict-based token bucket per tenant. Prunes expired entries on each check. Good enough for single-replica deployment. Will need Redis-backed rate limiting if scaled to multiple replicas (Wave 14).
 
 ## PDF Template Provenance
 
