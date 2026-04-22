@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: taxlens-usage-aggregation
+  labels:
+    app.kubernetes.io/name: taxlens
+    app.kubernetes.io/component: usage-cron
+spec:
+  schedule: "0 * * * *"  # Every hour
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            {{- toYaml .Values.nodeSelector | nindent 12 }}
+          containers:
+          - name: aggregate
+            image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            command: ["python3", "/app/scripts/aggregate_usage.py"]
+            env:
+            - name: DOLT_HOST
+              value: "taxlens-dolt.{{ .Release.Namespace }}.svc.cluster.local"
+            - name: DOLT_PORT
+              value: "3306"
+            - name: DOLT_DATABASE
+              value: "taxlens"
+            - name: DOLT_USER
+              value: "root"
+            {{- if .Values.stripe.enabled }}
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stripe.secretName }}
+                  key: secret-key
+            {{- end }}
+            resources:
+              requests:
+                memory: "32Mi"
+                cpu: "25m"
+              limits:
+                memory: "64Mi"
+                cpu: "100m"

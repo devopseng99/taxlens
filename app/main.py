@@ -18,12 +18,16 @@ from bridge import ocr_to_w2_payload, write_populated_data
 from tax_routes import router as tax_router
 from plaid_routes import router as plaid_router
 from admin_routes import router as admin_router
+from billing_routes import router as billing_router
+from monitoring import router as monitoring_router
 from auth import require_auth, AUTH_ENABLED
 from contextlib import asynccontextmanager
 from mcp_server import mcp
 from db.connection import init_pool, close_pool, DOLT_ENABLED
 from db.migrate import run_migrations
 from middleware.tenant_context import TenantContextMiddleware
+from metering import metering
+from rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -33,30 +37,73 @@ _mcp_starlette = mcp.streamable_http_app()
 
 @asynccontextmanager
 async def lifespan(app):
-    """Initialize DB pool, run migrations, start MCP session manager."""
+    """Initialize DB pool, run migrations, start MCP session manager, metering."""
     # Initialize Dolt connection pool and run schema migrations
     if DOLT_ENABLED:
         await init_pool()
         await run_migrations()
         logger.info("Dolt database initialized and migrations applied")
 
+    # Start metering logger
+    await metering.start()
+
     async with mcp.session_manager.run():
         yield
 
     # Shutdown
+    await metering.stop()
     if DOLT_ENABLED:
         await close_pool()
 
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="2.0.0",
+    version="3.0.0",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
 )
 
-# Multi-tenant context middleware (must be added before CORS)
+# --- Metering + Rate Limiting Middleware ---
+# NOTE: Starlette middleware execution order is LIFO — last added runs first.
+# We need: CORS (outermost) → TenantContext (sets tenant_id) → MeteringRateLimit (reads tenant_id)
+# So add in reverse order: MeteringRateLimit first, TenantContext second, CORS last.
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse as StarletteJSONResponse
+from metering import EVENT_API_CALL
+
+
+class MeteringRateLimitMiddleware(BaseHTTPMiddleware):
+    """Log API calls to metering and enforce rate limits."""
+
+    EXEMPT_PATHS = {"/health", "/billing/webhook", "/billing/plans", "/docs",
+                    "/openapi.json", "/mcp", "/mcp/"}
+
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        tenant_id = getattr(request.state, "tenant_id", None)
+
+        if path in self.EXEMPT_PATHS or not tenant_id:
+            return await call_next(request)
+
+        allowed, headers = await rate_limiter.check_api_rate(tenant_id)
+        if not allowed:
+            return StarletteJSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please retry later."},
+                headers=headers,
+            )
+
+        response = await call_next(request)
+        for k, v in headers.items():
+            response.headers[k] = v
+
+        await metering.log(tenant_id, EVENT_API_CALL, endpoint=path)
+        return response
+
+
+# Add innermost first, outermost last (LIFO execution)
+app.add_middleware(MeteringRateLimitMiddleware)
 app.add_middleware(TenantContextMiddleware)
 
 app.add_middleware(
@@ -65,6 +112,7 @@ app.add_middleware(
         "https://taxlens.istayintek.com",
         "https://dropit.istayintek.com",
         "https://portal.taxlens.istayintek.com",
+        "https://taxlens-portal.istayintek.com",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,6 +130,12 @@ app.include_router(plaid_router)
 
 # Mount admin/provisioning routes
 app.include_router(admin_router)
+
+# Mount billing routes (Stripe checkout, webhooks, usage)
+app.include_router(billing_router)
+
+# Mount monitoring routes (usage/me, admin monitoring)
+app.include_router(monitoring_router)
 
 # Mount MCP server (StreamableHTTP at /mcp)
 # Accessible at https://dropit.istayintek.com/api/mcp
@@ -170,13 +224,15 @@ def _detect_form_type(doc_type: str | None, model_id: str) -> str | None:
 @app.get("/health")
 async def health():
     from plaid_routes import PLAID_ENABLED
+    from billing import STRIPE_ENABLED
     return {
         "status": "ok",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "storage_root": str(STORAGE_ROOT),
         "writable": STORAGE_ROOT.exists(),
         "auth_enabled": AUTH_ENABLED,
         "dolt_enabled": DOLT_ENABLED,
+        "stripe_enabled": STRIPE_ENABLED,
         "mcp_endpoint": "/api/mcp",
         "plaid_enabled": PLAID_ENABLED,
     }

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-22 (v2.2.0)
+Updated: 2026-04-22 (v3.0.0)
 
 ## Architecture
 
@@ -111,6 +111,22 @@ Updated: 2026-04-22 (v2.2.0)
 49. **Single-level subdomain for wildcard cert** — `taxlens-portal.istayintek.com` instead of `portal.taxlens.istayintek.com`. Wildcard cert `*.istayintek.com` only covers one level. Three-level subdomains fail TLS handshake silently.
 
 50. **Jinja2 globals for config** — `templates.env.globals["config"] = {...}` to pass config values to all templates. Avoids repeating config in every route's template context.
+
+## Wave 14 — Billing, Metering & Launch (v3.0.0)
+
+58. **Async buffered metering** — `MeteringLogger` buffers usage events in memory (list of dicts) and flushes to Dolt every 30 seconds or when the buffer reaches 100 events, whichever comes first. This avoids per-request DB writes while keeping eventual consistency within a flush window. Uses `asyncio.Lock` for thread safety.
+
+59. **Token bucket rate limiting (in-memory)** — Per-tenant rate limiting uses a token bucket algorithm for API calls/minute and daily counters for computations/OCR/agent messages. Plan-based limits loaded from Dolt and cached for 5 minutes. Good enough for single-replica; would need Redis-backed solution for multi-replica.
+
+60. **Starlette middleware LIFO ordering** — `add_middleware()` calls execute in reverse order (last added = outermost). MeteringRateLimitMiddleware must be added FIRST (innermost), TenantContextMiddleware SECOND, CORS LAST (outermost). If reversed, `tenant_id` is None when rate limiter checks it, silently skipping all rate limiting.
+
+61. **Stripe graceful degradation** — When `STRIPE_SECRET_KEY` is empty, `STRIPE_ENABLED=False` and billing endpoints return 503. Webhook verification raises RuntimeError. Same pattern as Plaid (decision #30). Allows the same image to run with or without Stripe.
+
+62. **Self-service onboarding via Stripe webhook** — `checkout.session.completed` webhook triggers `provision_tenant()` which atomically creates: tenant record, admin user, API key, plan limits in Dolt, billing_customers record, and commits to Dolt. The raw API key is included in the Stripe checkout session metadata for retrieval post-purchase.
+
+63. **Shared Jinja2Templates instance (portal)** — All portal route modules must import from a single `shared.py` instead of creating their own `Jinja2Templates`. Template globals (like `config`) are set once on the shared instance. Creating separate instances per-module drops the globals, causing `UndefinedError` in templates.
+
+64. **CSS value collision in E2E assertions** — Checking for HTTP status codes like "500" in page content fails because CSS values (`font-weight: 500`, `height: 500px`) contain the same substring. E2E tests should check for semantic error text (`"internal server error"`) not status code numbers.
 
 ## Wave 13 — Claude Support Agent (v1.0.0)
 

@@ -129,3 +129,37 @@ CREATE TABLE IF NOT EXISTS tenant_plans (
     updated_at DATETIME NOT NULL,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
+
+CREATE TABLE IF NOT EXISTS usage_events (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    event_type VARCHAR(32) NOT NULL,
+    endpoint VARCHAR(255),
+    metadata_json JSON,
+    created_at DATETIME NOT NULL,
+    INDEX idx_tenant_type_date (tenant_id, event_type, created_at),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);
+
+CREATE TABLE IF NOT EXISTS usage_daily (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    event_type VARCHAR(32) NOT NULL,
+    event_date DATE NOT NULL,
+    event_count INT NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uq_tenant_type_date (tenant_id, event_type, event_date),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);
+
+CREATE TABLE IF NOT EXISTS billing_customers (
+    tenant_id VARCHAR(36) PRIMARY KEY,
+    stripe_customer_id VARCHAR(255) NOT NULL UNIQUE,
+    stripe_subscription_id VARCHAR(255),
+    plan_tier VARCHAR(32) NOT NULL DEFAULT 'starter',
+    subscription_status VARCHAR(32) NOT NULL DEFAULT 'active',
+    current_period_end DATETIME,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);

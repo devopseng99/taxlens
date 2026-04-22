@@ -53,6 +53,12 @@ admin:
   secretName: taxlens-admin
   adminKeyKey: admin-key
 
+stripe:
+  enabled: false
+  secretName: taxlens-stripe
+  # Keys in secret: secret-key, webhook-secret
+  # Price IDs set via env vars in deployment
+
 openfileDb:
   host: openfile-postgresql.openfile.svc.cluster.local
   port: "5432"

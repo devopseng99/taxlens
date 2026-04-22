@@ -108,6 +108,18 @@ spec:
               value: {{ .Values.openfileDb.user | quote }}
             - name: OPENFILE_DB_PASSWORD
               value: {{ .Values.openfileDb.password | quote }}
+            {{- if .Values.stripe.enabled }}
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stripe.secretName }}
+                  key: secret-key
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stripe.secretName }}
+                  key: webhook-secret
+            {{- end }}
           volumeMounts:
             - name: documents
               mountPath: {{ .Values.storage.root }}

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-22 (v2.2.0)
+Updated: 2026-04-22 (v3.0.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -58,18 +58,6 @@ Updated: 2026-04-22 (v2.2.0)
 - [x] Wave 13: Deployed to taxlens-agent ns on mgplcb03, CF tunnel route configured
 - [x] Wave 13: Admin oversight API (tenant stats, search via git grep, full conversation read)
 
-## Wave 11 — Remaining (Deferred)
-
-### 11.5 — Migrate Routes to Dolt
-Tax draft, document, and Plaid routes still use file-based storage for metadata. With Dolt repos ready, route handlers should read/write metadata through the repository layer. PVC keeps PDFs/docs, Dolt tracks metadata. Path changes from `{username}/` to `{tenant_id}/{username}/`.
-
-**Status:** Deferred. Routes work in both modes via middleware fallback. Priority is lower than OAuth.
-
-### 11.6 — MCP OAuth 2.0
-Implement `OAuthAuthorizationServerProvider` backed by Dolt. PKCE + authorization code flow. Scopes: compute, drafts, documents. Auto-mounts `/.well-known/oauth-authorization-server`, `/authorize`, `/token`, `/revoke`. Required for Claude Desktop to connect as an OAuth client (instead of manual API key).
-
-**Status:** Deferred. API key auth is working. OAuth layers on top once provisioning is battle-tested.
-
 ## Wave 12 — A2UI Tenant Portal (COMPLETE — v2.2.0)
 
 Deployed at https://taxlens-portal.istayintek.com (namespace `taxlens-portal`, mgplcb05).
@@ -96,17 +84,19 @@ Repo: https://github.com/devopseng99/taxlens-agent
 - Rate limiting (10 msg/min per tenant, in-memory)
 - **Known issue:** Requires funded Anthropic account — billing error if credits low
 
-## Wave 14 — Billing, Metering & Launch
+## Wave 14 — Billing, Metering & Launch (COMPLETE — v3.0.0)
 
-Stripe billing, usage metering, rate limiting, self-service onboarding.
-
-**Key deliverables:**
-- Metering: usage_events (append-only) + usage_daily (aggregated) in Dolt
-- Rate limiting: in-memory token bucket per tenant, 3 plan tiers
-- Stripe integration: checkout, webhook, portal, metered add-ons
-- Self-service: Stripe checkout → webhook → auto-provision tenant
-- Monitoring: Prometheus metrics, per-tenant usage, anomaly detection
-- Documentation: API reference, MCP integration guide, onboarding walkthrough
+**Delivered:**
+- Async buffered metering logger (6 event types, flush every 30s/100 events)
+- Token bucket rate limiting per tenant (3 plan tiers, Dolt-backed with 5min cache)
+- Stripe billing (checkout, webhook, portal, metered add-ons) — gracefully disabled when not configured
+- Self-service onboarding (Stripe checkout → webhook → auto-provision tenant + API key + plan)
+- Monitoring endpoints: `/usage/me` (tenant-facing), `/admin/monitoring/*` (platform admin)
+- Usage aggregation CronJob (hourly, Dolt-backed)
+- MeteringRateLimitMiddleware with correct LIFO ordering (innermost, after TenantContext)
+- 39 new tests (7 metering + 19 rate limiter + 13 billing), 237 total
+- 8 new E2E tests (T41-T48), 48 total portal E2E tests
+- v3.0.0 deployed and verified
 
 ### Plan Tiers
 
@@ -119,3 +109,12 @@ Stripe billing, usage metering, rate limiting, self-service onboarding.
 | MCP OAuth clients | 2 | 10 | Unlimited |
 | Plaid connections | 5 | 50 | Unlimited |
 | Dolt history | 30 days | 1 year | Unlimited |
+
+## Future Enhancements
+
+- **11.5:** Migrate routes to use Dolt repos for metadata (deferred — file-based fallback working)
+- **11.6:** MCP OAuth 2.0 implementation (deferred — API key auth working)
+- **Multi-replica rate limiting:** Redis-backed token bucket for horizontal scaling
+- **Production Stripe:** Enable test mode → live mode cutover, real product creation
+- **Prometheus metrics:** Full `/metrics` endpoint with Grafana dashboards
+- **API reference docs:** OpenAPI spec + MCP integration guide
