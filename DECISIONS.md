@@ -276,6 +276,16 @@ Updated: 2026-04-23 (v3.4.0 API + v2.6.0 Portal)
 
 121. **Restricted key permissions documented** — The `rk_test_*` key can: read products/customers/balances, create/list webhooks. Cannot: create products/prices/customers. Products must be created via Stripe Dashboard or a full `sk_test_` key.
 
+## Wave 23 — Tax Engine Completeness (v3.7.0 API)
+
+122. **AMT (Form 6251) computation** — Alternative Minimum Tax added: SALT add-back from itemized deductions, AMT exemption with 25% phase-out above threshold ($626,350 single, $1,252,700 MFJ), 26%/28% two-bracket AMT rates, tentative minimum tax compared to regular tax. AMT only triggers when tentative minimum exceeds regular tax — most standard-deduction filers see $0 AMT.
+
+123. **Education credits (Form 8863) — AOTC + LLC** — American Opportunity Tax Credit: 100% of first $2K + 25% of next $2K expenses = $2,500 max, 40% refundable. Lifetime Learning Credit: 20% of up to $10K expenses = $2,000 max, nonrefundable. Both phase out between $80K-$90K single ($160K-$180K MFJ). MFS cannot claim. Refundable portion added to total_payments (increases refund even if tax is $0).
+
+124. **QBI phase-out with W-2 wage limitation** — Replaced simplified flat 20% with proper IRS rules. Below threshold ($191,950 single, $383,900 MFJ): full 20%. In phase-out range ($50K single, $100K MFJ): linear reduction of excess over W-2 wage cap. Above range: limited to greater of 50% W-2 wages or 25% W-2 wages + 2.5% UBIA. For Schedule C sole proprietors (no W-2 wages to themselves), QBI phases to $0 — this correctly represents IRS treatment.
+
+125. **EducationExpense dataclass** — Per-student data class with student_name, qualified_expenses, credit_type ("aotc" or "llc"). Passed as `education_expenses` parameter to `compute_tax()`. Backward compatible — defaults to empty list.
+
 ## PDF Template Provenance
 
 | Template | Source | SHA256 (first 8) | Match |

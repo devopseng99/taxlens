@@ -140,6 +140,14 @@ class AdditionalIncome:
 
 
 @dataclass
+class EducationExpense:
+    """Per-student education expenses for Form 8863."""
+    student_name: str = ""
+    qualified_expenses: float = 0.0
+    credit_type: str = "aotc"  # "aotc" or "llc"
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -190,11 +198,17 @@ class TaxResult:
     niit: float = 0.0                    # Net Investment Income Tax (3.8%)
     additional_medicare_tax: float = 0.0 # Additional Medicare Tax (0.9%)
     qbi_deduction: float = 0.0           # Section 199A QBI deduction
+    amt: float = 0.0                      # Alternative Minimum Tax (Form 6251)
+    amt_income: float = 0.0               # AMT taxable income
+    amt_exemption: float = 0.0            # AMT exemption amount
+    amt_tentative: float = 0.0            # Tentative minimum tax
     line_24_total_tax: float = 0.0
 
     # Payments & credits
     line_25_federal_withheld: float = 0.0
     line_27_ctc: float = 0.0             # Child Tax Credit
+    education_credit: float = 0.0         # AOTC + LLC (nonrefundable portion)
+    education_credit_refundable: float = 0.0  # AOTC refundable portion (40%)
     estimated_payments: float = 0.0
     line_33_total_payments: float = 0.0
 
@@ -289,6 +303,9 @@ class TaxResult:
             "niit": round(self.niit, 2),
             "additional_medicare_tax": round(self.additional_medicare_tax, 2),
             "qbi_deduction": round(self.qbi_deduction, 2),
+            "amt": round(self.amt, 2),
+            "education_credit": round(self.education_credit, 2),
+            "education_credit_refundable": round(self.education_credit_refundable, 2),
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
             "federal_refund": round(self.line_34_overpaid, 2),
@@ -608,6 +625,7 @@ def compute_tax(
     work_states: list[str] | None = None,
     days_worked_by_state: dict[str, int] | None = None,
     additional_withholding: float = 0.0,
+    education_expenses: list[EducationExpense] | None = None,
 ) -> TaxResult:
     """Compute full federal + state tax return."""
 
@@ -759,15 +777,31 @@ def compute_tax(
     # =======================================================================
 
     # QBI deduction (Section 199A) — 20% of qualified business income
+    # With W-2 wage limitation phase-out above income threshold
     if result.sched_c_total_profit > 0:
         qbi_limit = QBI_TAXABLE_INCOME_LIMIT[filing_status]
+        qbi_range = QBI_PHASEOUT_RANGE[filing_status]
         tentative_taxable = result.line_11_agi - result.line_13_deduction
+        full_qbi = result.sched_c_total_profit * QBI_DEDUCTION_RATE
+
         if tentative_taxable <= qbi_limit:
-            # Full 20% deduction below threshold
-            result.qbi_deduction = result.sched_c_total_profit * QBI_DEDUCTION_RATE
+            # Below threshold: full 20% deduction
+            result.qbi_deduction = full_qbi
+        elif tentative_taxable >= qbi_limit + qbi_range:
+            # Above phase-out: limited to greater of 50% W-2 wages or 25% W-2 wages + 2.5% UBIA
+            # For Schedule C filers (no W-2 wages from own business), this is typically $0
+            # unless they have W-2 employees in their business
+            w2_wages_paid = 0.0  # Self-employed Schedule C filers have no W-2 wages to themselves
+            result.qbi_deduction = max(w2_wages_paid * 0.50, w2_wages_paid * 0.25)
         else:
-            # Simplified: phase-out not implemented, cap at 20%
-            result.qbi_deduction = result.sched_c_total_profit * QBI_DEDUCTION_RATE
+            # In phase-out range: reduce excess of full QBI over W-2 limit
+            w2_wages_paid = 0.0
+            w2_limited = max(w2_wages_paid * 0.50, w2_wages_paid * 0.25)
+            excess = max(0, full_qbi - w2_limited)
+            phase_fraction = (tentative_taxable - qbi_limit) / qbi_range
+            reduction = excess * phase_fraction
+            result.qbi_deduction = max(0, full_qbi - reduction)
+
         # QBI deduction can't exceed taxable income
         result.qbi_deduction = min(result.qbi_deduction, max(0, result.line_11_agi - result.line_13_deduction))
 
@@ -831,6 +865,37 @@ def compute_tax(
         result.additional_medicare_tax = (total_medicare_wages - amt_threshold) * ADDITIONAL_MEDICARE_RATE
 
     # =======================================================================
+    # ALTERNATIVE MINIMUM TAX — Form 6251
+    # =======================================================================
+
+    # AMT income starts with taxable income + add-back deductions
+    # Simplified: add back SALT deduction (the main AMT adjustment for most filers)
+    amt_income = result.line_15_taxable_income + result.sched_a_salt
+    result.amt_income = amt_income
+
+    # AMT exemption with phase-out (25% of excess over phaseout start)
+    exemption_base = AMT_EXEMPTION[filing_status]
+    phaseout_start = AMT_PHASEOUT_START[filing_status]
+    if amt_income > phaseout_start:
+        exemption_reduction = (amt_income - phaseout_start) * 0.25
+        exemption = max(0, exemption_base - exemption_reduction)
+    else:
+        exemption = exemption_base
+    result.amt_exemption = exemption
+
+    amt_taxable = max(0, amt_income - exemption)
+    rate_break = AMT_RATE_BREAK[filing_status]
+    if amt_taxable <= rate_break:
+        tentative_min_tax = amt_taxable * AMT_RATE_LOW
+    else:
+        tentative_min_tax = rate_break * AMT_RATE_LOW + (amt_taxable - rate_break) * AMT_RATE_HIGH
+    result.amt_tentative = tentative_min_tax
+
+    # AMT = excess of tentative minimum tax over regular tax (before credits)
+    regular_tax = result.line_16_tax + result.capital_gains_tax
+    result.amt = max(0, tentative_min_tax - regular_tax)
+
+    # =======================================================================
     # TOTAL TAX (Line 24)
     # =======================================================================
 
@@ -840,6 +905,7 @@ def compute_tax(
         + result.se_tax
         + result.niit
         + result.additional_medicare_tax
+        + result.amt
     )
 
     # =======================================================================
@@ -856,6 +922,44 @@ def compute_tax(
         result.line_27_ctc = min(ctc_base, result.line_24_total_tax)
         result.line_24_total_tax -= result.line_27_ctc
 
+    # Education Credits — Form 8863 (AOTC + LLC)
+    education_expenses = education_expenses or []
+    if education_expenses and filing_status != MFS:
+        phaseout_range = EDUCATION_CREDIT_PHASEOUT[filing_status]
+        phaseout_start_ed = phaseout_range[0]
+        phaseout_end = phaseout_range[1]
+
+        # Compute phaseout fraction
+        if result.line_11_agi >= phaseout_end:
+            ed_phaseout_frac = 0.0
+        elif result.line_11_agi <= phaseout_start_ed:
+            ed_phaseout_frac = 1.0
+        else:
+            ed_phaseout_frac = 1.0 - (result.line_11_agi - phaseout_start_ed) / (phaseout_end - phaseout_start_ed)
+
+        total_aotc = 0.0
+        total_llc = 0.0
+        for exp in education_expenses:
+            if exp.credit_type == "aotc":
+                # AOTC: 100% of first $2,000 + 25% of next $2,000
+                raw = min(exp.qualified_expenses, 2000) + max(0, min(exp.qualified_expenses - 2000, 2000)) * 0.25
+                total_aotc += min(raw, AOTC_MAX)
+            else:
+                # LLC: 20% of up to $10,000 expenses
+                total_llc += min(exp.qualified_expenses * LLC_EXPENSE_RATE, LLC_MAX)
+
+        total_aotc *= ed_phaseout_frac
+        total_llc *= ed_phaseout_frac
+
+        # AOTC refundable portion (40%)
+        result.education_credit_refundable = total_aotc * AOTC_REFUNDABLE_RATE
+        nonrefundable_aotc = total_aotc - result.education_credit_refundable
+
+        # Nonrefundable credits capped at tax liability
+        nonrefundable_ed = min(nonrefundable_aotc + total_llc, result.line_24_total_tax)
+        result.education_credit = nonrefundable_ed
+        result.line_24_total_tax -= nonrefundable_ed
+
     # =======================================================================
     # PAYMENTS (Lines 25-33)
     # =======================================================================
@@ -865,6 +969,7 @@ def compute_tax(
     result.line_33_total_payments = (
         result.line_25_federal_withheld
         + result.line_27_ctc
+        + result.education_credit_refundable
         + result.estimated_payments
     )
 

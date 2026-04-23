@@ -327,6 +327,25 @@ Stripe billing integration activated in test mode.
 - Run `scripts/setup-stripe-products.sh <price_ids>` to store IDs in K8s secret
 - Test full checkout flow end-to-end
 
+## Wave 23 — Tax Engine Completeness (DEPLOYED — v3.7.0 API)
+
+AMT, education credits, and QBI phase-out for complete 2025 federal computation.
+
+**Delivered:**
+- [x] AMT (Form 6251): SALT add-back, exemption phase-out, 26%/28% brackets, tentative minimum tax
+- [x] AOTC ($2,500 max, 40% refundable) + LLC ($2,000 max, nonrefundable)
+- [x] Education credit MAGI phase-out ($80K-$90K single, $160K-$180K MFJ, MFS ineligible)
+- [x] QBI W-2 wage limitation phase-out ($50K/$100K range above threshold)
+- [x] EducationExpense dataclass with per-student tracking
+- [x] 291/291 unit tests (16 new), 65/65 E2E tests passing
+
+**Modified files:**
+- `app/tax_engine.py` — AMT computation, education credits, QBI phase-out, EducationExpense dataclass
+- `app/tax_config.py` — AMT constants, education credit constants, QBI phase-out range
+
+**New files:**
+- `tests/test_wave23_tax.py` — 16 tests (5 AMT, 7 education credits, 4 QBI phase-out)
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
@@ -336,6 +355,6 @@ Stripe billing integration activated in test mode.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine completeness:** QBI phase-out, AMT (Form 6251), education credits (Form 8863)
+- **Tax engine remaining:** EITC, Form 2210 estimated penalties, depreciation (Form 4562)
 - **Audit risk scoring:** Statistical comparison to IRS norms by income bracket
 - **Prior-year import:** Upload previous 1040 PDF → OCR extract → pre-populate current year

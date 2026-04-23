@@ -156,6 +156,52 @@ QBI_TAXABLE_INCOME_LIMIT = {   # Below this, full 20% with no phase-out
     HOH:    191_950,
     MFS:    191_950,
 }
+QBI_PHASEOUT_RANGE = {         # Phase-out occurs over this range above the limit
+    SINGLE: 50_000,
+    MFJ:    100_000,
+    HOH:    50_000,
+    MFS:    50_000,
+}
+
+# ---------------------------------------------------------------------------
+# Alternative Minimum Tax (AMT) — Form 6251 (2025)
+# Source: IRS Rev. Proc. 2024-40
+# ---------------------------------------------------------------------------
+AMT_EXEMPTION = {
+    SINGLE: 88_100,
+    MFJ:    137_000,
+    HOH:    88_100,
+    MFS:    68_500,
+}
+AMT_PHASEOUT_START = {
+    SINGLE: 626_350,
+    MFJ:    1_252_700,
+    HOH:    626_350,
+    MFS:    626_350,
+}
+AMT_RATE_LOW = 0.26       # 26% on first $239,100 ($119,550 MFS)
+AMT_RATE_HIGH = 0.28      # 28% on excess
+AMT_RATE_BREAK = {
+    SINGLE: 239_100,
+    MFJ:    239_100,
+    HOH:    239_100,
+    MFS:    119_550,
+}
+
+# ---------------------------------------------------------------------------
+# Education Credits — Form 8863 (2025)
+# Source: IRS Rev. Proc. 2024-40
+# ---------------------------------------------------------------------------
+AOTC_MAX = 2_500                    # American Opportunity (100% of $2K + 25% of next $2K)
+AOTC_REFUNDABLE_RATE = 0.40         # 40% of AOTC is refundable
+LLC_MAX = 2_000                     # Lifetime Learning Credit (20% of $10K expenses)
+LLC_EXPENSE_RATE = 0.20
+EDUCATION_CREDIT_PHASEOUT = {       # MAGI phaseout ranges
+    SINGLE: (80_000, 90_000),
+    MFJ:    (160_000, 180_000),
+    HOH:    (80_000, 90_000),
+    MFS:    (0, 0),                 # MFS: cannot claim education credits
+}
 
 # ---------------------------------------------------------------------------
 # Illinois State Tax (2025)
