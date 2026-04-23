@@ -276,12 +276,37 @@ Security, observability, and operational readiness improvements.
 - [x] V006 migration: 7 DB indexes (api_keys, oauth_tokens, usage_events, billing_customers, tenant_features)
 - [x] 258/258 unit tests, 65/65 E2E tests passing
 
+## Wave 21 — Observability & Operations (DEPLOYED — v3.5.0 API)
+
+Request tracing, metrics, structured logging, and IP rate limiting.
+
+**Delivered:**
+- [x] Prometheus `/metrics` endpoint via `prometheus-fastapi-instrumentator` — request count, latency histograms, status codes
+- [x] `X-Request-ID` correlation middleware — generates UUID4 per request or accepts client-provided ID, returned in response header
+- [x] Structured JSON logging via `python-json-logger` — all log output is machine-parseable JSON with timestamp, level, logger fields
+- [x] IP-based rate limiting on public endpoints — `/health` (60/min), `/billing/plans` (30/min), `/billing/onboarding/free` (10/min)
+- [x] Reusable `IPRateLimiter` class with per-IP token buckets and 4096-IP eviction cap
+- [x] `/metrics` and `/health` excluded from Prometheus instrumentation (avoids noise)
+- [x] Middleware stack: CORS → RequestID → TenantContext → FeatureGate → MeteringRateLimit
+- [x] 273/273 unit tests (15 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/middleware/request_id.py` — pure ASGI request ID middleware
+- `tests/test_observability.py` — 15 tests (request ID, IP rate limiter, JSON logging, Prometheus)
+
+**Modified files:**
+- `app/main.py` — v3.5.0, Prometheus instrumentator, RequestID middleware, IP rate limiting in exempt paths, JSON logging setup
+- `app/rate_limiter.py` — `IPRateLimiter` class, `IP_RATE_LIMITS` config
+- `app/requirements.txt` — `prometheus-fastapi-instrumentator>=7.0.0`, `python-json-logger>=3.0.0`
+- `app/middleware/tenant_context.py` — `/metrics` added to skip paths
+- `Dockerfile` — `--no-access-log` flag (JSON formatter handles logging)
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
 - **Multi-replica rate limiting:** Redis-backed token bucket for horizontal scaling
 - **Production Stripe:** Enable test mode → live mode cutover, real product creation
-- **Prometheus metrics:** Full `/metrics` endpoint with Grafana dashboards
+- **Grafana dashboards:** Wire Prometheus metrics to visual dashboards
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)

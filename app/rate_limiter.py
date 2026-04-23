@@ -248,5 +248,45 @@ class RateLimiter:
         }
 
 
-# Singleton
+class IPRateLimiter:
+    """In-memory per-IP rate limiter using token buckets.
+
+    Used for public (unauthenticated) endpoints to prevent abuse.
+    """
+
+    def __init__(self, default_rpm: int = 30):
+        self._buckets: dict[str, TokenBucket] = {}
+        self._default_rpm = default_rpm
+        self._max_ips = 4096  # evict oldest if exceeded
+
+    def check(self, ip: str, rpm: int | None = None) -> tuple[bool, dict]:
+        """Check if IP is within rate limit. Returns (allowed, headers)."""
+        rpm = rpm or self._default_rpm
+        if ip not in self._buckets:
+            if len(self._buckets) >= self._max_ips:
+                # Evict oldest entry
+                oldest = next(iter(self._buckets))
+                del self._buckets[oldest]
+            self._buckets[ip] = TokenBucket(capacity=rpm, rate=rpm / 60.0, tokens=rpm)
+
+        bucket = self._buckets[ip]
+        allowed = bucket.consume()
+        headers = {
+            "X-RateLimit-Limit": str(rpm),
+            "X-RateLimit-Remaining": str(max(0, int(bucket.tokens))),
+        }
+        if not allowed:
+            headers["Retry-After"] = str(int(bucket.retry_after) + 1)
+        return allowed, headers
+
+
+# --- IP rate limit config for public endpoints ---
+IP_RATE_LIMITS: dict[str, int] = {
+    "/health": 60,                  # 60/min — monitoring probes
+    "/billing/plans": 30,           # 30/min
+    "/billing/onboarding/free": 10, # 10/min (also has hourly limit in billing_routes)
+}
+
+# Singletons
 rate_limiter = RateLimiter()
+ip_rate_limiter = IPRateLimiter()

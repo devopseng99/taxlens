@@ -25,7 +25,7 @@ from db.postgrest_client import postgrest, DB_ENABLED
 logger = logging.getLogger(__name__)
 
 # Paths that don't require tenant context
-_SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/mcp", "/mcp/"}
+_SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/mcp", "/mcp/", "/metrics"}
 
 # --- Auth Cache ---
 _AUTH_CACHE_MAX = 256

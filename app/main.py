@@ -26,8 +26,22 @@ from mcp_server import mcp
 from db.postgrest_client import postgrest, DB_ENABLED
 from middleware.tenant_context import TenantContextMiddleware
 from middleware.feature_gate import FeatureGateMiddleware
+from middleware.request_id import RequestIDMiddleware
 from metering import metering
-from rate_limiter import rate_limiter
+from rate_limiter import rate_limiter, ip_rate_limiter, IP_RATE_LIMITS
+from prometheus_fastapi_instrumentator import Instrumentator
+
+from pythonjsonlogger.json import JsonFormatter
+
+# --- Structured JSON Logging ---
+_json_formatter = JsonFormatter(
+    fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+    rename_fields={"asctime": "timestamp", "levelname": "level", "name": "logger"},
+)
+_handler = logging.StreamHandler()
+_handler.setFormatter(_json_formatter)
+logging.root.handlers = [_handler]
+logging.root.setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +74,20 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.1.0",
+    version="3.5.0",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
 )
+
+# --- Prometheus Metrics ---
+instrumentator = Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/health", "/docs", "/openapi.json", "/metrics"],
+)
+instrumentator.instrument(app)
+instrumentator.expose(app, endpoint="/metrics", include_in_schema=False)
 
 # --- Metering + Rate Limiting Middleware ---
 # NOTE: Starlette middleware execution order is LIFO — last added runs first.
@@ -84,7 +107,7 @@ class MeteringRateLimitMiddleware:
 
     EXEMPT_PATHS = {"/health", "/billing/webhook", "/billing/plans",
                     "/billing/onboarding/free", "/docs", "/openapi.json",
-                    "/mcp", "/mcp/"}
+                    "/mcp", "/mcp/", "/metrics"}
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -99,6 +122,19 @@ class MeteringRateLimitMiddleware:
         tenant_id = getattr(request.state, "tenant_id", None)
 
         if path in self.EXEMPT_PATHS or not tenant_id:
+            # Apply IP-based rate limiting on public endpoints
+            ip_limit = IP_RATE_LIMITS.get(path)
+            if ip_limit:
+                client_ip = request.client.host if request.client else "0.0.0.0"
+                ip_allowed, ip_headers = ip_rate_limiter.check(client_ip, ip_limit)
+                if not ip_allowed:
+                    resp = StarletteJSONResponse(
+                        status_code=429,
+                        content={"detail": "Rate limit exceeded. Please retry later."},
+                        headers=ip_headers,
+                    )
+                    await resp(scope, receive, send)
+                    return
             await self.app(scope, receive, send)
             return
 
@@ -129,10 +165,11 @@ class MeteringRateLimitMiddleware:
 
 
 # Add innermost first, outermost last (LIFO execution)
-# Order: CORS (outermost) → TenantContext → FeatureGate → MeteringRateLimit (innermost)
+# Order: CORS (outermost) → RequestID → TenantContext → FeatureGate → MeteringRateLimit (innermost)
 app.add_middleware(MeteringRateLimitMiddleware)
 app.add_middleware(FeatureGateMiddleware)
 app.add_middleware(TenantContextMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 _PORTAL_URL = os.getenv("TAXLENS_PORTAL_URL", "https://taxlens-portal.istayintek.com")
 _API_URL = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
@@ -270,7 +307,7 @@ async def health():
     status = "ok" if db_ok else "degraded"
     return {
         "status": status,
-        "version": "3.3.0",
+        "version": "3.5.0",
         "storage_root": str(STORAGE_ROOT),
         "writable": STORAGE_ROOT.exists(),
         "auth_enabled": AUTH_ENABLED,

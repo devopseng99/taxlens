@@ -252,6 +252,18 @@ Updated: 2026-04-23 (v3.4.0 API + v2.6.0 Portal)
 
 111. **V006 database indexes** — 7 new indexes on high-query columns: `api_keys(key_hash)`, `api_keys(status WHERE active)`, `oauth_tokens(token_hash)`, `usage_events(tenant_id, event_type, created_at)`, `billing_customers(tenant_id)`, `billing_customers(stripe_customer_id)`, `tenant_features(tenant_id)`.
 
+## Wave 21 — Observability & Operations (v3.5.0 API)
+
+112. **Prometheus metrics via prometheus-fastapi-instrumentator** — Exposes `/metrics` endpoint with `http_requests_total`, `http_request_duration_seconds` histogram, `http_request_size_bytes`. `/health`, `/metrics`, `/docs`, `/openapi.json` excluded from instrumentation to avoid noise. No auth on `/metrics` (internal only in production; CF tunnel doesn't expose it externally).
+
+113. **X-Request-ID correlation middleware** — Pure ASGI middleware generates UUID4 hex per request. Accepts client-provided `X-Request-ID` header (for load balancer passthrough). Injected into `request.state.request_id` and response header. Placed between CORS and TenantContext in the middleware stack so all downstream middleware have access.
+
+114. **Structured JSON logging with python-json-logger** — Root logger reconfigured with `JsonFormatter`. Every log line is valid JSON with `timestamp`, `level`, `logger`, `message` fields. Extra fields (request_id, tenant_id) can be passed via `extra={}`. Uvicorn access log disabled (`--no-access-log`) — Prometheus histograms replace it for latency/status monitoring.
+
+115. **IP-based rate limiting on public endpoints** — `IPRateLimiter` class uses per-IP token buckets (same algorithm as tenant rate limiter). Applied to unauthenticated paths: `/health` (60 rpm), `/billing/plans` (30 rpm), `/billing/onboarding/free` (10 rpm). Max 4096 tracked IPs with FIFO eviction. Integrated into `MeteringRateLimitMiddleware`'s exempt-path branch.
+
+116. **Middleware stack order updated** — Now 5 layers: CORS → RequestID → TenantContext → FeatureGate → MeteringRateLimit. RequestID is between CORS and TenantContext so every request gets an ID before auth validation, and the ID appears in error responses from auth failures.
+
 ## PDF Template Provenance
 
 | Template | Source | SHA256 (first 8) | Match |
