@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.8.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.9.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -295,6 +295,16 @@ Updated: 2026-04-23 (v3.8.0 API + v2.6.0 Portal)
 128. **Earned income = W-2 wages + net SE taxable** — EITC earned income includes W-2 wages plus net self-employment taxable income (92.35% of Schedule C profit). Investment income, interest, and dividends are NOT earned income. Zero earned income = zero EITC regardless of filing status or dependents.
 
 129. **EITC phase-out uses greater of AGI or earned income** — Per IRS rules, the phase-out income test uses the greater of AGI or earned income. This prevents filers with large above-the-line deductions (like SE tax deduction) from artificially lowering their phase-out income.
+
+## Wave 25 — CDCC + Saver's Credit (v3.9.0 API)
+
+130. **Child and Dependent Care Credit (Form 2441)** — AGI-based credit rate: 35% at $15K AGI, decreasing by 1% per $2K of AGI above $15K, floor at 20%. Max qualifying expenses: $3,000 for 1 dependent, $6,000 for 2+. Expenses capped at earned income. Nonrefundable — cannot exceed tax liability. Applied after education credits and before EITC in the credit ordering.
+
+131. **CDCC rate computation** — Rate steps down in 1% increments: `max(20%, 35% - floor((AGI - $15,000) / $2,000))`. At AGI $43,000+, rate floors at 20%. This graduated structure benefits lower-income families more while still providing a benefit to moderate-income families.
+
+132. **Retirement Savings Credit (Form 8880)** — Three-tier credit for IRA/401(k) contributions: 50% for AGI ≤ $23,750 (single), 20% for ≤ $25,750, 10% for ≤ $36,500, 0% above. MFJ thresholds doubled. Max eligible contribution $2,000 per person. Nonrefundable. Incentivizes low-income retirement saving.
+
+133. **Credit ordering: CTC → Education → CDCC → Saver's → EITC** — Nonrefundable credits (CTC, education, CDCC, saver's) reduce tax liability sequentially before refundable credits (EITC, refundable AOTC) are added to payments. This ordering maximizes refundable credit value since nonrefundable credits can't generate a refund below $0.
 
 ## PDF Template Provenance
 

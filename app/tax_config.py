@@ -223,6 +223,31 @@ EITC_PHASEOUT_START = {
 EITC_INVESTMENT_INCOME_LIMIT = 11_600  # Disqualified if investment income exceeds this
 
 # ---------------------------------------------------------------------------
+# Child and Dependent Care Credit (CDCC) — Form 2441 (2025)
+# ---------------------------------------------------------------------------
+CDCC_MAX_EXPENSES_ONE = 3_000     # Max qualifying expenses for 1 dependent
+CDCC_MAX_EXPENSES_TWO = 6_000     # Max qualifying expenses for 2+ dependents
+# AGI-based credit percentage: starts at 35%, decreases by 1% per $2,000 AGI over $15,000
+# Floors at 20% for AGI > $43,000
+CDCC_MAX_RATE = 0.35
+CDCC_MIN_RATE = 0.20
+CDCC_RATE_STEP_AGI = 2_000        # Rate decreases by 1% per this increment
+CDCC_RATE_START_AGI = 15_000      # AGI where rate starts declining from 35%
+
+# ---------------------------------------------------------------------------
+# Retirement Savings Contributions Credit (Saver's Credit) — Form 8880 (2025)
+# Source: IRS Rev. Proc. 2024-40
+# ---------------------------------------------------------------------------
+SAVERS_MAX_CONTRIBUTION = 2_000   # Max eligible contribution per person
+SAVERS_AGI_TIERS = {
+    # (tier1_end, tier2_end, tier3_end): credit rate is 50%/20%/10%/0%
+    SINGLE: (23_750, 25_750, 36_500),
+    HOH:    (35_625, 38_625, 54_750),
+    MFJ:    (47_500, 51_500, 73_000),
+    MFS:    (23_750, 25_750, 36_500),
+}
+
+# ---------------------------------------------------------------------------
 # Illinois State Tax (2025)
 # ---------------------------------------------------------------------------
 IL_FLAT_RATE = 0.0495

@@ -148,6 +148,20 @@ class EducationExpense:
 
 
 @dataclass
+class DependentCareExpense:
+    """Child/dependent care expenses for Form 2441."""
+    dependent_name: str = ""
+    care_expenses: float = 0.0
+
+
+@dataclass
+class RetirementContribution:
+    """Retirement savings contributions for Saver's Credit (Form 8880)."""
+    contributor: str = "filer"  # "filer" or "spouse"
+    contribution_amount: float = 0.0
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -211,6 +225,8 @@ class TaxResult:
     education_credit_refundable: float = 0.0  # AOTC refundable portion (40%)
     eitc: float = 0.0                     # Earned Income Tax Credit (refundable)
     eitc_earned_income: float = 0.0       # Earned income used for EITC calc
+    cdcc: float = 0.0                     # Child and Dependent Care Credit (nonrefundable)
+    savers_credit: float = 0.0            # Retirement Savings Credit (nonrefundable)
     estimated_payments: float = 0.0
     line_33_total_payments: float = 0.0
 
@@ -309,6 +325,8 @@ class TaxResult:
             "education_credit": round(self.education_credit, 2),
             "education_credit_refundable": round(self.education_credit_refundable, 2),
             "eitc": round(self.eitc, 2),
+            "cdcc": round(self.cdcc, 2),
+            "savers_credit": round(self.savers_credit, 2),
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
             "federal_refund": round(self.line_34_overpaid, 2),
@@ -629,6 +647,8 @@ def compute_tax(
     days_worked_by_state: dict[str, int] | None = None,
     additional_withholding: float = 0.0,
     education_expenses: list[EducationExpense] | None = None,
+    dependent_care_expenses: list[DependentCareExpense] | None = None,
+    retirement_contributions: list[RetirementContribution] | None = None,
 ) -> TaxResult:
     """Compute full federal + state tax return."""
 
@@ -964,6 +984,60 @@ def compute_tax(
         result.line_24_total_tax -= nonrefundable_ed
 
     # =======================================================================
+    # CHILD AND DEPENDENT CARE CREDIT (CDCC) — Form 2441
+    # =======================================================================
+
+    dependent_care_expenses = dependent_care_expenses or []
+    if dependent_care_expenses and result.line_24_total_tax > 0:
+        num_care_dependents = len(dependent_care_expenses)
+        expense_limit = CDCC_MAX_EXPENSES_TWO if num_care_dependents >= 2 else CDCC_MAX_EXPENSES_ONE
+        total_care_expenses = sum(e.care_expenses for e in dependent_care_expenses)
+        qualifying_expenses = min(total_care_expenses, expense_limit)
+
+        # Expenses can't exceed earned income
+        cdcc_earned = result.line_1a_wages + max(0, result.sched_se_taxable)
+        qualifying_expenses = min(qualifying_expenses, cdcc_earned)
+
+        # AGI-based credit rate: 35% at $15K AGI, decreasing 1% per $2K, floor 20%
+        if result.line_11_agi <= CDCC_RATE_START_AGI:
+            cdcc_rate = CDCC_MAX_RATE
+        else:
+            steps = int((result.line_11_agi - CDCC_RATE_START_AGI) / CDCC_RATE_STEP_AGI)
+            cdcc_rate = max(CDCC_MIN_RATE, CDCC_MAX_RATE - steps * 0.01)
+
+        cdcc_credit = qualifying_expenses * cdcc_rate
+        # Nonrefundable: capped at remaining tax liability
+        result.cdcc = min(cdcc_credit, result.line_24_total_tax)
+        result.line_24_total_tax -= result.cdcc
+
+    # =======================================================================
+    # RETIREMENT SAVINGS CREDIT (SAVER'S CREDIT) — Form 8880
+    # =======================================================================
+
+    retirement_contributions = retirement_contributions or []
+    if retirement_contributions and result.line_24_total_tax > 0:
+        tiers = SAVERS_AGI_TIERS.get(filing_status, SAVERS_AGI_TIERS[SINGLE])
+        agi = result.line_11_agi
+
+        if agi <= tiers[0]:
+            savers_rate = 0.50
+        elif agi <= tiers[1]:
+            savers_rate = 0.20
+        elif agi <= tiers[2]:
+            savers_rate = 0.10
+        else:
+            savers_rate = 0.0
+
+        if savers_rate > 0:
+            total_eligible = sum(
+                min(c.contribution_amount, SAVERS_MAX_CONTRIBUTION)
+                for c in retirement_contributions
+            )
+            savers_credit = total_eligible * savers_rate
+            result.savers_credit = min(savers_credit, result.line_24_total_tax)
+            result.line_24_total_tax -= result.savers_credit
+
+    # =======================================================================
     # EARNED INCOME TAX CREDIT (EITC) — Schedule EIC
     # =======================================================================
 
@@ -1123,6 +1197,10 @@ def compute_tax(
         result.forms_generated.append("Form 8960")
     if result.eitc > 0:
         result.forms_generated.append("Schedule EIC")
+    if result.cdcc > 0:
+        result.forms_generated.append("Form 2441")
+    if result.savers_credit > 0:
+        result.forms_generated.append("Form 8880")
     # State forms
     for sr in state_returns:
         if sr.form_name:

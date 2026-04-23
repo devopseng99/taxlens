@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.8.0)
+Updated: 2026-04-23 (v3.9.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -368,6 +368,25 @@ Earned Income Tax Credit — the largest refundable credit in the US tax system.
 - `app/tax_config.py` — EITC constants (max credits, rates, thresholds, investment income limit)
 - `app/tax_engine.py` — EITC computation, `eitc`/`eitc_earned_income` fields in TaxResult, added to payments + summary
 
+## Wave 25 — CDCC + Saver's Credit (DEPLOYED — v3.9.0 API)
+
+Child and Dependent Care Credit (Form 2441) and Retirement Savings Credit (Form 8880).
+
+**Delivered:**
+- [x] CDCC: AGI-based rate (35% → 20%), $3K/$6K expense limits, earned income cap
+- [x] Saver's Credit: 3-tier (50%/20%/10%), $2K max contribution, MFJ doubled thresholds
+- [x] Both nonrefundable: capped at remaining tax liability
+- [x] DependentCareExpense and RetirementContribution dataclasses
+- [x] Credit ordering: CTC → Education → CDCC → Saver's → EITC
+- [x] 328/328 unit tests (17 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave25_credits.py` — 17 tests (8 CDCC, 9 Saver's Credit)
+
+**Modified files:**
+- `app/tax_config.py` — CDCC + Saver's Credit constants
+- `app/tax_engine.py` — New dataclasses, computation, TaxResult fields, forms list
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
@@ -377,6 +396,6 @@ Earned Income Tax Credit — the largest refundable credit in the US tax system.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Form 2210 estimated penalties, depreciation (Form 4562), Child & Dependent Care Credit (Form 2441)
+- **Tax engine remaining:** Form 2210 estimated penalties, depreciation (Form 4562)
 - **Audit risk scoring:** Statistical comparison to IRS norms by income bracket
 - **Prior-year import:** Upload previous 1040 PDF → OCR extract → pre-populate current year
