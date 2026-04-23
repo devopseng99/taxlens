@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.1.1)
+Updated: 2026-04-22 (v3.1.2)
 
 ## Architecture
 
@@ -171,6 +171,14 @@ Updated: 2026-04-23 (v3.1.1)
 76. **Namespace Helm ownership annotation** — If `kubectl create namespace` runs before `helm install` (which also tries to create the namespace), the install fails with "cannot re-use a name that is still in use." Fix: annotate the existing namespace with `meta.helm.sh/release-name` and label with `app.kubernetes.io/managed-by=Helm` before running `helm install`.
 
 77. **PostgreSQL PGDATA subdirectory + chmod 777** — PG Alpine container (UID 999) sets `PGDATA=/var/lib/postgresql/data/pgdata` (subdirectory of mount). The mount point must be `chmod 777` on the host — `chown 999:999` alone is insufficient because the container's initdb creates subdirectories that may need group/other write bits depending on the storage driver.
+
+## v3.1.2 — Logging Suppression
+
+78. **Consistent WARNING-level logging across all services** — All 5 TaxLens pods now emit WARNING+ only. Pattern: (a) uvicorn `--log-level warning` in Dockerfile CMD, (b) Python `logging.basicConfig(level=logging.WARNING)` + explicit suppression of noisy third-party loggers (`httpx`, `httpcore`, `uvicorn.access`), (c) PostgreSQL `log_min_messages=warning` + `log_checkpoints=off` + `log_connections=off` + `log_disconnections=off` via container args, (d) PostgREST `PGRST_LOG_LEVEL=warn` env var. This eliminates high-frequency INFO-level disk writes (connection logs, checkpoint notifications, HTTP access logs) that were consuming disk on the memory-constrained cluster.
+
+79. **Metering pseudo-tenant skip** — `MeteringLogger.log()` returns early for `tenant_id` values `default` and `__admin__` which don't exist in the `tenants` table. Without this, PostgREST returns FK constraint violations on `usage_events.tenant_id`. Health checks and admin endpoints set these pseudo-tenant IDs.
+
+80. **CronJob aggregate_usage.py rewritten for PostgREST** — Original script used Dolt imports (`aiomysql`, `CALL dolt_commit`). Rewritten to use PostgREST HTTP API with admin JWT. Groups events by tenant+type+date, upserts into `usage_daily`, prunes events older than 30 days. Script now lives at `/app/scripts/aggregate_usage.py` inside the API image (added `COPY scripts/ /app/scripts/` to Dockerfile).
 
 ## PDF Template Provenance
 

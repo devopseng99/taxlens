@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.1.1)
+Updated: 2026-04-22 (v3.1.2)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -155,6 +155,21 @@ Replaces Dolt with PostgreSQL 16 + PostgREST v12 in isolated `taxlens-db` namesp
 | MCP OAuth clients | 2 | 10 | Unlimited |
 | Plaid connections | 5 | 50 | Unlimited |
 | Audit history | 30 days | 1 year | Unlimited |
+
+## v3.1.2 — Logging Suppression (DEPLOYED)
+
+Reduces disk I/O by suppressing INFO-level logging across all 5 TaxLens pods.
+
+**Changes:**
+- [x] taxlens-api: uvicorn `--log-level warning`, httpx/httpcore/uvicorn.access suppressed
+- [x] taxlens-portal: uvicorn `--log-level warning`, httpx/httpcore/uvicorn.access suppressed
+- [x] taxlens-agent: `logging.basicConfig(level=WARNING)`, httpx/httpcore/uvicorn.access suppressed
+- [x] taxlens-pg: `log_min_messages=warning`, `log_checkpoints=off`, `log_connections=off`, `log_disconnections=off`
+- [x] taxlens-postgrest: `PGRST_LOG_LEVEL=warn`
+- [x] Metering pseudo-tenant skip (FK constraint fix for `default`/`__admin__`)
+- [x] CronJob `aggregate_usage.py` rewritten for PostgREST (was Dolt/aiomysql)
+- [x] `COPY scripts/ /app/scripts/` added to Dockerfile for CronJob access
+- [x] All 3 repos committed and pushed, releases created (API v3.1.2, Portal v2.3.1, Agent v1.0.1)
 
 ## Future Enhancements
 
