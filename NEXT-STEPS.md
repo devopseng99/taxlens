@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.9.0)
+Updated: 2026-04-23 (v3.10.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -387,6 +387,26 @@ Child and Dependent Care Credit (Form 2441) and Retirement Savings Credit (Form 
 - `app/tax_config.py` — CDCC + Saver's Credit constants
 - `app/tax_engine.py` — New dataclasses, computation, TaxResult fields, forms list
 
+## Wave 26 — Estimated Tax Penalty (DEPLOYED — v3.10.0 API)
+
+Form 2210 simplified short method — penalty for underpayment of estimated tax.
+
+**Delivered:**
+- [x] Penalty computation: 90% current year or 100% prior year safe harbor (110% if high AGI)
+- [x] $1,000 threshold: no penalty if owed < $1,000
+- [x] High AGI ($150K/$75K MFS) triggers 110% prior year requirement
+- [x] Estimated payments + withholding reduce underpayment
+- [x] Penalty = underpayment × 8% annual rate, added to amount owed
+- [x] Optional prior_year_tax/prior_year_agi parameters (backward compatible)
+- [x] 342/342 unit tests (14 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave26_penalty.py` — 14 tests (no penalty, penalty applies, high AGI, estimated payments, forms)
+
+**Modified files:**
+- `app/tax_config.py` — Form 2210 constants (threshold, rates, safe harbor percentages)
+- `app/tax_engine.py` — Penalty computation, prior_year_tax/agi params, TaxResult fields
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
@@ -396,6 +416,6 @@ Child and Dependent Care Credit (Form 2441) and Retirement Savings Credit (Form 
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Form 2210 estimated penalties, depreciation (Form 4562)
+- **Tax engine remaining:** Depreciation (Form 4562), annualized installment method
 - **Audit risk scoring:** Statistical comparison to IRS norms by income bracket
 - **Prior-year import:** Upload previous 1040 PDF → OCR extract → pre-populate current year

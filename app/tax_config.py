@@ -248,6 +248,21 @@ SAVERS_AGI_TIERS = {
 }
 
 # ---------------------------------------------------------------------------
+# Estimated Tax Penalty — Form 2210 (2025)
+# ---------------------------------------------------------------------------
+ESTIMATED_TAX_PENALTY_THRESHOLD = 1_000  # No penalty if owed < $1,000
+ESTIMATED_TAX_SAFE_HARBOR_PCT = 0.90     # Pay 90% of current year tax
+ESTIMATED_TAX_PRIOR_YEAR_PCT = 1.00      # Or 100% of prior year tax (default)
+ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI = 1.10  # 110% if prior year AGI > $150K ($75K MFS)
+ESTIMATED_TAX_HIGH_AGI_THRESHOLD = {
+    SINGLE: 150_000,
+    MFJ:    150_000,
+    HOH:    150_000,
+    MFS:    75_000,
+}
+ESTIMATED_TAX_PENALTY_RATE = 0.08        # 2025 underpayment rate (8% annual)
+
+# ---------------------------------------------------------------------------
 # Illinois State Tax (2025)
 # ---------------------------------------------------------------------------
 IL_FLAT_RATE = 0.0495

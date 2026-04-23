@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.9.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.10.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -305,6 +305,14 @@ Updated: 2026-04-23 (v3.9.0 API + v2.6.0 Portal)
 132. **Retirement Savings Credit (Form 8880)** — Three-tier credit for IRA/401(k) contributions: 50% for AGI ≤ $23,750 (single), 20% for ≤ $25,750, 10% for ≤ $36,500, 0% above. MFJ thresholds doubled. Max eligible contribution $2,000 per person. Nonrefundable. Incentivizes low-income retirement saving.
 
 133. **Credit ordering: CTC → Education → CDCC → Saver's → EITC** — Nonrefundable credits (CTC, education, CDCC, saver's) reduce tax liability sequentially before refundable credits (EITC, refundable AOTC) are added to payments. This ordering maximizes refundable credit value since nonrefundable credits can't generate a refund below $0.
+
+## Wave 26 — Estimated Tax Penalty (v3.10.0 API)
+
+134. **Estimated tax penalty (Form 2210 simplified)** — Applies when: (1) amount owed ≥ $1,000, AND (2) withholding + estimated payments < required annual payment, AND (3) prior year tax is known. Required payment = lesser of 90% current year tax or 100% prior year tax (110% if prior year AGI > $150K, $75K MFS). Penalty = underpayment × 8% annual rate. Added to amount owed.
+
+135. **Prior year tax as optional parameter** — `prior_year_tax` and `prior_year_agi` are optional parameters to `compute_tax()`. First-time filers or users without prior year data get no penalty. This avoids false penalties while enabling accurate computation for returning filers. Prior-year import (future wave) will populate these automatically.
+
+136. **Simplified short method over annualized** — Full Form 2210 supports annualized income installment method for uneven quarterly income. We implement the short method (same underpayment all 4 quarters) which covers the vast majority of filers. The annualized method is a future enhancement for self-employed with seasonal income.
 
 ## PDF Template Provenance
 

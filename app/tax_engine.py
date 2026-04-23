@@ -230,6 +230,10 @@ class TaxResult:
     estimated_payments: float = 0.0
     line_33_total_payments: float = 0.0
 
+    # Estimated tax penalty
+    estimated_tax_penalty: float = 0.0    # Form 2210 penalty
+    estimated_tax_required: float = 0.0   # Required annual payment
+
     # Bottom line
     line_34_overpaid: float = 0.0        # Refund
     line_37_owed: float = 0.0            # Amount owed
@@ -327,6 +331,7 @@ class TaxResult:
             "eitc": round(self.eitc, 2),
             "cdcc": round(self.cdcc, 2),
             "savers_credit": round(self.savers_credit, 2),
+            "estimated_tax_penalty": round(self.estimated_tax_penalty, 2),
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
             "federal_refund": round(self.line_34_overpaid, 2),
@@ -649,6 +654,8 @@ def compute_tax(
     education_expenses: list[EducationExpense] | None = None,
     dependent_care_expenses: list[DependentCareExpense] | None = None,
     retirement_contributions: list[RetirementContribution] | None = None,
+    prior_year_tax: float = 0.0,
+    prior_year_agi: float = 0.0,
 ) -> TaxResult:
     """Compute full federal + state tax return."""
 
@@ -1101,6 +1108,32 @@ def compute_tax(
         result.line_37_owed = abs(diff)
 
     # =======================================================================
+    # ESTIMATED TAX PENALTY — Form 2210 (simplified short method)
+    # =======================================================================
+
+    # Penalty applies if: (1) owed >= $1,000 AND (2) withholding/credits < required payment
+    # Required payment = lesser of 90% current year tax or 100% prior year tax (110% if high AGI)
+    if result.line_37_owed >= ESTIMATED_TAX_PENALTY_THRESHOLD and prior_year_tax > 0:
+        current_year_required = result.line_24_total_tax * ESTIMATED_TAX_SAFE_HARBOR_PCT
+
+        high_agi_threshold = ESTIMATED_TAX_HIGH_AGI_THRESHOLD[filing_status]
+        if prior_year_agi > high_agi_threshold:
+            prior_year_required = prior_year_tax * ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI
+        else:
+            prior_year_required = prior_year_tax * ESTIMATED_TAX_PRIOR_YEAR_PCT
+
+        result.estimated_tax_required = min(current_year_required, prior_year_required)
+
+        # Total payments (withholding + estimated + refundable credits) vs required
+        total_timely_payments = result.line_25_federal_withheld + result.estimated_payments
+        if total_timely_payments < result.estimated_tax_required:
+            # Underpayment = required - paid. Penalty = underpayment * rate * (time fraction)
+            # Simplified: assume full year underpayment (4 quarters)
+            underpayment = result.estimated_tax_required - total_timely_payments
+            result.estimated_tax_penalty = underpayment * ESTIMATED_TAX_PENALTY_RATE
+            result.line_37_owed += result.estimated_tax_penalty
+
+    # =======================================================================
     # SCHEDULE B
     # =======================================================================
 
@@ -1201,6 +1234,8 @@ def compute_tax(
         result.forms_generated.append("Form 2441")
     if result.savers_credit > 0:
         result.forms_generated.append("Form 8880")
+    if result.estimated_tax_penalty > 0:
+        result.forms_generated.append("Form 2210")
     # State forms
     for sr in state_returns:
         if sr.form_name:
