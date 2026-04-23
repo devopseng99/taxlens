@@ -30,6 +30,11 @@ from rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
+# Suppress noisy INFO loggers — only WARN+ reaches stdout
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
 # Create MCP Starlette app (initializes session_manager lazily)
 _mcp_starlette = mcp.streamable_http_app()
 

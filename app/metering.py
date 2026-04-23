@@ -59,6 +59,9 @@ class MeteringLogger:
         """Buffer a usage event. Non-blocking."""
         if not DB_ENABLED:
             return
+        # Skip pseudo-tenants that don't exist in the tenants table (FK constraint)
+        if not tenant_id or tenant_id in ("default", "__admin__"):
+            return
         event = {
             "id": uuid.uuid4().hex,
             "tenant_id": tenant_id,

@@ -28,6 +28,15 @@ spec:
           ports:
             - containerPort: {{ .Values.postgres.port }}
               protocol: TCP
+          args:
+            - "-c"
+            - "log_min_messages=warning"
+            - "-c"
+            - "log_checkpoints=off"
+            - "-c"
+            - "log_connections=off"
+            - "-c"
+            - "log_disconnections=off"
           env:
             - name: POSTGRES_DB
               value: {{ .Values.postgres.database }}

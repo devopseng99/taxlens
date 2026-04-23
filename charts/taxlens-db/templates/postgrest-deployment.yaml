@@ -69,6 +69,8 @@ spec:
               value: {{ .Values.postgrest.maxRows | quote }}
             - name: PGRST_DB_POOL
               value: {{ .Values.postgrest.dbPool | quote }}
+            - name: PGRST_LOG_LEVEL
+              value: "warn"
           livenessProbe:
             httpGet:
               path: /
