@@ -289,7 +289,7 @@ def _detect_form_type(doc_type: str | None, model_id: str) -> str | None:
 @app.get("/health")
 async def health():
     from plaid_routes import PLAID_ENABLED
-    from billing import STRIPE_ENABLED
+    from billing import STRIPE_ENABLED, STRIPE_MODE
 
     db_ok = False
     if DB_ENABLED:
@@ -315,6 +315,7 @@ async def health():
         "db_ok": db_ok,
         "db_provider": "postgrest" if DB_ENABLED else "none",
         "stripe_enabled": STRIPE_ENABLED,
+        "stripe_mode": STRIPE_MODE,
         "mcp_endpoint": "/api/mcp",
         "plaid_enabled": PLAID_ENABLED,
     }

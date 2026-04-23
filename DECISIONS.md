@@ -264,6 +264,18 @@ Updated: 2026-04-23 (v3.4.0 API + v2.6.0 Portal)
 
 116. **Middleware stack order updated** — Now 5 layers: CORS → RequestID → TenantContext → FeatureGate → MeteringRateLimit. RequestID is between CORS and TenantContext so every request gets an ID before auth validation, and the ID appears in error responses from auth failures.
 
+## Wave 22 — Revenue Activation (v3.6.0 API)
+
+117. **Stripe test mode activation** — `STRIPE_SECRET_KEY` (restricted test key `rk_test_*`) and `STRIPE_WEBHOOK_SECRET` stored in K8s secret `taxlens-stripe`. Stripe enabled in Helm values (`stripe.enabled: true`). Health endpoint now reports `stripe_mode: "test"` so test vs live is always visible.
+
+118. **Webhook endpoint registered** — `we_1TPT6kGghEIUa3k8AK87ALmk` at `dropit.istayintek.com/api/billing/webhook`. Listens for: checkout.session.completed, customer.subscription.updated/deleted, invoice.paid, invoice.payment_failed. Webhook secret stored in K8s secret.
+
+119. **Price IDs via K8s secret (optional)** — `STRIPE_PRICE_STARTER/PROFESSIONAL/ENTERPRISE` read from `taxlens-stripe` secret keys `price-starter/professional/enterprise` with `optional: true`. Products must be created in Stripe Dashboard (restricted key lacks `rak_product_write`). Script `scripts/setup-stripe-products.sh` patches the secret.
+
+120. **Stripe mode detection** — `STRIPE_MODE` constant: "test" for `sk_test_`/`rk_test_` prefixes, "live" for other keys, "disabled" if empty. Exposed in `/api/health` response so operators can verify environment.
+
+121. **Restricted key permissions documented** — The `rk_test_*` key can: read products/customers/balances, create/list webhooks. Cannot: create products/prices/customers. Products must be created via Stripe Dashboard or a full `sk_test_` key.
+
 ## PDF Template Provenance
 
 | Template | Source | SHA256 (first 8) | Match |

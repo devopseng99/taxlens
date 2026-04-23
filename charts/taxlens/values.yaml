@@ -43,10 +43,10 @@ admin:
   adminKeyKey: admin-key
 
 stripe:
-  enabled: false
+  enabled: true
   secretName: taxlens-stripe
-  # Keys in secret: secret-key, webhook-secret
-  # Price IDs set via env vars in deployment
+  # Keys in secret: secret-key, webhook-secret, price-starter, price-professional, price-enterprise
+  # Price IDs created via Stripe Dashboard, stored in secret via scripts/setup-stripe-products.sh
 
 openfileDb:
   host: openfile-postgresql.openfile.svc.cluster.local

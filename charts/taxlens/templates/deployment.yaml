@@ -123,6 +123,24 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.stripe.secretName }}
                   key: webhook-secret
+            - name: STRIPE_PRICE_STARTER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stripe.secretName }}
+                  key: price-starter
+                  optional: true
+            - name: STRIPE_PRICE_PROFESSIONAL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stripe.secretName }}
+                  key: price-professional
+                  optional: true
+            - name: STRIPE_PRICE_ENTERPRISE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stripe.secretName }}
+                  key: price-enterprise
+                  optional: true
             {{- end }}
           volumeMounts:
             - name: documents

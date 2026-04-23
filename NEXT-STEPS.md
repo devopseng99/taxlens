@@ -301,11 +301,37 @@ Request tracing, metrics, structured logging, and IP rate limiting.
 - `app/middleware/tenant_context.py` — `/metrics` added to skip paths
 - `Dockerfile` — `--no-access-log` flag (JSON formatter handles logging)
 
+## Wave 22 — Revenue Activation (DEPLOYED — v3.6.0 API)
+
+Stripe billing integration activated in test mode.
+
+**Delivered:**
+- [x] K8s secret `taxlens-stripe` with test key + webhook secret
+- [x] Stripe webhook endpoint registered (`we_1TPT6kGghEIUa3k8AK87ALmk`) — 5 event types
+- [x] Stripe enabled in Helm values + deployment template
+- [x] Price ID env vars via K8s secret (optional keys, populated via `scripts/setup-stripe-products.sh`)
+- [x] `STRIPE_MODE` detection (test/live/disabled) exposed in `/api/health`
+- [x] 275/275 unit tests (2 new billing mode tests), 65/65 E2E tests passing
+
+**New files:**
+- `scripts/setup-stripe-products.sh` — Creates Stripe products in Dashboard, patches K8s secret with price IDs
+
+**Modified files:**
+- `app/billing.py` — `STRIPE_MODE` constant for test/live detection
+- `app/main.py` — Health endpoint includes `stripe_mode`
+- `charts/taxlens/values.yaml` — `stripe.enabled: true`
+- `charts/taxlens/templates/deployment.yaml` — Price ID env vars from secret (optional)
+
+**Pending (requires Stripe Dashboard access):**
+- Create 3 products (Starter $29, Professional $99, Enterprise $299) in Stripe Dashboard
+- Run `scripts/setup-stripe-products.sh <price_ids>` to store IDs in K8s secret
+- Test full checkout flow end-to-end
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
 - **Multi-replica rate limiting:** Redis-backed token bucket for horizontal scaling
-- **Production Stripe:** Enable test mode → live mode cutover, real product creation
+- **Stripe live mode:** Create full-access key, cutover from test → live
 - **Grafana dashboards:** Wire Prometheus metrics to visual dashboards
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema

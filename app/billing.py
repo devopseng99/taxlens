@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_ENABLED = bool(STRIPE_SECRET_KEY)
+STRIPE_MODE = "test" if STRIPE_SECRET_KEY.startswith(("sk_test_", "rk_test_")) else "live" if STRIPE_SECRET_KEY else "disabled"
 
 # Price IDs (configured per environment)
 STRIPE_PRICES = {

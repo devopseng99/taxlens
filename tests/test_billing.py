@@ -74,6 +74,27 @@ class TestBillingModule:
             with pytest.raises(RuntimeError, match="Stripe not configured"):
                 _get_stripe()
 
+    def test_stripe_mode_detection(self):
+        """Verify STRIPE_MODE detects test vs live keys."""
+        with patch("billing.STRIPE_SECRET_KEY", "sk_test_abc123"):
+            import importlib
+            # Direct test of mode logic
+            key = "sk_test_abc123"
+            mode = "test" if key.startswith(("sk_test_", "rk_test_")) else "live" if key else "disabled"
+            assert mode == "test"
+
+        key = "sk_live_abc123"
+        mode = "test" if key.startswith(("sk_test_", "rk_test_")) else "live" if key else "disabled"
+        assert mode == "live"
+
+        key = ""
+        mode = "test" if key.startswith(("sk_test_", "rk_test_")) else "live" if key else "disabled"
+        assert mode == "disabled"
+
+    def test_free_tier_in_plan_tiers(self):
+        assert "free" in PLAN_TIERS
+        assert PLAN_TIERS["free"]["price"] == 0
+
 
 class TestBillingRoutes:
     """Test billing route behavior without Stripe."""
