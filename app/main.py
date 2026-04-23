@@ -266,6 +266,8 @@ async def whoami(request: Request, _auth: str = Depends(require_auth)):
         "tenant_id": getattr(request.state, "tenant_id", None),
         "tenant_slug": getattr(request.state, "tenant_slug", None),
         "user_id": getattr(request.state, "user_id", None),
+        "username": getattr(request.state, "username", None),
+        "role": getattr(request.state, "role", None),
         "db_enabled": DB_ENABLED,
     }
 

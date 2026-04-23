@@ -53,11 +53,14 @@ def _cache_put(key_hash: str, result: dict) -> None:
         _auth_cache.popitem(last=False)
 
 
-def _set_state(request: Request, tenant_id, tenant_slug="", user_id=None, db_token=None):
+def _set_state(request: Request, tenant_id, tenant_slug="", user_id=None, db_token=None,
+               username=None, role=None):
     request.state.tenant_id = tenant_id
     request.state.tenant_slug = tenant_slug
     request.state.user_id = user_id
     request.state.db_token = db_token
+    request.state.username = username
+    request.state.role = role
 
 
 class TenantContextMiddleware:
@@ -100,6 +103,8 @@ class TenantContextMiddleware:
                     cached.get("tenant_slug", ""),
                     cached.get("user_id"),
                     postgrest.mint_jwt(cached["tenant_id"], cached.get("user_id")),
+                    cached.get("username"),
+                    cached.get("role"),
                 )
                 await self.app(scope, receive, send)
                 return
@@ -115,6 +120,8 @@ class TenantContextMiddleware:
                         row.get("tenant_slug", ""),
                         row.get("user_id"),
                         postgrest.mint_jwt(row["tenant_id"], row.get("user_id")),
+                        row.get("username"),
+                        row.get("role"),
                     )
                     await self.app(scope, receive, send)
                     return

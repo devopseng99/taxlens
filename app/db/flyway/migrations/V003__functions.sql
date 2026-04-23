@@ -3,16 +3,18 @@
 -- validate_api_key: Called anonymously (no JWT needed) to authenticate API keys.
 -- Returns tenant info if key is valid, empty result if not.
 CREATE OR REPLACE FUNCTION validate_api_key(p_key_hash TEXT)
-RETURNS TABLE(tenant_id TEXT, tenant_slug TEXT, user_id TEXT, key_id TEXT)
+RETURNS TABLE(tenant_id TEXT, tenant_slug TEXT, user_id TEXT, key_id TEXT, username TEXT, role TEXT)
 LANGUAGE sql SECURITY DEFINER AS $$
     -- Update last_used_at as side effect
     UPDATE api_keys SET last_used_at = NOW()
     WHERE key_hash = p_key_hash AND status = 'active';
 
-    -- Return tenant + user info
-    SELECT k.tenant_id::TEXT, t.slug::TEXT, k.user_id::TEXT, k.id::TEXT
+    -- Return tenant + user info (LEFT JOIN: key may not be tied to a user)
+    SELECT k.tenant_id::TEXT, t.slug::TEXT, k.user_id::TEXT, k.id::TEXT,
+           u.username::TEXT, u.role::TEXT
     FROM api_keys k
     JOIN tenants t ON k.tenant_id = t.id
+    LEFT JOIN users u ON k.user_id = u.id
     WHERE k.key_hash = p_key_hash
       AND k.status = 'active'
       AND t.status = 'active';
