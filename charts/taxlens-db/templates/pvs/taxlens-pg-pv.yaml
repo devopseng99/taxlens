@@ -14,7 +14,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   claimRef:
     namespace: {{ .Values.namespace }}
-    name: taxlens-pg-data
+    name: data-taxlens-pg-0
   local:
     path: {{ .Values.postgres.storage.hostPath }}
   nodeAffinity:

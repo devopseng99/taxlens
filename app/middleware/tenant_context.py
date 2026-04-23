@@ -6,6 +6,9 @@ and injects it into request.state for downstream handlers.
 Uses an in-memory LRU cache for API key validation to avoid repeated
 PostgREST roundtrips for the same key.
 
+Uses pure ASGI middleware (not BaseHTTPMiddleware) to avoid deadlocks with
+nested async httpx calls in the middleware chain.
+
 Paths that skip tenant context: /health, /docs, /openapi.json, /mcp (MCP has its own auth).
 """
 
@@ -13,9 +16,9 @@ import hashlib
 import logging
 import time
 from collections import OrderedDict
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from db.postgrest_client import postgrest, DB_ENABLED
 
@@ -50,25 +53,38 @@ def _cache_put(key_hash: str, result: dict) -> None:
         _auth_cache.popitem(last=False)
 
 
-class TenantContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+def _set_state(request: Request, tenant_id, tenant_slug="", user_id=None, db_token=None):
+    request.state.tenant_id = tenant_id
+    request.state.tenant_slug = tenant_slug
+    request.state.user_id = user_id
+    request.state.db_token = db_token
+
+
+class TenantContextMiddleware:
+    """Pure ASGI middleware — avoids BaseHTTPMiddleware deadlocks with async DB calls."""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope)
         path = request.url.path
 
-        # Skip tenant context for health/docs/MCP (MCP uses its own OAuth)
+        # Skip tenant context for health/docs/MCP
         if path in _SKIP_PATHS or path.startswith("/docs") or path.startswith("/openapi"):
-            request.state.tenant_id = None
-            request.state.tenant_slug = None
-            request.state.user_id = None
-            request.state.db_token = None
-            return await call_next(request)
+            _set_state(request, None)
+            await self.app(scope, receive, send)
+            return
 
         # If DB is not enabled, run in legacy single-tenant mode
         if not DB_ENABLED:
-            request.state.tenant_id = "default"
-            request.state.tenant_slug = "default"
-            request.state.user_id = None
-            request.state.db_token = None
-            return await call_next(request)
+            _set_state(request, "default", "default")
+            await self.app(scope, receive, send)
+            return
 
         # Extract API key from header
         api_key = request.headers.get("X-API-Key", "")
@@ -79,13 +95,14 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             # Check cache first
             cached = _cache_get(key_hash)
             if cached:
-                request.state.tenant_id = cached["tenant_id"]
-                request.state.tenant_slug = cached.get("tenant_slug", "")
-                request.state.user_id = cached.get("user_id")
-                request.state.db_token = postgrest.mint_jwt(
-                    cached["tenant_id"], cached.get("user_id")
+                _set_state(
+                    request, cached["tenant_id"],
+                    cached.get("tenant_slug", ""),
+                    cached.get("user_id"),
+                    postgrest.mint_jwt(cached["tenant_id"], cached.get("user_id")),
                 )
-                return await call_next(request)
+                await self.app(scope, receive, send)
+                return
 
             # Validate via PostgREST RPC (anonymous, no JWT needed)
             try:
@@ -93,13 +110,14 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 if rows:
                     row = rows[0]
                     _cache_put(key_hash, row)
-                    request.state.tenant_id = row["tenant_id"]
-                    request.state.tenant_slug = row.get("tenant_slug", "")
-                    request.state.user_id = row.get("user_id")
-                    request.state.db_token = postgrest.mint_jwt(
-                        row["tenant_id"], row.get("user_id")
+                    _set_state(
+                        request, row["tenant_id"],
+                        row.get("tenant_slug", ""),
+                        row.get("user_id"),
+                        postgrest.mint_jwt(row["tenant_id"], row.get("user_id")),
                     )
-                    return await call_next(request)
+                    await self.app(scope, receive, send)
+                    return
             except Exception as e:
                 logger.warning("API key validation failed: %s", e)
 
@@ -118,37 +136,35 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 if rows:
                     token_row = rows[0]
                     if token_row.get("expires_at") and token_row["expires_at"] < int(time.time()):
-                        return JSONResponse({"detail": "Token expired"}, status_code=401)
-                    request.state.tenant_id = token_row["tenant_id"]
-                    request.state.tenant_slug = ""
-                    request.state.user_id = token_row.get("user_id")
-                    request.state.db_token = postgrest.mint_jwt(
-                        token_row["tenant_id"], token_row.get("user_id")
+                        resp = JSONResponse({"detail": "Token expired"}, status_code=401)
+                        await resp(scope, receive, send)
+                        return
+                    _set_state(
+                        request, token_row["tenant_id"], "",
+                        token_row.get("user_id"),
+                        postgrest.mint_jwt(token_row["tenant_id"], token_row.get("user_id")),
                     )
-                    return await call_next(request)
+                    await self.app(scope, receive, send)
+                    return
             except Exception as e:
                 logger.warning("Bearer token validation failed: %s", e)
 
         # Admin key bypass — admin endpoints handle their own auth
         admin_key = request.headers.get("X-Admin-Key", "")
         if admin_key and path.startswith("/admin"):
-            request.state.tenant_id = "__admin__"
-            request.state.tenant_slug = "__admin__"
-            request.state.user_id = None
-            request.state.db_token = postgrest.mint_jwt("__admin__", role="app_admin")
-            return await call_next(request)
+            _set_state(
+                request, "__admin__", "__admin__", None,
+                postgrest.mint_jwt("__admin__", role="app_admin"),
+            )
+            await self.app(scope, receive, send)
+            return
 
         # Billing webhook + plans — no auth needed
         if path.startswith("/billing/webhook") or path == "/billing/plans":
-            request.state.tenant_id = None
-            request.state.tenant_slug = None
-            request.state.user_id = None
-            request.state.db_token = None
-            return await call_next(request)
+            _set_state(request, None)
+            await self.app(scope, receive, send)
+            return
 
         # No valid auth found — let individual route handlers decide
-        request.state.tenant_id = None
-        request.state.tenant_slug = None
-        request.state.user_id = None
-        request.state.db_token = None
-        return await call_next(request)
+        _set_state(request, None)
+        await self.app(scope, receive, send)

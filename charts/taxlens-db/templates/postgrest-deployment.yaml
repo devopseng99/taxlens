@@ -47,13 +47,13 @@ spec:
             - containerPort: {{ .Values.postgrest.port }}
               protocol: TCP
           env:
-            - name: PGRST_DB_URI
-              value: "postgres://authenticator:$(PG_PASSWORD)@taxlens-pg:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
             - name: PG_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.postgres.secretName }}
                   key: {{ .Values.postgres.passwordKey }}
+            - name: PGRST_DB_URI
+              value: "postgres://authenticator:$(PG_PASSWORD)@taxlens-pg:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
             - name: PGRST_DB_SCHEMAS
               value: "public"
             - name: PGRST_DB_ANON_ROLE

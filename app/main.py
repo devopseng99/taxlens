@@ -64,38 +64,61 @@ app = FastAPI(
 # NOTE: Starlette middleware execution order is LIFO — last added runs first.
 # We need: CORS (outermost) → TenantContext (sets tenant_id) → MeteringRateLimit (reads tenant_id)
 # So add in reverse order: MeteringRateLimit first, TenantContext second, CORS last.
-from starlette.middleware.base import BaseHTTPMiddleware
+#
+# IMPORTANT: Both middlewares are pure ASGI (not BaseHTTPMiddleware) to avoid
+# deadlocks when async httpx calls (PostgREST) are used inside the middleware chain.
+from starlette.requests import Request as StarletteRequest
 from starlette.responses import JSONResponse as StarletteJSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 from metering import EVENT_API_CALL
 
 
-class MeteringRateLimitMiddleware(BaseHTTPMiddleware):
-    """Log API calls to metering and enforce rate limits."""
+class MeteringRateLimitMiddleware:
+    """Pure ASGI middleware — log API calls and enforce rate limits."""
 
     EXEMPT_PATHS = {"/health", "/billing/webhook", "/billing/plans", "/docs",
                     "/openapi.json", "/mcp", "/mcp/"}
 
-    async def dispatch(self, request, call_next):
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = StarletteRequest(scope)
         path = request.url.path
         tenant_id = getattr(request.state, "tenant_id", None)
 
         if path in self.EXEMPT_PATHS or not tenant_id:
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
         allowed, headers = await rate_limiter.check_api_rate(tenant_id)
         if not allowed:
-            return StarletteJSONResponse(
+            resp = StarletteJSONResponse(
                 status_code=429,
                 content={"detail": "Rate limit exceeded. Please retry later."},
                 headers=headers,
             )
+            await resp(scope, receive, send)
+            return
 
-        response = await call_next(request)
-        for k, v in headers.items():
-            response.headers[k] = v
+        # Inject rate limit headers into the response
+        headers_to_add = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
 
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                existing = list(message.get("headers", []))
+                existing.extend(headers_to_add)
+                message["headers"] = existing
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+        # Fire-and-forget metering (non-blocking buffer)
         await metering.log(tenant_id, EVENT_API_CALL, endpoint=path)
-        return response
 
 
 # Add innermost first, outermost last (LIFO execution)
