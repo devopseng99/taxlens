@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-22 (v3.1.0)
+Updated: 2026-04-23 (v3.1.1)
 
 ## Architecture
 
@@ -161,6 +161,16 @@ Updated: 2026-04-22 (v3.1.0)
 71. **Isolated taxlens-db namespace** — PostgreSQL + PostgREST run in their own namespace with NetworkPolicy restricting access to taxlens, taxlens-portal, and taxlens-agent namespaces only. This provides defense-in-depth: even if the API is compromised, the attacker can only reach PostgREST (which enforces RLS), not PostgreSQL directly.
 
 72. **Graceful degradation preserved: DB_ENABLED from POSTGREST_URL** — Same pattern as Dolt (decision #38) but keyed on `POSTGREST_URL` env var. When empty, the app runs in file-only single-tenant mode. All DB operations guarded by `if not DB_ENABLED:` checks.
+
+73. **Pure ASGI middleware over BaseHTTPMiddleware** — Starlette's `BaseHTTPMiddleware` wraps `call_next` in an anyio task group. When two stacked BaseHTTPMiddleware subclasses both do `await httpx_call()` (PostgREST), the nested task groups deadlock silently — requests hang indefinitely while health checks (which skip auth) keep passing. Converted both `TenantContextMiddleware` and `MeteringRateLimitMiddleware` to raw ASGI classes (`__call__(self, scope, receive, send)`). Response header injection done via `send` wrapper function.
+
+74. **StatefulSet PVC naming: `data-{statefulset}-0`** — StatefulSet `volumeClaimTemplates` with `name: data` auto-creates a PVC named `data-{statefulset-name}-0` (e.g., `data-taxlens-pg-0`). The PV's `claimRef.name` must match exactly. Never combine `volumes[].persistentVolumeClaim` with `volumeClaimTemplates` for the same mount name — K8s creates both resources, and the PV may bind to the wrong one (in our case, it bound to a Harness PV from another namespace).
+
+75. **PostgREST env var definition order** — Kubernetes `$(VAR)` expansion in env values requires the referenced variable to be defined earlier in the `env` list. `PGRST_DB_URI: postgres://authenticator:$(PG_PASSWORD)@...` fails with auth error if `PG_PASSWORD` is defined after it. Fix: move `PG_PASSWORD` (secretKeyRef) above `PGRST_DB_URI`.
+
+76. **Namespace Helm ownership annotation** — If `kubectl create namespace` runs before `helm install` (which also tries to create the namespace), the install fails with "cannot re-use a name that is still in use." Fix: annotate the existing namespace with `meta.helm.sh/release-name` and label with `app.kubernetes.io/managed-by=Helm` before running `helm install`.
+
+77. **PostgreSQL PGDATA subdirectory + chmod 777** — PG Alpine container (UID 999) sets `PGDATA=/var/lib/postgresql/data/pgdata` (subdirectory of mount). The mount point must be `chmod 777` on the host — `chown 999:999` alone is insufficient because the container's initdb creates subdirectories that may need group/other write bits depending on the storage driver.
 
 ## PDF Template Provenance
 

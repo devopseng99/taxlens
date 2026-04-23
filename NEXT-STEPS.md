@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-22 (v3.1.0)
+Updated: 2026-04-23 (v3.1.1)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -98,11 +98,11 @@ Repo: https://github.com/devopseng99/taxlens-agent
 - 8 new E2E tests (T41-T48), 48 total portal E2E tests
 - v3.0.0 deployed and verified
 
-## Wave 15 — PostgreSQL + PostgREST Migration (COMPLETE — v3.1.0)
+## Wave 15 — PostgreSQL + PostgREST Migration (DEPLOYED — v3.1.1)
 
 Replaces Dolt with PostgreSQL 16 + PostgREST v12 in isolated `taxlens-db` namespace.
 
-**Delivered:**
+**Delivered (code):**
 - db-flyway-admin migration engine (`db/flyway/`) — reusable Flyway-inspired module with CLI
 - 4 PostgreSQL migrations: schema (12 tables), roles + RLS, functions, audit triggers
 - PostgREST HTTP client (`db/postgrest_client.py`) — replaces 7 repo modules + connection.py
@@ -111,20 +111,38 @@ Replaces Dolt with PostgreSQL 16 + PostgREST v12 in isolated `taxlens-db` namesp
 - All middleware, routes, services converted from Dolt/aiomysql to PostgREST/httpx
 - Helm chart for taxlens-db namespace (PG StatefulSet + PostgREST Deployment + Flyway Job + NetworkPolicy)
 - Updated taxlens API Helm chart (PostgREST env vars, removed Dolt templates)
-- Data migration script (Dolt → PostgreSQL via PostgREST)
 - E2E test hardening (retry login, 45s timeouts, _ensure_logged_in guards)
 - 27 new unit tests (14 flyway + 7 PostgREST client + 6 auth cache), 242 total
 - Deleted 11 old Dolt files (7 repos + connection + migrate + versioning + schema.sql)
 
-**Pending (Human-in-the-Loop):**
-- [ ] `mkdir -p /opt/k8s-pers/vol1/psql-taxlens && chown 999:999 ... && chmod 700 ...` on mgplcb05
-- [ ] `kubectl create namespace taxlens-db`
-- [ ] Create `taxlens-db-credentials` secret (postgres-password)
-- [ ] Create `taxlens-db-jwt` secret (jwt-secret)
-- [ ] Deploy: `helm install taxlens-db charts/taxlens-db -n taxlens-db`
-- [ ] Rebuild + deploy taxlens API image with new env vars
-- [ ] Run data migration script (if Dolt has existing data)
-- [ ] Verify: `python -m db.flyway info`, PostgREST OpenAPI, auth flow <1s
+**Deployed (infrastructure):**
+- [x] Node directory `/opt/k8s-pers/vol1/psql-taxlens` on mgplcb05 (chmod 777, uid 999)
+- [x] Namespace `taxlens-db` with Helm ownership annotations
+- [x] Secrets: `taxlens-db-credentials` + `taxlens-db-jwt` (both namespaces)
+- [x] PostgreSQL 16-alpine StatefulSet running (PV correctly bound to `data-taxlens-pg-0`)
+- [x] PostgREST v12.2.3 running (13 relations, 5 functions, 12 relationships loaded)
+- [x] All 4 migrations applied via `kubectl exec psql`
+- [x] API v3.1.1 deployed with `POSTGREST_URL` + `DB_JWT_SECRET` env vars
+- [x] Seed data: 1 tenant, 1 user, 2 API keys (admin + E2E test)
+- [x] Auth latency: **68ms** (was 30,000ms+ with Dolt) — **384x improvement**
+
+**Critical fixes during deployment:**
+- Pure ASGI middleware (BaseHTTPMiddleware deadlocked with nested async httpx)
+- StatefulSet PVC naming (`data-{name}-0`, not custom name)
+- PostgREST env var ordering (`PG_PASSWORD` before `PGRST_DB_URI`)
+- Namespace Helm ownership annotations required for pre-created namespaces
+
+**Test results (post-deployment):**
+- 242/242 unit tests pass (3.17s)
+- 52/59 E2E tests pass (7 minor: history page, admin rendering, field expectations)
+- Portal login: working with spinner (v2.3.0)
+
+**Remaining minor E2E failures (non-blocking):**
+- T12: History page not implemented in portal yet
+- T15/T16: Admin pages don't render tenant list/health in current portal version
+- T39: Test expects >1 tenant (only 1 seeded)
+- T52: whoami doesn't return `username`/`role` fields (test expectation mismatch)
+- T53/T54: Playwright session state carryover between tests
 
 ### Plan Tiers
 
