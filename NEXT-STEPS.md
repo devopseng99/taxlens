@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.2.0)
+Updated: 2026-04-23 (v3.3.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -231,14 +231,34 @@ Live: https://taxlens.istayintek.com
 - [x] `/tools` index updated: all 4 tools linked (was "Coming Soon")
 - [x] All 16 pages returning 200 on production
 
-## Upcoming Waves
+## Wave 19 — Subscription Portal UX + Early Access (DEPLOYED — v3.3.0)
 
-### Wave 19 — Subscription Portal UX + Early Access
-- Feature-aware dashboard (hide/show based on `tenant_features`)
-- Upgrade flow: plan comparison → Stripe checkout → features unlock
-- Usage dashboard with visual progress bars per resource
-- Early access toggle for Enterprise tenants (opt-in to beta features)
-- 6 new E2E tests (T60-T65), target 65/65
+Feature-aware portal with upgrade flow and early access toggles.
+
+**Delivered:**
+- [x] Feature-aware dashboard: fetches `tenant_features` via admin API, shows 10 features with enabled/locked badges
+- [x] Upgrade flow: `/billing/upgrade` with 4-tier plan comparison → Stripe checkout redirect → `/billing/success`
+- [x] Usage dashboard: `/usage` with color-coded progress bars (green/yellow/red), upgrade prompts at limits
+- [x] Early access: `/settings/early-access` with opt-in checkboxes for 3 beta features (enterprise only)
+- [x] Sidebar: new Billing section (Usage, Early Access, Plans & Upgrade)
+- [x] CSS: progress bars, upgrade CTAs, feature-locked cards, lock icons in `base.html`
+- [x] 6 new E2E tests (T60-T65), 65/65 total passing
+- [x] Portal rebuilt, image imported to mgplcb05, deployed
+
+**New files:**
+- `app/routes/billing.py` — plan tiers, upgrade page, Stripe checkout redirect, success page
+- `app/routes/usage.py` — usage meters with plan limits, progress bar data
+- `app/templates/billing/upgrade.html` — 4-tier plan comparison grid
+- `app/templates/billing/success.html` — post-checkout celebration
+- `app/templates/usage.html` — progress bars with color coding
+- `app/templates/settings/early_access.html` — beta feature toggles
+
+**Modified files:**
+- `app/routes/dashboard.py` — fetches features, passes to template
+- `app/routes/settings.py` — early access route + beta feature list
+- `app/main.py` — includes billing + usage routers
+- `app/templates/base.html` — sidebar billing section + CSS
+- `app/templates/dashboard.html` — feature-gated UI with lock icons
 
 ## Future Enhancements
 

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.2.0 API + v1.0.0 Landing)
+Updated: 2026-04-23 (v3.3.0 API + v1.1.0 Landing)
 
 ## Architecture
 
@@ -217,6 +217,20 @@ Updated: 2026-04-23 (v3.2.0 API + v1.0.0 Landing)
 95. **Client-side-only calculators — no server, no storage** — All 4 tools (refund estimator, filing status advisor, bracket visualizer, SE tax calculator) compute entirely in browser JavaScript. No API calls, no data stored, no PII collected. This avoids NIST/IRS compliance requirements for the public tools — actual tax filing (even free tier) requires login.
 
 96. **2025 tax brackets hardcoded in client JS (not API)** — Bracket tables are embedded in each tool's `<script>` tag. This is intentional — these are marketing tools, not the production engine. The TaxLens API has the authoritative bracket tables. Keeping them separate prevents confusion and avoids needing API auth for read-only estimates.
+
+## Wave 19 — Subscription Portal UX + Early Access (v3.3.0)
+
+97. **Feature-aware dashboard via admin API** — Portal fetches tenant features from `GET /admin/tenants/{id}/features` on dashboard load. Features stored in Jinja2 template context, not session. Each feature renders as enabled (green checkmark) or locked (lock icon with tier requirement). This avoids caching stale feature flags — always reflects current state.
+
+98. **Upgrade flow redirects to Stripe via API** — `/billing/checkout?plan=X` calls `POST /api/billing/checkout` with the target plan, which returns a Stripe checkout URL. Portal redirects the browser there. No Stripe keys in the portal — all payment logic lives in the API. Post-checkout success page at `/billing/success` refreshes features.
+
+99. **Usage meters with color-coded progress bars** — Usage page builds meter data per resource (filings, documents, OCR pages, computations, users). Plan limits defined as constants in the portal route (`PLAN_LIMITS` dict). Colors: green (<70%), yellow (70-90%), red (>90%). Unlimited resources show a thin green bar at 10% width.
+
+100. **Early access as opt-in toggles, not auto-enable** — Enterprise tenants (or admin-enabled) see `/settings/early-access` with checkbox toggles for beta features. Selected features saved to `early_access_features` JSONB array via admin API. This ensures beta features are explicitly opted into, not silently activated.
+
+101. **Sidebar billing section added to base template** — New "Billing" section in sidebar with Usage, Early Access, and Plans & Upgrade links. CSS for progress bars, upgrade CTAs, and feature-locked cards added to `base.html`. Keeps all portal styling in one file (no separate CSS imports).
+
+102. **65/65 E2E tests — 6 new Wave 19 tests** — T60-T65 cover billing upgrade page, usage page, early access page, feature flags API, dashboard feature gating, and sidebar navigation items. All tests pass against live deployment.
 
 ## PDF Template Provenance
 
