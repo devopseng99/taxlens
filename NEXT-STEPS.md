@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.4.0)
+Updated: 2026-04-23 (v3.8.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -347,6 +347,27 @@ AMT, education credits, and QBI phase-out for complete 2025 federal computation.
 **New files:**
 - `tests/test_wave23_tax.py` — 16 tests (5 AMT, 7 education credits, 4 QBI phase-out)
 
+## Wave 24 — EITC (DEPLOYED — v3.8.0 API)
+
+Earned Income Tax Credit — the largest refundable credit in the US tax system.
+
+**Delivered:**
+- [x] Full 2025 EITC computation: phase-in, plateau, phase-out for 0/1/2/3+ qualifying children
+- [x] Max credits: $649 (0 children), $4,328 (1), $7,152 (2), $8,046 (3+)
+- [x] MFJ higher phase-out thresholds ($17,740/$29,200 vs $10,620/$22,080)
+- [x] MFS disqualification, investment income limit ($11,600)
+- [x] SE income counts as earned income for EITC
+- [x] Refundable credit: added to `line_33_total_payments`
+- [x] Schedule EIC added to forms list when EITC claimed
+- [x] 311/311 unit tests (20 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave24_eitc.py` — 20 tests (phase-in/out, children, MFJ, disqualification, SE income, refundable)
+
+**Modified files:**
+- `app/tax_config.py` — EITC constants (max credits, rates, thresholds, investment income limit)
+- `app/tax_engine.py` — EITC computation, `eitc`/`eitc_earned_income` fields in TaxResult, added to payments + summary
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
@@ -356,6 +377,6 @@ AMT, education credits, and QBI phase-out for complete 2025 federal computation.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** EITC, Form 2210 estimated penalties, depreciation (Form 4562)
+- **Tax engine remaining:** Form 2210 estimated penalties, depreciation (Form 4562), Child & Dependent Care Credit (Form 2441)
 - **Audit risk scoring:** Statistical comparison to IRS norms by income bracket
 - **Prior-year import:** Upload previous 1040 PDF → OCR extract → pre-populate current year

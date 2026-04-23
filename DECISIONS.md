@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.4.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.8.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -285,6 +285,16 @@ Updated: 2026-04-23 (v3.4.0 API + v2.6.0 Portal)
 124. **QBI phase-out with W-2 wage limitation** — Replaced simplified flat 20% with proper IRS rules. Below threshold ($191,950 single, $383,900 MFJ): full 20%. In phase-out range ($50K single, $100K MFJ): linear reduction of excess over W-2 wage cap. Above range: limited to greater of 50% W-2 wages or 25% W-2 wages + 2.5% UBIA. For Schedule C sole proprietors (no W-2 wages to themselves), QBI phases to $0 — this correctly represents IRS treatment.
 
 125. **EducationExpense dataclass** — Per-student data class with student_name, qualified_expenses, credit_type ("aotc" or "llc"). Passed as `education_expenses` parameter to `compute_tax()`. Backward compatible — defaults to empty list.
+
+## Wave 24 — EITC (v3.8.0 API)
+
+126. **Earned Income Tax Credit (EITC) — Schedule EIC** — Full 2025 EITC implementation with phase-in, plateau, and phase-out ranges for 0, 1, 2, and 3+ qualifying children. Max credits: $649 (0), $4,328 (1), $7,152 (2), $8,046 (3+). Phase-in rates: 7.65%/34%/40%/45%. Phase-out rates: 7.65%/15.98%/21.06%/21.06%. MFJ gets higher phase-out start ($17,740/$29,200 vs $10,620/$22,080). Fully refundable — added to `line_33_total_payments`. EITC is the largest refundable credit in the US tax system.
+
+127. **EITC disqualification rules** — MFS filers cannot claim EITC (IRS has limited exception for separated spouses, not implemented). Investment income (interest + dividends + capital gains) exceeding $11,600 disqualifies the credit entirely. This prevents high-wealth/low-wage filers from claiming.
+
+128. **Earned income = W-2 wages + net SE taxable** — EITC earned income includes W-2 wages plus net self-employment taxable income (92.35% of Schedule C profit). Investment income, interest, and dividends are NOT earned income. Zero earned income = zero EITC regardless of filing status or dependents.
+
+129. **EITC phase-out uses greater of AGI or earned income** — Per IRS rules, the phase-out income test uses the greater of AGI or earned income. This prevents filers with large above-the-line deductions (like SE tax deduction) from artificially lowering their phase-out income.
 
 ## PDF Template Provenance
 

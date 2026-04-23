@@ -209,6 +209,8 @@ class TaxResult:
     line_27_ctc: float = 0.0             # Child Tax Credit
     education_credit: float = 0.0         # AOTC + LLC (nonrefundable portion)
     education_credit_refundable: float = 0.0  # AOTC refundable portion (40%)
+    eitc: float = 0.0                     # Earned Income Tax Credit (refundable)
+    eitc_earned_income: float = 0.0       # Earned income used for EITC calc
     estimated_payments: float = 0.0
     line_33_total_payments: float = 0.0
 
@@ -306,6 +308,7 @@ class TaxResult:
             "amt": round(self.amt, 2),
             "education_credit": round(self.education_credit, 2),
             "education_credit_refundable": round(self.education_credit_refundable, 2),
+            "eitc": round(self.eitc, 2),
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
             "federal_refund": round(self.line_34_overpaid, 2),
@@ -961,6 +964,43 @@ def compute_tax(
         result.line_24_total_tax -= nonrefundable_ed
 
     # =======================================================================
+    # EARNED INCOME TAX CREDIT (EITC) — Schedule EIC
+    # =======================================================================
+
+    # EITC: refundable credit for low-to-moderate income workers
+    # MFS filers generally ineligible (we disallow here; IRS has limited exception)
+    num_eitc_children = min(num_dependents, 3)  # 3+ treated as 3
+    earned_income = result.line_1a_wages + max(0, result.sched_se_taxable)
+    result.eitc_earned_income = earned_income
+
+    # Investment income test: interest + dividends + capital gains
+    investment_income = (
+        result.line_2b_taxable_interest
+        + result.line_3b_ordinary_dividends
+        + max(0, result.sched_d_net_gain)
+    )
+
+    if filing_status != MFS and investment_income <= EITC_INVESTMENT_INCOME_LIMIT:
+        phase_in_rate = EITC_PHASE_IN_RATE[num_eitc_children]
+        phase_out_rate = EITC_PHASE_OUT_RATE[num_eitc_children]
+        max_credit = EITC_MAX_CREDIT[num_eitc_children]
+        earned_amount = EITC_EARNED_INCOME_AMOUNT[num_eitc_children]
+        phaseout_start = EITC_PHASEOUT_START.get(filing_status, EITC_PHASEOUT_START[SINGLE])[num_eitc_children]
+
+        # Phase-in: credit grows at phase_in_rate up to earned_amount
+        credit_from_earned = min(earned_income * phase_in_rate, max_credit)
+
+        # Phase-out: credit reduces at phase_out_rate above phaseout_start
+        # Use the greater of AGI or earned income for phase-out test
+        phaseout_income = max(result.line_11_agi, earned_income)
+        if phaseout_income > phaseout_start:
+            reduction = (phaseout_income - phaseout_start) * phase_out_rate
+        else:
+            reduction = 0.0
+
+        result.eitc = max(0, credit_from_earned - reduction)
+
+    # =======================================================================
     # PAYMENTS (Lines 25-33)
     # =======================================================================
 
@@ -970,6 +1010,7 @@ def compute_tax(
         result.line_25_federal_withheld
         + result.line_27_ctc
         + result.education_credit_refundable
+        + result.eitc
         + result.estimated_payments
     )
 
@@ -1080,6 +1121,8 @@ def compute_tax(
         result.forms_generated.append("Form 8959")
     if result.niit > 0:
         result.forms_generated.append("Form 8960")
+    if result.eitc > 0:
+        result.forms_generated.append("Schedule EIC")
     # State forms
     for sr in state_returns:
         if sr.form_name:

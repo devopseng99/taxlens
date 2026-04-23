@@ -204,6 +204,25 @@ EDUCATION_CREDIT_PHASEOUT = {       # MAGI phaseout ranges
 }
 
 # ---------------------------------------------------------------------------
+# Earned Income Tax Credit (EITC) — Schedule EIC (2025)
+# Source: IRS Rev. Proc. 2024-40
+# Key: number of qualifying children (0, 1, 2, 3 means 3+)
+# ---------------------------------------------------------------------------
+EITC_MAX_CREDIT = {0: 649, 1: 4_328, 2: 7_152, 3: 8_046}
+EITC_PHASE_IN_RATE = {0: 0.0765, 1: 0.34, 2: 0.40, 3: 0.45}
+EITC_PHASE_OUT_RATE = {0: 0.0765, 1: 0.1598, 2: 0.2106, 3: 0.2106}
+# Earned income amount where credit reaches maximum (end of phase-in)
+EITC_EARNED_INCOME_AMOUNT = {0: 8_490, 1: 12_730, 2: 17_880, 3: 17_880}
+# AGI/earned income where phase-out begins (single/HOH vs MFJ)
+EITC_PHASEOUT_START = {
+    SINGLE: {0: 10_620, 1: 22_080, 2: 22_080, 3: 22_080},
+    HOH:    {0: 10_620, 1: 22_080, 2: 22_080, 3: 22_080},
+    MFJ:    {0: 17_740, 1: 29_200, 2: 29_200, 3: 29_200},
+    MFS:    {0: 10_620, 1: 22_080, 2: 22_080, 3: 22_080},  # MFS eligible only if lived apart
+}
+EITC_INVESTMENT_INCOME_LIMIT = 11_600  # Disqualified if investment income exceeds this
+
+# ---------------------------------------------------------------------------
 # Illinois State Tax (2025)
 # ---------------------------------------------------------------------------
 IL_FLAT_RATE = 0.0495
