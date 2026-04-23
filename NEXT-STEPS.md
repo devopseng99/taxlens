@@ -219,12 +219,19 @@ Live: https://taxlens.istayintek.com
 - emDash CMS admin panel (SQLite adapter incompatible with Workers — needs D1 adapter)
 - Blog content management (currently hardcoded Astro components)
 
-## Upcoming Waves
+## Wave 18 — Free Tax Calculator Tools (DEPLOYED — v1.1.0)
 
-### Wave 18 — Public Tax Estimator Tools (CF Worker Functions)
-- Client-side-only tax calculators on the landing page (no login, no data stored)
-- Refund estimator, filing status advisor, bracket visualizer, SE tax calculator
-- Marketing tools only — actual filing requires login (free or paid tier)
+4 client-side JS calculators on the landing page. No login, no API, no data stored.
+
+**Delivered:**
+- [x] `/tools/refund-estimator` — 2025 brackets, standard deduction, CTC, effective/marginal rates
+- [x] `/tools/filing-status` — Interactive questionnaire → recommended status + explanation
+- [x] `/tools/brackets` — Color-coded stacked bar chart with real-time bracket breakdown
+- [x] `/tools/se-tax` — SE tax: 92.35% base, SS cap ($176,100), Medicare, 50% deduction, W-2 offset
+- [x] `/tools` index updated: all 4 tools linked (was "Coming Soon")
+- [x] All 16 pages returning 200 on production
+
+## Upcoming Waves
 
 ### Wave 19 — Subscription Portal UX + Early Access
 - Feature-aware dashboard (hide/show based on `tenant_features`)

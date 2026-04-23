@@ -212,6 +212,12 @@ Updated: 2026-04-23 (v3.2.0 API + v1.0.0 Landing)
 
 94. **`CLOUDFLARE_ACCOUNT_ID` required alongside token** — The CF API token doesn't include `/memberships` scope, so wrangler can't auto-detect the account. Explicit `CLOUDFLARE_ACCOUNT_ID=9709bd1f498109e65ff5d1898fec15ee` env var required for all wrangler commands.
 
+## Wave 18 — Free Tax Calculator Tools (v1.1.0)
+
+95. **Client-side-only calculators — no server, no storage** — All 4 tools (refund estimator, filing status advisor, bracket visualizer, SE tax calculator) compute entirely in browser JavaScript. No API calls, no data stored, no PII collected. This avoids NIST/IRS compliance requirements for the public tools — actual tax filing (even free tier) requires login.
+
+96. **2025 tax brackets hardcoded in client JS (not API)** — Bracket tables are embedded in each tool's `<script>` tag. This is intentional — these are marketing tools, not the production engine. The TaxLens API has the authoritative bracket tables. Keeping them separate prevents confusion and avoids needing API auth for read-only estimates.
+
 ## PDF Template Provenance
 
 | Template | Source | SHA256 (first 8) | Match |
