@@ -8,9 +8,14 @@ from azure.ai.documentintelligence.models import AnalyzeDocumentRequest
 from azure.core.credentials import AzureKeyCredential
 
 
+OCR_ENABLED = bool(os.getenv("AZURE_DOCAI_ENDPOINT")) and bool(os.getenv("AZURE_DOCAI_KEY"))
+
+
 def get_client() -> DocumentIntelligenceClient:
-    endpoint = os.environ["AZURE_DOCAI_ENDPOINT"]
-    key = os.environ["AZURE_DOCAI_KEY"]
+    endpoint = os.getenv("AZURE_DOCAI_ENDPOINT", "")
+    key = os.getenv("AZURE_DOCAI_KEY", "")
+    if not endpoint or not key:
+        raise RuntimeError("Azure Document Intelligence not configured (AZURE_DOCAI_ENDPOINT/KEY missing)")
     return DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
 
 

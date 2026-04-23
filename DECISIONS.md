@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.3.0 API + v1.1.0 Landing)
+Updated: 2026-04-23 (v3.4.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -231,6 +231,26 @@ Updated: 2026-04-23 (v3.3.0 API + v1.1.0 Landing)
 101. **Sidebar billing section added to base template** — New "Billing" section in sidebar with Usage, Early Access, and Plans & Upgrade links. CSS for progress bars, upgrade CTAs, and feature-locked cards added to `base.html`. Keeps all portal styling in one file (no separate CSS imports).
 
 102. **65/65 E2E tests — 6 new Wave 19 tests** — T60-T65 cover billing upgrade page, usage page, early access page, feature flags API, dashboard feature gating, and sidebar navigation items. All tests pass against live deployment.
+
+## Wave 20 — Production Hardening (v3.4.0 API + v2.6.0 Portal)
+
+103. **DB password moved from values.yaml to K8s Secret** — OpenFile DB password was hardcoded in plain text in Helm values (committed to git). Replaced with `secretKeyRef` referencing `openfile-postgresql` secret. URL env vars (`TAXLENS_PORTAL_URL`, `TAXLENS_API_URL`, `TAXLENS_LANDING_URL`) added to deployment template for configurable URLs.
+
+104. **Deep health check pings PostgREST** — `/api/health` now makes an HTTP GET to PostgREST root. Returns `"status": "degraded"` with `"db_ok": false` if PostgREST is unreachable. K8s probes will detect actual database outages instead of reporting healthy when DB is down.
+
+105. **Daily PostgreSQL backup CronJob** — `taxlens-pg-backup` runs daily at 3 AM, `pg_dump --format=custom | gzip` to `/opt/k8s-pers/vol1/taxlens-backups/`. 7-day retention with `find -mtime +7 -delete`. Deployed via Helm in `taxlens-db` chart.
+
+106. **Hardcoded URLs extracted to env vars** — 15+ instances of `dropit.istayintek.com`, `taxlens-portal.istayintek.com` across billing_routes.py, onboarding.py, admin_routes.py, main.py (CORS), mcp_server.py now read from `TAXLENS_PORTAL_URL`, `TAXLENS_API_URL`, `TAXLENS_LANDING_URL` with existing values as defaults.
+
+107. **CSRF double-submit cookie** — Portal now generates HMAC-derived CSRF tokens from the session cookie. `set_csrf_cookie()` called on login, `verify_csrf()` available for POST form validation. CSRF cookie is `httponly=False` (must be readable by JS/forms) but `SameSite=Lax` + `Secure=True`.
+
+108. **Security headers on all portal responses** — `SecurityHeadersMiddleware` adds: `Content-Security-Policy` (self + inline for HTMX), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`.
+
+109. **Branded error pages** — Portal exception handler now renders `error.html` template with base.html layout (sidebar, dark theme) instead of raw `<h1>404</h1>` HTML. Error titles mapped for 400, 403, 404, 500, 503.
+
+110. **Azure OCR graceful degradation** — `ocr.py` now uses `os.getenv()` instead of `os.environ[]`. Adds `OCR_ENABLED` flag. Missing credentials return a clear `RuntimeError` instead of `KeyError` crash.
+
+111. **V006 database indexes** — 7 new indexes on high-query columns: `api_keys(key_hash)`, `api_keys(status WHERE active)`, `oauth_tokens(token_hash)`, `usage_events(tenant_id, event_type, created_at)`, `billing_customers(tenant_id)`, `billing_customers(stripe_customer_id)`, `tenant_features(tenant_id)`.
 
 ## PDF Template Provenance
 

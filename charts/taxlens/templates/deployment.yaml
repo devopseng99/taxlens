@@ -102,7 +102,16 @@ spec:
             - name: OPENFILE_DB_USER
               value: {{ .Values.openfileDb.user | quote }}
             - name: OPENFILE_DB_PASSWORD
-              value: {{ .Values.openfileDb.password | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.openfileDb.secretName }}
+                  key: {{ .Values.openfileDb.passwordKey }}
+            - name: TAXLENS_PORTAL_URL
+              value: {{ .Values.urls.portal | quote }}
+            - name: TAXLENS_API_URL
+              value: {{ .Values.urls.api | quote }}
+            - name: TAXLENS_LANDING_URL
+              value: {{ .Values.urls.landing | quote }}
             {{- if .Values.stripe.enabled }}
             - name: STRIPE_SECRET_KEY
               valueFrom:

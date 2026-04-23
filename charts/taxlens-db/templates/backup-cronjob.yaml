@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: taxlens-pg-backup
+  labels:
+    app.kubernetes.io/name: taxlens
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "0 3 * * *"  # Daily at 3 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: mgplcb05
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-backup
+              image: docker.io/library/postgres:16-alpine
+              imagePullPolicy: IfNotPresent
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  BACKUP_DIR="/backups"
+                  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                  BACKUP_FILE="${BACKUP_DIR}/taxlens-${TIMESTAMP}.sql.gz"
+
+                  echo "Starting PostgreSQL backup at $(date)"
+                  pg_dump -h taxlens-pg.taxlens-db.svc -U "${PGUSER}" -d "${PGDATABASE}" \
+                    --no-password --format=custom | gzip > "${BACKUP_FILE}"
+
+                  echo "Backup created: ${BACKUP_FILE} ($(du -h ${BACKUP_FILE} | cut -f1))"
+
+                  # Retain last 7 days
+                  find "${BACKUP_DIR}" -name "taxlens-*.sql.gz" -mtime +7 -delete
+                  echo "Cleanup complete. Backups retained:"
+                  ls -lh "${BACKUP_DIR}"/taxlens-*.sql.gz 2>/dev/null || echo "(none)"
+              env:
+                - name: PGUSER
+                  value: "postgres"
+                - name: PGDATABASE
+                  value: {{ .Values.postgres.database | default "taxlens" | quote }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgres.secretName | default "taxlens-db-credentials" }}
+                      key: {{ .Values.postgres.passwordKey | default "postgres-password" }}
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+              resources:
+                limits:
+                  memory: 128Mi
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+          volumes:
+            - name: backups
+              hostPath:
+                path: /opt/k8s-pers/vol1/taxlens-backups
+                type: DirectoryOrCreate

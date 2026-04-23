@@ -33,8 +33,14 @@ mcp = FastMCP(
     streamable_http_path="/",
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=["dropit.istayintek.com", "localhost", "127.0.0.1"],
-        allowed_origins=["https://dropit.istayintek.com", "https://taxlens.istayintek.com"],
+        allowed_hosts=[
+            os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api").split("//")[1].split("/")[0],
+            "localhost", "127.0.0.1",
+        ],
+        allowed_origins=[
+            os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api").rsplit("/api", 1)[0],
+            os.getenv("TAXLENS_LANDING_URL", "https://taxlens.istayintek.com"),
+        ],
     ),
 )
 

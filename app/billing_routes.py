@@ -1,6 +1,7 @@
 """Billing routes — Stripe checkout, webhooks, portal, usage, onboarding."""
 
 import logging
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, HTTPException, Depends
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
+_PORTAL_URL = os.getenv("TAXLENS_PORTAL_URL", "https://taxlens-portal.istayintek.com")
+
 
 # --- Models ---
 
@@ -26,12 +29,12 @@ class CheckoutRequest(BaseModel):
     tenant_name: str
     email: str
     plan_tier: str = "starter"
-    success_url: str = "https://taxlens-portal.istayintek.com/dashboard?billing=success"
-    cancel_url: str = "https://taxlens-portal.istayintek.com/settings/billing?billing=cancelled"
+    success_url: str = f"{_PORTAL_URL}/dashboard?billing=success"
+    cancel_url: str = f"{_PORTAL_URL}/settings/billing?billing=cancelled"
 
 
 class PortalRequest(BaseModel):
-    return_url: str = "https://taxlens-portal.istayintek.com/settings/billing"
+    return_url: str = f"{_PORTAL_URL}/settings/billing"
 
 
 # --- Checkout & Portal ---
@@ -298,7 +301,7 @@ async def free_signup(req: FreeSignupRequest, request: Request):
         "tenant_id": result["tenant_id"],
         "api_key": result["api_key"],
         "plan_tier": "free",
-        "portal_url": f"https://taxlens-portal.istayintek.com/login?key={result['api_key']}",
+        "portal_url": f"{_PORTAL_URL}/login?key={result['api_key']}",
         "features": {
             "standard_deduction": True,
             "unlimited_w2": True,

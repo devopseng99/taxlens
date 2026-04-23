@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import os
 import re
 import secrets
 import uuid
@@ -115,7 +116,7 @@ async def provision_tenant(tenant_name: str, plan_tier: str = "starter",
             "description": "Add this to your Claude Desktop config (claude_desktop_config.json):",
             "mcpServers": {
                 "taxlens": {
-                    "url": "https://dropit.istayintek.com/api/mcp",
+                    "url": f"{os.getenv('TAXLENS_API_URL', 'https://dropit.istayintek.com/api')}/mcp",
                     "headers": {"X-API-Key": raw_key},
                 }
             },

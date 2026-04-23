@@ -306,10 +306,10 @@ async def create_oauth_client(tenant_id: str, req: CreateOAuthClientRequest,
             "info": "Add this to your Claude Desktop config:",
             "config": {
                 "taxlens": {
-                    "url": "https://dropit.istayintek.com/api/mcp",
+                    "url": f"{os.getenv('TAXLENS_API_URL', 'https://dropit.istayintek.com/api')}/mcp",
                     "oauth": {
                         "client_id": client_id, "client_secret": client_secret,
-                        "token_endpoint": "https://dropit.istayintek.com/api/oauth/token",
+                        "token_endpoint": f"{os.getenv('TAXLENS_API_URL', 'https://dropit.istayintek.com/api')}/oauth/token",
                     },
                 }
             },

@@ -134,14 +134,18 @@ app.add_middleware(MeteringRateLimitMiddleware)
 app.add_middleware(FeatureGateMiddleware)
 app.add_middleware(TenantContextMiddleware)
 
+_PORTAL_URL = os.getenv("TAXLENS_PORTAL_URL", "https://taxlens-portal.istayintek.com")
+_API_URL = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
+_LANDING_URL = os.getenv("TAXLENS_LANDING_URL", "https://taxlens.istayintek.com")
+
+_cors_origins = [_LANDING_URL, _PORTAL_URL]
+_api_base = _API_URL.rsplit("/api", 1)[0]  # e.g. "https://dropit.istayintek.com"
+if _api_base not in _cors_origins:
+    _cors_origins.append(_api_base)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://taxlens.istayintek.com",
-        "https://dropit.istayintek.com",
-        "https://portal.taxlens.istayintek.com",
-        "https://taxlens-portal.istayintek.com",
-    ],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -249,13 +253,29 @@ def _detect_form_type(doc_type: str | None, model_id: str) -> str | None:
 async def health():
     from plaid_routes import PLAID_ENABLED
     from billing import STRIPE_ENABLED
+
+    db_ok = False
+    if DB_ENABLED:
+        try:
+            import httpx
+            from db.postgrest_client import POSTGREST_URL
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(f"{POSTGREST_URL}/")
+                db_ok = r.status_code == 200
+        except Exception:
+            db_ok = False
+    else:
+        db_ok = True  # No DB to check
+
+    status = "ok" if db_ok else "degraded"
     return {
-        "status": "ok",
-        "version": "3.1.0",
+        "status": status,
+        "version": "3.3.0",
         "storage_root": str(STORAGE_ROOT),
         "writable": STORAGE_ROOT.exists(),
         "auth_enabled": AUTH_ENABLED,
         "db_enabled": DB_ENABLED,
+        "db_ok": db_ok,
         "db_provider": "postgrest" if DB_ENABLED else "none",
         "stripe_enabled": STRIPE_ENABLED,
         "mcp_endpoint": "/api/mcp",

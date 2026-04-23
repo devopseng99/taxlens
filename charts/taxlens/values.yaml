@@ -53,7 +53,13 @@ openfileDb:
   port: "5432"
   name: openfile
   user: postgres
-  password: EXBzXH9dLrsLEML6TOQtn7cN6fbVN4Pc
+  secretName: openfile-postgresql
+  passwordKey: postgres-password
+
+urls:
+  portal: "https://taxlens-portal.istayintek.com"
+  api: "https://dropit.istayintek.com/api"
+  landing: "https://taxlens.istayintek.com"
 
 nodeSelector:
   kubernetes.io/hostname: mgplcb05

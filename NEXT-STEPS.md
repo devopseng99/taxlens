@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.3.0)
+Updated: 2026-04-23 (v3.4.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -260,6 +260,22 @@ Feature-aware portal with upgrade flow and early access toggles.
 - `app/templates/base.html` — sidebar billing section + CSS
 - `app/templates/dashboard.html` — feature-gated UI with lock icons
 
+## Wave 20 — Production Hardening (DEPLOYED — v3.4.0 API + v2.6.0 Portal)
+
+Security, observability, and operational readiness improvements.
+
+**Delivered:**
+- [x] DB password moved from values.yaml to K8s Secret (`openfile-postgresql`)
+- [x] URL env vars: `TAXLENS_PORTAL_URL`, `TAXLENS_API_URL`, `TAXLENS_LANDING_URL` (15+ hardcoded instances replaced)
+- [x] Deep health check: `/api/health` pings PostgREST, returns `degraded` if DB unreachable
+- [x] Daily PG backup CronJob (`taxlens-pg-backup`, 3 AM, 7-day retention, pg_dump to hostPath)
+- [x] CSRF double-submit cookie protection on portal
+- [x] Security headers: CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy
+- [x] Branded error pages (error.html with base.html layout)
+- [x] Azure OCR graceful degradation (`os.getenv` + `OCR_ENABLED` flag)
+- [x] V006 migration: 7 DB indexes (api_keys, oauth_tokens, usage_events, billing_customers, tenant_features)
+- [x] 258/258 unit tests, 65/65 E2E tests passing
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
@@ -268,3 +284,7 @@ Feature-aware portal with upgrade flow and early access toggles.
 - **Prometheus metrics:** Full `/metrics` endpoint with Grafana dashboards
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
+- **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
+- **Tax engine completeness:** QBI phase-out, AMT (Form 6251), education credits (Form 8863)
+- **Audit risk scoring:** Statistical comparison to IRS norms by income bracket
+- **Prior-year import:** Upload previous 1040 PDF → OCR extract → pre-populate current year
