@@ -196,14 +196,30 @@ Reduces disk I/O by suppressing INFO-level logging across all 5 TaxLens pods.
 - [x] `COPY scripts/ /app/scripts/` added to Dockerfile for CronJob access
 - [x] All 3 repos committed and pushed, releases created (API v3.1.2, Portal v2.3.1, Agent v1.0.1)
 
-## Upcoming Waves
+## Wave 17 — Landing Page on Cloudflare Workers (DEPLOYED — v1.0.0)
 
-### Wave 17 — emDash Landing Page CMS (Cloudflare Workers)
-- emDash v0.1.0 (Astro 6 + CF Workers + D1 + R2) at `taxlens.istayintek.com`
-- Marketing pages: hero, features, pricing (4 tiers), how-it-works, blog
-- Free signup form → `POST /billing/onboarding/free` → redirect to portal
-- CF API token with Workers Scripts, D1, R2, KV, Routes permissions
-- Replace current nginx K8s service with CF Worker route
+Astro 6 SSR site on CF Workers replacing nginx K8s service.
+Repo: https://github.com/devopseng99/taxlens-landing
+Live: https://taxlens.istayintek.com
+
+**Delivered:**
+- [x] 12 marketing pages (all returning 200):
+  - `/` landing, `/features`, `/pricing` (4 tiers), `/how-it-works`
+  - `/signup` (fetch to `/billing/onboarding/free`), `/for-professionals`
+  - `/blog` (3 seed posts), `/contact`, `/tools` (placeholder)
+  - `/login` (redirect to portal), `/legal/terms`, `/legal/privacy`
+- [x] CF Workers deployment: `taxlens-landing.gitit102.workers.dev`
+- [x] Workers Route: `taxlens.istayintek.com/*` → `taxlens-landing` worker
+- [x] D1 database `taxlens-landing-db` + R2 bucket `taxlens-landing-assets`
+- [x] `nodejs_compat` flag for Node.js built-in support
+- [x] Old taxlens-ui nginx scaled to 0 (reclaimed 32Mi)
+- [x] CF API token with `CLOUDFLARE_ACCOUNT_ID` env var pattern
+
+**Deferred:**
+- emDash CMS admin panel (SQLite adapter incompatible with Workers — needs D1 adapter)
+- Blog content management (currently hardcoded Astro components)
+
+## Upcoming Waves
 
 ### Wave 18 — Public Tax Estimator Tools (CF Worker Functions)
 - Client-side-only tax calculators on the landing page (no login, no data stored)

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.2.0)
+Updated: 2026-04-23 (v3.2.0 API + v1.0.0 Landing)
 
 ## Architecture
 
@@ -197,6 +197,20 @@ Updated: 2026-04-23 (v3.2.0)
 87. **Self-service free signup without Stripe** — `POST /billing/onboarding/free` provisions a tenant with `plan_tier="free"` without requiring Stripe checkout. IP-based rate limiting (10 signups/hour per IP) prevents abuse. The endpoint is exempt from auth (tenant context middleware skip) since there's no tenant yet. Stripe is only involved for paid tier upgrades.
 
 88. **Feature cache invalidation on admin updates** — `invalidate_cache(tenant_id)` called in admin PUT/POST feature endpoints and `_sync_plan_limits()` (Stripe webhook). Without explicit invalidation, upgraded tenants would wait up to 5 minutes for new features to take effect.
+
+## Wave 17 — Landing Page on Cloudflare Workers (v1.0.0)
+
+89. **Astro 6 SSR on CF Workers (not emDash CMS)** — emDash 0.6.0's SQLite adapter uses `better-sqlite3` native addon which fails on CF Workers runtime (`createRequire` undefined). Deployed pure Astro SSR instead. emDash CMS admin will be added later when `@emdash-cms/cloudflare` D1 adapter is available. Marketing pages don't need CMS — they're static Astro components.
+
+90. **Workers Route over custom_domain** — `custom_domain: true` in wrangler.toml tries to create a new DNS record, conflicting with the existing CF tunnel CNAME. Workers Routes (`taxlens.istayintek.com/*`) intercept traffic on existing DNS records and take priority over CF tunnel routing. Route created via CF API (`POST /zones/{id}/workers/routes`).
+
+91. **`nodejs_compat` compatibility flag required** — Astro's Cloudflare adapter uses `node:module` and other Node.js built-ins. Without `nodejs_compat`, the worker crashes with "No such module node:module".
+
+92. **Signup page is client-side fetch, not SSR form** — The `/signup` form POSTs to `https://dropit.istayintek.com/api/billing/onboarding/free` via client-side `fetch()`. This avoids CORS issues (browser makes the request directly) and keeps the landing page stateless. The API key is displayed on success — users must save it before navigating away.
+
+93. **Old taxlens-ui K8s nginx scaled to 0 (not deleted)** — The CF Workers landing page replaces the nginx static site. Scaled to 0 to reclaim 32Mi memory on mgplcb05. Kept as fallback in case CF Workers has issues — can scale back to 1 and remove the Workers Route.
+
+94. **`CLOUDFLARE_ACCOUNT_ID` required alongside token** — The CF API token doesn't include `/memberships` scope, so wrangler can't auto-detect the account. Explicit `CLOUDFLARE_ACCOUNT_ID=9709bd1f498109e65ff5d1898fec15ee` env var required for all wrangler commands.
 
 ## PDF Template Provenance
 
