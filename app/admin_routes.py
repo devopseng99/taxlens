@@ -399,3 +399,102 @@ async def get_full_history(request: Request, limit: int = 50,
         "row_id": r["row_id"], "committed_at": r["committed_at"],
         "committed_by": r.get("committed_by", "system"),
     } for r in rows]}
+
+
+# --- Feature Flag Management ---
+
+_VALID_FEATURE_FLAGS = {
+    "can_compute_tax", "can_upload_documents", "can_itemized_deductions",
+    "can_schedule_c", "can_schedule_d", "can_1099_forms", "can_multi_state",
+    "can_use_mcp", "can_use_plaid", "can_use_agent",
+    "max_filings_per_year", "max_w2_uploads", "max_documents", "max_users",
+    "allowed_form_types", "early_access_enabled", "early_access_features",
+}
+
+
+@router.get("/tenants/{tenant_id}/features")
+async def get_tenant_features(tenant_id: str, request: Request,
+                              _admin: str = Depends(require_admin)):
+    """Get current feature flags for a tenant."""
+    if not DB_ENABLED:
+        raise HTTPException(503, "Database not enabled.")
+    token = _admin_token(request)
+    rows = await postgrest.get(
+        "tenant_features", {"tenant_id": f"eq.{tenant_id}"}, token=token,
+    )
+    if not rows:
+        raise HTTPException(404, f"No features found for tenant {tenant_id}")
+    return rows[0]
+
+
+class UpdateFeaturesRequest(BaseModel):
+    features: dict
+
+
+@router.put("/tenants/{tenant_id}/features")
+async def update_tenant_features(tenant_id: str, req: UpdateFeaturesRequest,
+                                 request: Request,
+                                 _admin: str = Depends(require_admin)):
+    """Update feature flags for a tenant. Only known flags are accepted."""
+    if not DB_ENABLED:
+        raise HTTPException(503, "Database not enabled.")
+
+    invalid = set(req.features.keys()) - _VALID_FEATURE_FLAGS
+    if invalid:
+        raise HTTPException(400, f"Unknown feature flags: {', '.join(invalid)}")
+
+    token = _admin_token(request)
+
+    # Build update data
+    update_data = {}
+    for key, value in req.features.items():
+        if key in ("allowed_form_types", "early_access_features"):
+            update_data[key] = json.dumps(value) if value is not None else None
+        else:
+            update_data[key] = value
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    await postgrest.update(
+        "tenant_features", {"tenant_id": f"eq.{tenant_id}"},
+        update_data, token=token,
+    )
+
+    # Invalidate feature cache
+    from middleware.feature_gate import invalidate_cache
+    invalidate_cache(tenant_id)
+
+    return {"updated": True, "tenant_id": tenant_id, "features": req.features}
+
+
+class EarlyAccessRequest(BaseModel):
+    enabled: bool
+    features: list[str] = []
+
+
+@router.post("/tenants/{tenant_id}/features/early-access")
+async def toggle_early_access(tenant_id: str, req: EarlyAccessRequest,
+                              request: Request,
+                              _admin: str = Depends(require_admin)):
+    """Toggle early access and select beta features for a tenant."""
+    if not DB_ENABLED:
+        raise HTTPException(503, "Database not enabled.")
+
+    token = _admin_token(request)
+    await postgrest.update(
+        "tenant_features", {"tenant_id": f"eq.{tenant_id}"},
+        {
+            "early_access_enabled": req.enabled,
+            "early_access_features": json.dumps(req.features),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        token=token,
+    )
+
+    from middleware.feature_gate import invalidate_cache
+    invalidate_cache(tenant_id)
+
+    return {
+        "tenant_id": tenant_id,
+        "early_access_enabled": req.enabled,
+        "early_access_features": req.features,
+    }

@@ -166,8 +166,9 @@ class TenantContextMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Billing webhook + plans — no auth needed
-        if path.startswith("/billing/webhook") or path == "/billing/plans":
+        # Billing webhook + plans + free signup — no auth needed
+        if (path.startswith("/billing/webhook") or path == "/billing/plans"
+                or path == "/billing/onboarding/free"):
             _set_state(request, None)
             await self.app(scope, receive, send)
             return

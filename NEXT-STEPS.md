@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-22 (v3.1.2)
+Updated: 2026-04-23 (v3.2.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -146,15 +146,40 @@ Replaces Dolt with PostgreSQL 16 + PostgREST v12 in isolated `taxlens-db` namesp
 
 ### Plan Tiers
 
-| Feature | Starter ($29/mo) | Professional ($99/mo) | Enterprise ($299/mo) |
-|---------|-------------------|-----------------------|----------------------|
-| API calls/min | 30 | 120 | 600 |
-| Computations/day | 50 | 500 | Unlimited |
-| OCR pages/month | 100 | 1,000 | 10,000 |
-| Agent messages/day | 100 | 500 | Unlimited |
-| MCP OAuth clients | 2 | 10 | Unlimited |
-| Plaid connections | 5 | 50 | Unlimited |
-| Audit history | 30 days | 1 year | Unlimited |
+| Feature | Free ($0) | Starter ($29/mo) | Professional ($99/mo) | Enterprise ($299/mo) |
+|---------|-----------|-------------------|-----------------------|----------------------|
+| Tax compute | Std deduction + W-2 | All schedules | All schedules | All schedules |
+| Doc upload | W-2 only (unlimited) | All forms | All forms | All forms |
+| Filings/year | 1 | Unlimited | Unlimited | Unlimited |
+| API calls/min | 10 | 30 | 120 | 600 |
+| Computations/day | 5 | 50 | 500 | Unlimited |
+| OCR pages/month | 20 | 100 | 1,000 | 10,000 |
+| Agent messages/day | 0 | 100 | 500 | Unlimited |
+| MCP server | No | Yes | Yes | Yes |
+| Plaid sync | No | No | Yes | Yes |
+| Multi-state | No | No | Yes | Yes |
+| Users | 1 | 3 | 10 | Unlimited |
+| Early access | No | No | No | Yes |
+
+## Wave 16 — Feature Flags + Free Tier (DEPLOYED — v3.2.0)
+
+Per-tenant feature gating with NIST/IRS-compliant free tier.
+
+**Delivered:**
+- [x] V005 migration: `tenant_features` table (10 boolean flags, 4 quotas, JSONB form allowlist)
+- [x] RLS policies (tenant reads own, admin reads/writes all) + audit trigger
+- [x] `upsert_tenant_features` RPC function
+- [x] Free tier added to `PLAN_DEFAULTS` and `PLAN_TIERS`
+- [x] `TIER_FEATURES` constant mapping plan → feature defaults
+- [x] `FeatureGateMiddleware` (pure ASGI, 256-entry LRU cache, 5-min TTL)
+- [x] `POST /billing/onboarding/free` self-service signup (IP rate-limited 10/hr)
+- [x] Admin API: GET/PUT `/admin/tenants/{id}/features` + early-access toggle
+- [x] `provision_tenant()` inserts `tenant_features` row on creation
+- [x] Stripe webhook `_sync_plan_limits()` syncs features on plan change
+- [x] Feature cache invalidation on admin updates
+- [x] Existing tenants backfilled (enterprise + professional = all features)
+- [x] 16 new unit tests (258 total), 59/59 E2E (T41 updated for 4 tiers)
+- [x] API v3.2.0 deployed and verified
 
 ## v3.1.2 — Logging Suppression (DEPLOYED)
 
@@ -170,6 +195,27 @@ Reduces disk I/O by suppressing INFO-level logging across all 5 TaxLens pods.
 - [x] CronJob `aggregate_usage.py` rewritten for PostgREST (was Dolt/aiomysql)
 - [x] `COPY scripts/ /app/scripts/` added to Dockerfile for CronJob access
 - [x] All 3 repos committed and pushed, releases created (API v3.1.2, Portal v2.3.1, Agent v1.0.1)
+
+## Upcoming Waves
+
+### Wave 17 — emDash Landing Page CMS (Cloudflare Workers)
+- emDash v0.1.0 (Astro 6 + CF Workers + D1 + R2) at `taxlens.istayintek.com`
+- Marketing pages: hero, features, pricing (4 tiers), how-it-works, blog
+- Free signup form → `POST /billing/onboarding/free` → redirect to portal
+- CF API token with Workers Scripts, D1, R2, KV, Routes permissions
+- Replace current nginx K8s service with CF Worker route
+
+### Wave 18 — Public Tax Estimator Tools (CF Worker Functions)
+- Client-side-only tax calculators on the landing page (no login, no data stored)
+- Refund estimator, filing status advisor, bracket visualizer, SE tax calculator
+- Marketing tools only — actual filing requires login (free or paid tier)
+
+### Wave 19 — Subscription Portal UX + Early Access
+- Feature-aware dashboard (hide/show based on `tenant_features`)
+- Upgrade flow: plan comparison → Stripe checkout → features unlock
+- Usage dashboard with visual progress bars per resource
+- Early access toggle for Enterprise tenants (opt-in to beta features)
+- 6 new E2E tests (T60-T65), target 65/65
 
 ## Future Enhancements
 

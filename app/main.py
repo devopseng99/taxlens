@@ -25,6 +25,7 @@ from contextlib import asynccontextmanager
 from mcp_server import mcp
 from db.postgrest_client import postgrest, DB_ENABLED
 from middleware.tenant_context import TenantContextMiddleware
+from middleware.feature_gate import FeatureGateMiddleware
 from metering import metering
 from rate_limiter import rate_limiter
 
@@ -81,8 +82,9 @@ from metering import EVENT_API_CALL
 class MeteringRateLimitMiddleware:
     """Pure ASGI middleware — log API calls and enforce rate limits."""
 
-    EXEMPT_PATHS = {"/health", "/billing/webhook", "/billing/plans", "/docs",
-                    "/openapi.json", "/mcp", "/mcp/"}
+    EXEMPT_PATHS = {"/health", "/billing/webhook", "/billing/plans",
+                    "/billing/onboarding/free", "/docs", "/openapi.json",
+                    "/mcp", "/mcp/"}
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -127,7 +129,9 @@ class MeteringRateLimitMiddleware:
 
 
 # Add innermost first, outermost last (LIFO execution)
+# Order: CORS (outermost) → TenantContext → FeatureGate → MeteringRateLimit (innermost)
 app.add_middleware(MeteringRateLimitMiddleware)
+app.add_middleware(FeatureGateMiddleware)
 app.add_middleware(TenantContextMiddleware)
 
 app.add_middleware(

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-22 (v3.1.2)
+Updated: 2026-04-23 (v3.2.0)
 
 ## Architecture
 
@@ -179,6 +179,24 @@ Updated: 2026-04-22 (v3.1.2)
 79. **Metering pseudo-tenant skip** — `MeteringLogger.log()` returns early for `tenant_id` values `default` and `__admin__` which don't exist in the `tenants` table. Without this, PostgREST returns FK constraint violations on `usage_events.tenant_id`. Health checks and admin endpoints set these pseudo-tenant IDs.
 
 80. **CronJob aggregate_usage.py rewritten for PostgREST** — Original script used Dolt imports (`aiomysql`, `CALL dolt_commit`). Rewritten to use PostgREST HTTP API with admin JWT. Groups events by tenant+type+date, upserts into `usage_daily`, prunes events older than 30 days. Script now lives at `/app/scripts/aggregate_usage.py` inside the API image (added `COPY scripts/ /app/scripts/` to Dockerfile).
+
+## Wave 16 — Feature Flags + Free Tier (v3.2.0)
+
+81. **Per-tenant feature flags via `tenant_features` table** — Boolean columns for each gatable feature (`can_itemized_deductions`, `can_schedule_c`, `can_1099_forms`, etc.) rather than a single JSONB blob. Explicit columns enable RLS policies and PostgREST filtering without parsing JSON, and make the feature matrix self-documenting in the schema. Trade-off: adding a new feature requires a migration, but features change rarely and schema enforcement prevents typos.
+
+82. **Free tier requires login — no anonymous tax access** — All tiers authenticate via API key (same mechanism). Tax data is PII governed by NIST SP 800-53 and IRS Publication 4557 (Safeguarding Taxpayer Data). No anonymous document upload, computation, or storage. The landing page's public tax estimator tools (Wave 18) are client-side-only JavaScript calculators that store nothing.
+
+83. **Free tier allows document upload (NIST/IRS retention)** — `can_upload_documents=true` for all tiers. IRS requires taxpayers to retain supporting documents. Blocking uploads on the free tier would violate data retention requirements and degrade user trust. Instead, form-type gating (`allowed_form_types JSONB`) restricts what can be processed — free tier can only upload W-2s.
+
+84. **Form-type gating via `allowed_form_types` JSONB column** — Free tier: `["W-2"]`. Starter: `["W-2","1099-INT","1099-DIV","1099-NEC","1099-MISC","1099-B"]`. Professional/Enterprise: `NULL` (all types). The OCR/upload pipeline accepts the document but returns 403 if the detected form type isn't in the tenant's allowlist. This is a soft gate — the document is not stored if rejected.
+
+85. **`TIER_FEATURES` constant in rate_limiter.py** — Single source of truth for plan → feature mapping. Used by `provision_tenant()` during onboarding and `_sync_plan_limits()` on Stripe webhook plan changes. Keeps feature defaults out of the database — the DB stores the tenant's current features, not the tier templates.
+
+86. **FeatureGateMiddleware as pure ASGI (same pattern as tenant_context.py)** — Runs after TenantContextMiddleware (needs `tenant_id`) and before MeteringRateLimitMiddleware. Blocks `/mcp` and `/plaid` path prefixes for tenants without those features. Skips admin, health, docs, billing, and onboarding paths. Uses a separate 256-entry LRU cache with 5-min TTL (same pattern as auth cache). Route-level checks use `request.state.features` for fine-grained gating.
+
+87. **Self-service free signup without Stripe** — `POST /billing/onboarding/free` provisions a tenant with `plan_tier="free"` without requiring Stripe checkout. IP-based rate limiting (10 signups/hour per IP) prevents abuse. The endpoint is exempt from auth (tenant context middleware skip) since there's no tenant yet. Stripe is only involved for paid tier upgrades.
+
+88. **Feature cache invalidation on admin updates** — `invalidate_cache(tenant_id)` called in admin PUT/POST feature endpoints and `_sync_plan_limits()` (Stripe webhook). Without explicit invalidation, upgraded tenants would wait up to 5 minutes for new features to take effect.
 
 ## PDF Template Provenance
 

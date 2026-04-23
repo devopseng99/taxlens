@@ -162,10 +162,11 @@ async def _handle_payment_failed(invoice: dict):
 
 
 async def _sync_plan_limits(stripe_customer_id: str, plan_tier: str):
-    """Sync tenant_plans table after plan change."""
+    """Sync tenant_plans + tenant_features tables after plan change."""
     if not DB_ENABLED:
         return
-    from rate_limiter import PLAN_DEFAULTS
+    from rate_limiter import PLAN_DEFAULTS, TIER_FEATURES
+    import json as _json
     admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
     customers = await postgrest.get(
         "billing_customers",
@@ -175,6 +176,8 @@ async def _sync_plan_limits(stripe_customer_id: str, plan_tier: str):
     if not customers:
         return
     tenant_id = customers[0]["tenant_id"]
+
+    # Sync rate limits
     limits = PLAN_DEFAULTS.get(plan_tier, PLAN_DEFAULTS["starter"])
     await postgrest.rpc("upsert_tenant_plans", {
         "p_tenant_id": tenant_id,
@@ -184,6 +187,21 @@ async def _sync_plan_limits(stripe_customer_id: str, plan_tier: str):
         "p_ocr_pages_per_month": limits["ocr_pages_per_month"],
         "p_agent_messages_per_day": limits["agent_messages_per_day"],
     }, token=admin_token)
+
+    # Sync feature flags
+    tier_features = TIER_FEATURES.get(plan_tier, TIER_FEATURES["free"])
+    feat_params = {"p_tenant_id": tenant_id}
+    for key, value in tier_features.items():
+        param_key = f"p_{key}"
+        if key in ("allowed_form_types", "early_access_features"):
+            feat_params[param_key] = _json.dumps(value) if value is not None else None
+        else:
+            feat_params[param_key] = value
+    await postgrest.rpc("upsert_tenant_features", feat_params, token=admin_token)
+
+    # Invalidate feature cache
+    from middleware.feature_gate import invalidate_cache
+    invalidate_cache(tenant_id)
 
 
 # --- Usage endpoints ---
@@ -222,3 +240,71 @@ async def get_usage(request: Request, _auth: str = Depends(require_auth)):
 async def list_plans():
     """List available billing plans (public endpoint)."""
     return {"plans": PLAN_TIERS}
+
+
+# --- Free tier self-service signup ---
+
+class FreeSignupRequest(BaseModel):
+    name: str
+    email: str
+
+# IP-based rate limiting for free signup (10/hr)
+_signup_attempts: dict[str, list[float]] = {}
+_SIGNUP_LIMIT = 10
+_SIGNUP_WINDOW = 3600  # 1 hour
+
+
+def _check_signup_rate(ip: str) -> bool:
+    """Returns True if allowed."""
+    import time
+    now = time.time()
+    attempts = _signup_attempts.get(ip, [])
+    attempts = [t for t in attempts if now - t < _SIGNUP_WINDOW]
+    _signup_attempts[ip] = attempts
+    return len(attempts) < _SIGNUP_LIMIT
+
+
+@router.post("/onboarding/free")
+async def free_signup(req: FreeSignupRequest, request: Request):
+    """Self-service free tier signup. No Stripe, no admin key.
+    Creates tenant with standard deduction + W-2 only features.
+    Login required for all API/portal access (NIST/IRS compliance)."""
+    import time
+
+    if not DB_ENABLED:
+        raise HTTPException(503, "Database required for signup")
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_signup_rate(client_ip):
+        raise HTTPException(429, "Too many signup attempts. Please try again later.")
+    _signup_attempts.setdefault(client_ip, []).append(time.time())
+
+    if not req.name or not req.email:
+        raise HTTPException(400, "Name and email are required")
+
+    from onboarding import provision_tenant
+    try:
+        result = await provision_tenant(
+            tenant_name=req.name,
+            plan_tier="free",
+            email=req.email,
+            admin_username=req.email.split("@")[0],
+        )
+    except Exception as e:
+        logger.error("Free signup failed: %s", e)
+        raise HTTPException(500, "Signup failed. Please try again.")
+
+    return {
+        "tenant_id": result["tenant_id"],
+        "api_key": result["api_key"],
+        "plan_tier": "free",
+        "portal_url": f"https://taxlens-portal.istayintek.com/login?key={result['api_key']}",
+        "features": {
+            "standard_deduction": True,
+            "unlimited_w2": True,
+            "itemized_deductions": False,
+            "schedules_c_d": False,
+            "1099_forms": False,
+            "multi_state": False,
+        },
+    }

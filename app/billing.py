@@ -25,6 +25,7 @@ STRIPE_METERED_PRICES = {
 }
 
 PLAN_TIERS = {
+    "free": {"name": "Free", "price": 0, "description": "Free forever — standard deduction + W-2"},
     "starter": {"name": "Starter", "price": 2900, "description": "$29/mo"},
     "professional": {"name": "Professional", "price": 9900, "description": "$99/mo"},
     "enterprise": {"name": "Enterprise", "price": 29900, "description": "$299/mo"},

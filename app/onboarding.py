@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from db.postgrest_client import postgrest, DB_ENABLED
 from billing import save_billing_customer
-from rate_limiter import PLAN_DEFAULTS
+from rate_limiter import PLAN_DEFAULTS, TIER_FEATURES
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,20 @@ async def provision_tenant(tenant_name: str, plan_tier: str = "starter",
         "p_agent_messages_per_day": limits["agent_messages_per_day"],
     }, token=admin_token)
 
-    # 5. Link Stripe billing
+    # 5. Set feature flags based on plan tier
+    tier_features = TIER_FEATURES.get(plan_tier, TIER_FEATURES["free"])
+    feat_params = {"p_tenant_id": tenant_id}
+    for key, value in tier_features.items():
+        param_key = f"p_{key}"
+        if key == "allowed_form_types":
+            feat_params[param_key] = json.dumps(value) if value is not None else None
+        elif key == "early_access_features":
+            feat_params[param_key] = json.dumps(value) if value else "[]"
+        else:
+            feat_params[param_key] = value
+    await postgrest.rpc("upsert_tenant_features", feat_params, token=admin_token)
+
+    # 6. Link Stripe billing
     if stripe_customer_id:
         await save_billing_customer(
             tenant_id, stripe_customer_id, stripe_subscription_id, plan_tier

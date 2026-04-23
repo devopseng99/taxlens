@@ -12,12 +12,62 @@ logger = logging.getLogger(__name__)
 
 # Default plan limits
 PLAN_DEFAULTS = {
+    "free": {"api_calls_per_minute": 10, "computations_per_day": 5,
+             "ocr_pages_per_month": 20, "agent_messages_per_day": 0},
     "starter": {"api_calls_per_minute": 30, "computations_per_day": 50,
                 "ocr_pages_per_month": 100, "agent_messages_per_day": 100},
     "professional": {"api_calls_per_minute": 120, "computations_per_day": 500,
                      "ocr_pages_per_month": 1000, "agent_messages_per_day": 500},
     "enterprise": {"api_calls_per_minute": 600, "computations_per_day": 999999,
                    "ocr_pages_per_month": 10000, "agent_messages_per_day": 999999},
+}
+
+# Per-tier feature defaults for tenant_features table
+TIER_FEATURES = {
+    "free": {
+        "can_compute_tax": True, "can_upload_documents": True,
+        "can_itemized_deductions": False, "can_schedule_c": False,
+        "can_schedule_d": False, "can_1099_forms": False,
+        "can_multi_state": False, "can_use_mcp": False,
+        "can_use_plaid": False, "can_use_agent": False,
+        "max_filings_per_year": 1, "max_w2_uploads": None,
+        "max_documents": 10, "max_users": 1,
+        "allowed_form_types": ["W-2"],
+        "early_access_enabled": False,
+    },
+    "starter": {
+        "can_compute_tax": True, "can_upload_documents": True,
+        "can_itemized_deductions": True, "can_schedule_c": True,
+        "can_schedule_d": False, "can_1099_forms": True,
+        "can_multi_state": False, "can_use_mcp": True,
+        "can_use_plaid": False, "can_use_agent": False,
+        "max_filings_per_year": None, "max_w2_uploads": None,
+        "max_documents": None, "max_users": 3,
+        "allowed_form_types": ["W-2", "1099-INT", "1099-DIV", "1099-NEC", "1099-MISC", "1099-B"],
+        "early_access_enabled": False,
+    },
+    "professional": {
+        "can_compute_tax": True, "can_upload_documents": True,
+        "can_itemized_deductions": True, "can_schedule_c": True,
+        "can_schedule_d": True, "can_1099_forms": True,
+        "can_multi_state": True, "can_use_mcp": True,
+        "can_use_plaid": True, "can_use_agent": True,
+        "max_filings_per_year": None, "max_w2_uploads": None,
+        "max_documents": None, "max_users": 10,
+        "allowed_form_types": None,  # None = all types allowed
+        "early_access_enabled": False,
+    },
+    "enterprise": {
+        "can_compute_tax": True, "can_upload_documents": True,
+        "can_itemized_deductions": True, "can_schedule_c": True,
+        "can_schedule_d": True, "can_1099_forms": True,
+        "can_multi_state": True, "can_use_mcp": True,
+        "can_use_plaid": True, "can_use_agent": True,
+        "max_filings_per_year": None, "max_w2_uploads": None,
+        "max_documents": None, "max_users": None,
+        "allowed_form_types": None,  # None = all types allowed
+        "early_access_enabled": True,
+    },
 }
 
 

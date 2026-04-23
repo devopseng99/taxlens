@@ -106,12 +106,14 @@ class TestMigrationDiscovery:
         engine = MigrationEngine("postgres://fake:fake@localhost/fake",
                                   migrations_dir=migrations_dir)
         files = engine.discover()
-        assert len(files) == 4
+        assert len(files) == 5
         assert files[0].version == 1
         assert files[1].version == 2
         assert files[2].version == 3
         assert files[3].version == 4
+        assert files[4].version == 5
         assert "create schema" in files[0].description
+        assert "feature" in files[4].description
         assert "roles and rls" in files[1].description
         assert "functions" in files[2].description
         assert "audit log triggers" in files[3].description
