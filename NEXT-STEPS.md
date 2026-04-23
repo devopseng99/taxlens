@@ -322,10 +322,11 @@ Stripe billing integration activated in test mode.
 - `charts/taxlens/values.yaml` — `stripe.enabled: true`
 - `charts/taxlens/templates/deployment.yaml` — Price ID env vars from secret (optional)
 
-**Pending (requires Stripe Dashboard access):**
-- Create 3 products (Starter $29, Professional $99, Enterprise $299) in Stripe Dashboard
-- Run `scripts/setup-stripe-products.sh <price_ids>` to store IDs in K8s secret
-- Test full checkout flow end-to-end
+**Stripe Products (COMPLETED):**
+- Starter: `prod_UOGelXMZCrPHkV` → `price_1TPU7uGghEIUa3k8ek4hg4Qc` ($29/mo)
+- Professional: `prod_UOGeNG1PnY24NL` → `price_1TPU7zGghEIUa3k8uQ672L8W` ($99/mo)
+- Enterprise: `prod_UOGfQ7Zot1FTns` → `price_1TPU85GghEIUa3k83hniJ6iq` ($299/mo)
+- Checkout flow verified: `POST /billing/checkout` → valid Stripe Checkout session URL
 
 ## Wave 23 — Tax Engine Completeness (DEPLOYED — v3.7.0 API)
 

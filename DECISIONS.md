@@ -270,11 +270,11 @@ Updated: 2026-04-23 (v3.4.0 API + v2.6.0 Portal)
 
 118. **Webhook endpoint registered** — `we_1TPT6kGghEIUa3k8AK87ALmk` at `dropit.istayintek.com/api/billing/webhook`. Listens for: checkout.session.completed, customer.subscription.updated/deleted, invoice.paid, invoice.payment_failed. Webhook secret stored in K8s secret.
 
-119. **Price IDs via K8s secret (optional)** — `STRIPE_PRICE_STARTER/PROFESSIONAL/ENTERPRISE` read from `taxlens-stripe` secret keys `price-starter/professional/enterprise` with `optional: true`. Products must be created in Stripe Dashboard (restricted key lacks `rak_product_write`). Script `scripts/setup-stripe-products.sh` patches the secret.
+119. **Stripe products and prices created** — 3 products created via API after key permissions were updated: TaxLens Starter (`prod_UOGelXMZCrPHkV`, $29/mo `price_1TPU7uGghEIUa3k8ek4hg4Qc`), Professional (`prod_UOGeNG1PnY24NL`, $99/mo `price_1TPU7zGghEIUa3k8uQ672L8W`), Enterprise (`prod_UOGfQ7Zot1FTns`, $299/mo `price_1TPU85GghEIUa3k83hniJ6iq`). Price IDs stored in K8s secret `taxlens-stripe` and injected as env vars.
 
 120. **Stripe mode detection** — `STRIPE_MODE` constant: "test" for `sk_test_`/`rk_test_` prefixes, "live" for other keys, "disabled" if empty. Exposed in `/api/health` response so operators can verify environment.
 
-121. **Restricted key permissions documented** — The `rk_test_*` key can: read products/customers/balances, create/list webhooks. Cannot: create products/prices/customers. Products must be created via Stripe Dashboard or a full `sk_test_` key.
+121. **Checkout flow verified end-to-end** — `POST /billing/checkout` with admin key creates a valid Stripe Checkout session URL. Session includes tenant_name and plan_tier in metadata for webhook-driven provisioning. Tested with starter tier — returns `checkout_url` pointing to `checkout.stripe.com`.
 
 ## Wave 23 — Tax Engine Completeness (v3.7.0 API)
 
