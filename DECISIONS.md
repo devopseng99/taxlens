@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.14.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.15.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -349,6 +349,10 @@ Updated: 2026-04-23 (v3.14.0 API + v2.6.0 Portal)
 150. **`get_tax_config` as MCP tool (not just resource)** — Exposes tax brackets, deductions, credit limits, and penalty constants as a callable tool so agents can look up rules before computing. Also available as `taxlens://config/{year}` resource for MCP clients that support resource reads. Tool params (filing_status, tax_year) allow targeted lookups vs the resource which returns a single filing status.
 
 151. **MCP tool signatures mirror engine params** — Every `compute_tax()` parameter is now accessible via MCP `compute_tax_scenario`. Agent clients get the same power as the REST API without needing to construct Pydantic models. The dict-based interface is more natural for LLM tool use.
+
+152. **STRIPE_LIVE_MODE_CONFIRMED safety guard** — Live Stripe keys (`sk_live_`/`rk_live_`) are automatically disabled unless `STRIPE_LIVE_MODE_CONFIRMED=true` is set. Prevents accidental real charges when a live key is provisioned but the system isn't ready for production billing. Test keys (`sk_test_`/`rk_test_`) don't need confirmation.
+
+153. **Separate cutover script (not helm values)** — Stripe live mode cutover uses a dedicated script (`scripts/setup-stripe-live.sh`) that updates K8s secrets + sets the confirmation env var + verifies health. Keeps the Helm chart agnostic to Stripe mode — the same chart works for test and live.
 
 ## PDF Template Provenance
 

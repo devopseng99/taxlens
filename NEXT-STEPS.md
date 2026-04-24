@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.14.0)
+Updated: 2026-04-23 (v3.15.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -512,6 +512,34 @@ Full parameter parity between MCP tools and the tax engine — agents now have t
 **Modified files:**
 - `app/mcp_server.py` — Full parameter parity: 12 new params on compute_tax_scenario, new get_tax_config tool, new resource, updated instructions
 - `app/main.py` — version bump to 3.14.0
+
+## Wave 31 — Stripe Live Mode (DEPLOYED — v3.15.0 API)
+
+Safety guard and cutover infrastructure for switching from Stripe test to live mode.
+
+**Delivered:**
+- [x] `STRIPE_LIVE_MODE_CONFIRMED` env var safety guard — live keys disabled unless explicitly confirmed
+- [x] Live mode detection: `sk_live_`/`rk_live_` keys auto-detected, logged warning when unconfirmed
+- [x] `GET /billing/status` admin endpoint — mode, configured prices, plan list
+- [x] `scripts/setup-stripe-live.sh` — automated cutover: creates secret, sets env, verifies health
+- [x] Script validates key prefixes, requires interactive confirmation for live mode
+- [x] Revert instructions included in script output
+- [x] 465/465 unit tests (13 new), 65/65 E2E tests passing
+
+**New files:**
+- `scripts/setup-stripe-live.sh` — Live mode cutover script with runbook
+- `tests/test_wave31_stripe_live.py` — 13 tests (9 mode detection, 3 plan tiers, 1 status response)
+
+**Modified files:**
+- `app/billing.py` — STRIPE_LIVE_MODE_CONFIRMED guard, warning log on unconfirmed live key
+- `app/billing_routes.py` — `/billing/status` admin endpoint
+- `app/main.py` — version bump to 3.15.0
+
+**To activate live mode:**
+1. Create live products in Stripe Dashboard (3 monthly subscriptions)
+2. Create restricted live API key with billing permissions
+3. Create live webhook at `https://dropit.istayintek.com/api/billing/webhook`
+4. Run: `./scripts/setup-stripe-live.sh <live_key> <webhook_secret> <price_ids...>`
 
 ## Future Enhancements
 
