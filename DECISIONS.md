@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.16.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.16.1 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -365,6 +365,14 @@ Updated: 2026-04-23 (v3.16.0 API + v2.6.0 Portal)
 157. **Rental income flows to Line 9 total_income** — Schedule E net income (or allowed loss after passive activity rules) added to total income alongside wages, interest, dividends, capital gains, business income, and other income. This affects AGI and all downstream calculations (deduction phaseouts, credit eligibility).
 
 158. **HSA limits in get_year_config()** — HSA_LIMIT_SELF and HSA_LIMIT_FAMILY are year-specific (inflation-adjusted), while HSA_CATCHUP is statutory ($1,000 fixed). Rental loss limits (RENTAL_LOSS_LIMIT, phaseout start/end) are also statutory but stored alongside year config for consistent access pattern.
+
+## Wave 34 — Infrastructure Hardening (v3.16.1)
+
+159. **Deep health probe (not always-on)** — Deep mode (`?deep=true`) measures DB latency and verifies storage write capability. Shallow mode (default) just checks DB reachability. Deep mode is for manual debugging, not Kubernetes probes — avoids unnecessary write I/O on every 10-second probe.
+
+160. **Separate readiness from liveness** — `/health` is the liveness probe (always 200 unless process is dead). `/ready` is the readiness probe (503 when DB or storage unavailable). Kubernetes should use readiness to stop routing traffic during DB maintenance without killing the pod.
+
+161. **PostgreSQL backup via pg_dump in pod** — Backup runs `pg_dump` inside the PG pod (avoids needing pg_dump binaries on the host), streams through gzip, and copies to node storage via SSH. 7-day retention with automatic pruning. Restore instructions are printed after each backup.
 
 ## PDF Template Provenance
 

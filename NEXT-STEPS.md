@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.16.0)
+Updated: 2026-04-23 (v3.16.1)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -566,6 +566,25 @@ Coverage expansion: two new income/deduction types that are common for small lan
 - `app/mcp_server.py` — rental/HSA in _build_inputs, compute_tax_scenario, get_tax_config
 - `app/tax_routes.py` — RentalPropertyInput, HSAContributionInput, TaxDraftRequest fields
 - `app/main.py` — version bump to 3.16.0
+
+## Wave 34 — Infrastructure Hardening (DEPLOYED — v3.16.1 API)
+
+Pre-scaling infrastructure improvements for reliability and operability.
+
+**Delivered:**
+- [x] Deep health probe: `/health?deep=true` measures DB latency (ms) + verifies storage write
+- [x] Uptime tracking: `_STARTUP_TIME` + `uptime_seconds` in health response
+- [x] Readiness endpoint: `/ready` returns 503 when DB or storage unavailable
+- [x] PostgreSQL backup: `scripts/backup-pg.sh` with pg_dump → gzip → node storage, 7-day retention
+- [x] Graceful shutdown: metering buffer flushed + structured shutdown logging
+- [x] 506/506 unit tests (15 new), 65/65 E2E tests passing
+
+**New files:**
+- `scripts/backup-pg.sh` — Automated backup with restore instructions
+- `tests/test_wave34_infrastructure.py` — 15 tests (6 backup, 6 health, 3 config)
+
+**Modified files:**
+- `app/main.py` — Deep health, readiness endpoint, uptime tracking, graceful shutdown
 
 ## Future Enhancements
 
