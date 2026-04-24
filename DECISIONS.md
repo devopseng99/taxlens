@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.20.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.21.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -399,6 +399,18 @@ Updated: 2026-04-24 (v3.20.0 API + v2.6.0 Portal)
 170. **Fire-and-forget email pattern** — Email calls in onboarding and billing webhook are wrapped in try/except with logging. Email failure never blocks tenant provisioning or plan upgrades. This follows the graceful feature degradation pattern.
 
 171. **Three email templates** — Welcome (with API key + MCP config), filing deadline reminder, plan upgrade confirmation. All include plain text fallback for email clients that don't render HTML.
+
+## Wave 42 — Depreciation & Form 4562 (v3.21.0)
+
+186. **DepreciableAsset as standalone dataclass** — Separate from BusinessIncome and RentalProperty. Assets track their own MACRS class, recovery year, Section 179 election, and bonus depreciation flag. Depreciation is computed per-asset and then allocated to either Schedule C or Schedule E based on `asset_use`. This allows mixed business/rental portfolios.
+
+187. **Section 179 aggregate limit enforcement** — The $1,250,000 (2025) Section 179 limit applies across ALL assets, not per-asset. The engine totals all Section 179 elections and pro-rates if over the limit. Phaseout begins at $3,130,000 in total asset cost, reducing the limit dollar-for-dollar. Real property (27.5/39-year) is excluded from Section 179.
+
+188. **Bonus depreciation based on placed-in-service year** — TCJA phasedown: 100% (2022), 80% (2023), 60% (2024), 40% (2025), 20% (2026). The engine reads `date_placed_in_service` to determine the bonus rate, defaulting to the tax year if no date is provided. Real property is excluded from bonus depreciation.
+
+189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
+
+190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
 
 ## Wave 41 — Crypto & Digital Assets (v3.20.0)
 

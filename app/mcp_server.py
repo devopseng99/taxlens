@@ -17,6 +17,7 @@ from tax_engine import (
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     EducationExpense, DependentCareExpense, RetirementContribution,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
+    DepreciableAsset,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -91,6 +92,7 @@ def _build_inputs(
     energy_improvements: list[dict] | None = None,
     k1_incomes: list[dict] | None = None,
     crypto_transactions: list[dict] | None = None,
+    depreciable_assets: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -271,6 +273,24 @@ def _build_inputs(
             for ct in crypto_transactions
         ]
 
+    # Build depreciable assets
+    asset_list = None
+    if depreciable_assets:
+        asset_list = [
+            DepreciableAsset(
+                description=a.get("description", ""),
+                cost=a.get("cost", 0),
+                date_placed_in_service=a.get("date_placed_in_service", ""),
+                macrs_class=a.get("macrs_class", 5),
+                asset_use=a.get("asset_use", "business"),
+                business_use_pct=a.get("business_use_pct", 100.0),
+                section_179_elected=a.get("section_179_elected", 0),
+                bonus_depreciation=a.get("bonus_depreciation", True),
+                recovery_year=a.get("recovery_year", 1),
+            )
+            for a in depreciable_assets
+        ]
+
     # Build K-1 incomes
     k1_list = None
     if k1_incomes:
@@ -317,6 +337,7 @@ def _build_inputs(
         energy_improvements=energy_list,
         k1_incomes=k1_list,
         crypto_transactions=crypto_list,
+        depreciable_assets=asset_list,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -367,6 +388,7 @@ def compute_tax_scenario(
     energy_improvements: list[dict] | None = None,
     k1_incomes: list[dict] | None = None,
     crypto_transactions: list[dict] | None = None,
+    depreciable_assets: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -405,9 +427,10 @@ def compute_tax_scenario(
         retirement_contributions: Retirement savings for Saver's Credit (Form 8880).
         rental_properties: Rental real estate (Schedule E).
         hsa_contributions: HSA contributions (Form 8889, above-the-line deduction).
-        energy_improvements: Residential energy credits (Form 5695). Each dict: {"solar_electric", "heat_pump", "insulation", "windows_skylights", "exterior_doors", "battery_storage", "energy_audit", ...}. §25D (solar/wind/geo): 30% no cap. §25C (improvements): 30% up to $3,200/yr ($1,200 envelope + $2,000 heat pump).
+        energy_improvements: Residential energy credits (Form 5695).
         k1_incomes: Schedule K-1 passthrough income from partnerships/S-corps/trusts.
-        crypto_transactions: Digital asset transactions for Form 8949. Each dict: {"asset_name" (e.g., "BTC"), "date_acquired", "date_sold", "proceeds", "cost_basis", "is_long_term" (bool), "exchange", "basis_method" ("fifo"/"lifo"/"hifo"/"specific_id"), "wash_sale_loss_disallowed" (float)}. Flows to Schedule D. Wash sale loss disallowed adjusts cost basis per IRS proposed regs 2024.
+        crypto_transactions: Digital asset transactions for Form 8949.
+        depreciable_assets: Business/rental assets for depreciation (Form 4562). Each dict: {"description", "cost", "date_placed_in_service" (YYYY-MM-DD), "macrs_class" (3/5/7/15/27/39), "asset_use" ("business"/"rental"), "business_use_pct" (0-100), "section_179_elected", "bonus_depreciation" (bool), "recovery_year" (1-based)}. Section 179 limit: $1,250,000 (2025). Bonus: 40% (2025). Real property (27/39-year) not eligible for Section 179 or bonus.
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor).
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold).
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -437,6 +460,7 @@ def compute_tax_scenario(
         energy_improvements=energy_improvements,
         k1_incomes=k1_incomes,
         crypto_transactions=crypto_transactions,
+        depreciable_assets=depreciable_assets,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )
@@ -765,6 +789,13 @@ def get_tax_config(
             "rate": c.ESTIMATED_TAX_PENALTY_RATE,
             "safe_harbor_pct": c.ESTIMATED_TAX_SAFE_HARBOR_PCT,
             "high_agi_prior_year_pct": c.ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI,
+        },
+        "depreciation": {
+            "section_179_limit": c.SECTION_179_LIMIT,
+            "section_179_phaseout_start": c.SECTION_179_PHASEOUT_START,
+            "bonus_rate": c.BONUS_DEPRECIATION_RATES.get(tax_year, 0.0),
+            "bonus_rates_by_year": c.BONUS_DEPRECIATION_RATES,
+            "macrs_classes": sorted(c.MACRS_TABLES.keys()) + [27, 39],
         },
         "energy_credits": {
             "clean_energy_rate": c.ENERGY_CLEAN_CREDIT_RATE,

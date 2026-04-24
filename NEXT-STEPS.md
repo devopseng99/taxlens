@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.20.0)
+Updated: 2026-04-24 (v3.21.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -658,6 +658,30 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
 
+### Wave 42 — Depreciation & Form 4562 (v3.21.0) — 2026-04-24
+
+- [x] DepreciableAsset dataclass: MACRS class, Section 179, bonus depreciation, business/rental use
+- [x] MACRS GDS half-year convention tables (3/5/7/15-year) + straight-line (27.5/39-year)
+- [x] Section 179: $1,250,000 limit (2025), $1,160,000 (2024), aggregate enforcement with phaseout
+- [x] Bonus depreciation: TCJA phasedown (40% for 2025, 60% for 2024), placed-in-service year
+- [x] Real property (27.5/39-year) excluded from Section 179 and bonus depreciation
+- [x] Depreciation order: Section 179 → Bonus → MACRS on remaining basis
+- [x] Business depreciation reduces Schedule C profit; rental depreciation reduces Schedule E
+- [x] Form 4562 summary PDF via ReportLab
+- [x] Full stack: engine + API + MCP + PDF
+- [x] 681/681 unit tests (33 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave42_depreciation.py` — 33 tests (11 MACRS, 4 Section 179, 5 bonus, 13 engine integration)
+
+**Modified files:**
+- `app/tax_engine.py` — DepreciableAsset dataclass, TaxResult depreciation fields, compute_tax() depreciation logic
+- `app/tax_config.py` — MACRS tables, bonus rates, Section 179 limits (2024+2025)
+- `app/tax_routes.py` — DepreciableAssetInput model, TaxDraftRequest field, file_map
+- `app/mcp_server.py` — depreciable_assets param, build/forward logic, get_tax_config depreciation section
+- `app/pdf_generator.py` — generate_form_4562(), generate_all_pdfs() hook
+- `app/main.py` — version 3.21.0
+
 ### Wave 41 — Crypto & Digital Assets (v3.20.0) — 2026-04-24
 
 - [x] CryptoTransaction dataclass: asset_name, exchange, tx_hash, basis_method, wash_sale_loss_disallowed
@@ -722,4 +746,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Depreciation (Form 4562), annualized installment method
+- **Tax engine remaining:** Annualized installment method (Form 2210 Schedule AI)

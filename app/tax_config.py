@@ -69,6 +69,30 @@ ENERGY_IMPROVEMENT_ANNUAL_LIMIT = 3_200     # Total annual cap
 ENERGY_IMPROVEMENT_ENVELOPE_LIMIT = 1_200   # Subcap: insulation, windows, doors, audits
 ENERGY_IMPROVEMENT_HP_LIMIT = 2_000         # Subcap: heat pumps, biomass, HP water heaters
 
+# --- Form 4562 — Depreciation & Section 179 ---
+# MACRS GDS half-year convention percentages (IRS Rev. Proc. 87-57)
+MACRS_TABLES = {
+    3: [0.3333, 0.4445, 0.1481, 0.0741],
+    5: [0.2000, 0.3200, 0.1920, 0.1152, 0.1152, 0.0576],
+    7: [0.1429, 0.2449, 0.1749, 0.1249, 0.0893, 0.0892, 0.0893, 0.0446],
+    15: [0.0500, 0.0950, 0.0855, 0.0770, 0.0693, 0.0623, 0.0590, 0.0590,
+         0.0591, 0.0590, 0.0591, 0.0590, 0.0591, 0.0590, 0.0591, 0.0295],
+}
+# 27.5-year residential rental: straight-line (mid-month convention)
+MACRS_RESIDENTIAL_YEARS = 27.5
+# 39-year nonresidential real property: straight-line (mid-month convention)
+MACRS_NONRESIDENTIAL_YEARS = 39
+
+# TCJA Bonus Depreciation phasedown (by year asset placed in service)
+BONUS_DEPRECIATION_RATES = {
+    2022: 1.00,
+    2023: 0.80,
+    2024: 0.60,
+    2025: 0.40,
+    2026: 0.20,
+}
+# Real property (27.5/39-year) is NOT eligible for bonus depreciation
+
 # These thresholds are statutory (set by ACA/law), not inflation-adjusted
 ADDITIONAL_MEDICARE_THRESHOLD = {
     SINGLE: 200_000, MFJ: 250_000, HOH: 200_000, MFS: 125_000,
@@ -162,6 +186,9 @@ _YEAR_2024 = {
     "HDHP_MIN_DEDUCTIBLE_FAMILY": 3_200,
     "HDHP_MAX_OOP_SELF": 8_050,
     "HDHP_MAX_OOP_FAMILY": 16_100,
+    # Section 179 — Rev. Proc. 2023-34
+    "SECTION_179_LIMIT": 1_160_000,
+    "SECTION_179_PHASEOUT_START": 2_890_000,
     # Estimated tax penalty rate (IRS sets quarterly)
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -236,6 +263,9 @@ _YEAR_2025 = {
     "HDHP_MIN_DEDUCTIBLE_FAMILY": 3_300,
     "HDHP_MAX_OOP_SELF": 8_300,
     "HDHP_MAX_OOP_FAMILY": 16_600,
+    # Section 179 — Rev. Proc. 2024-40
+    "SECTION_179_LIMIT": 1_250_000,
+    "SECTION_179_PHASEOUT_START": 3_130_000,
     # Estimated tax penalty rate
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -306,6 +336,11 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.ENERGY_IMPROVEMENT_ANNUAL_LIMIT = ENERGY_IMPROVEMENT_ANNUAL_LIMIT
     ns.ENERGY_IMPROVEMENT_ENVELOPE_LIMIT = ENERGY_IMPROVEMENT_ENVELOPE_LIMIT
     ns.ENERGY_IMPROVEMENT_HP_LIMIT = ENERGY_IMPROVEMENT_HP_LIMIT
+    # Depreciation
+    ns.MACRS_TABLES = MACRS_TABLES
+    ns.MACRS_RESIDENTIAL_YEARS = MACRS_RESIDENTIAL_YEARS
+    ns.MACRS_NONRESIDENTIAL_YEARS = MACRS_NONRESIDENTIAL_YEARS
+    ns.BONUS_DEPRECIATION_RATES = BONUS_DEPRECIATION_RATES
 
     return ns
 

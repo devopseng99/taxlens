@@ -164,6 +164,66 @@ class CryptoTransaction:
 
 
 @dataclass
+class DepreciableAsset:
+    """Form 4562 — Depreciable business/rental asset (MACRS, Section 179, bonus)."""
+    description: str = ""              # e.g., "Laptop", "Office furniture", "Rental roof"
+    cost: float = 0.0                  # Original cost basis
+    date_placed_in_service: str = ""   # YYYY-MM-DD (determines bonus rate and recovery year)
+    macrs_class: int = 5               # 3, 5, 7, 15, 27 (residential rental), 39 (nonresidential)
+    asset_use: str = "business"        # "business" (Schedule C) or "rental" (Schedule E)
+    business_use_pct: float = 100.0    # Business use percentage (0-100)
+    section_179_elected: float = 0.0   # Amount elected under Section 179
+    bonus_depreciation: bool = True    # Elect bonus depreciation (if eligible)
+    recovery_year: int = 1             # Current recovery year (1-based; 1 = placed in service year)
+
+    @property
+    def is_real_property(self) -> bool:
+        return self.macrs_class in (27, 39)
+
+    def compute_depreciation(self, tax_year: int = 2025) -> float:
+        """Compute current-year depreciation for this asset."""
+        from tax_config import MACRS_TABLES, BONUS_DEPRECIATION_RATES
+        if self.cost <= 0:
+            return 0.0
+
+        business_pct = min(self.business_use_pct, 100.0) / 100.0
+        depreciable_basis = self.cost * business_pct
+
+        # Section 179 reduces depreciable basis (applied in year 1 only)
+        s179 = 0.0
+        if self.recovery_year == 1 and self.section_179_elected > 0 and not self.is_real_property:
+            s179 = min(self.section_179_elected, depreciable_basis)
+            depreciable_basis -= s179
+
+        # Bonus depreciation (year 1 only, not for real property)
+        bonus = 0.0
+        if self.recovery_year == 1 and self.bonus_depreciation and not self.is_real_property:
+            # Determine placed-in-service year for bonus rate
+            pis_year = tax_year
+            if self.date_placed_in_service:
+                try:
+                    pis_year = int(self.date_placed_in_service.split("-")[0])
+                except (ValueError, IndexError):
+                    pis_year = tax_year
+            bonus_rate = BONUS_DEPRECIATION_RATES.get(pis_year, 0.0)
+            bonus = depreciable_basis * bonus_rate
+            depreciable_basis -= bonus
+
+        # MACRS regular depreciation on remaining basis
+        macrs_depr = 0.0
+        if self.is_real_property:
+            # Straight-line for real property
+            years = 27.5 if self.macrs_class == 27 else 39.0
+            macrs_depr = depreciable_basis / years
+        else:
+            table = MACRS_TABLES.get(self.macrs_class)
+            if table and 0 < self.recovery_year <= len(table):
+                macrs_depr = depreciable_basis * table[self.recovery_year - 1]
+
+        return round(s179 + bonus + macrs_depr, 2)
+
+
+@dataclass
 class Deductions:
     mortgage_interest: float = 0.0
     property_tax: float = 0.0
@@ -482,6 +542,15 @@ class TaxResult:
     quarterly_estimated_tax: float = 0.0     # Per-quarter estimated payment
     quarterly_schedule: list = field(default_factory=list)  # 4 quarterly amounts
 
+    # --- Depreciation / Form 4562 ---
+    depreciation_total: float = 0.0          # Total depreciation deduction
+    depreciation_section_179: float = 0.0    # Section 179 portion
+    depreciation_bonus: float = 0.0          # Bonus depreciation portion
+    depreciation_macrs: float = 0.0          # Regular MACRS portion
+    depreciation_business: float = 0.0       # Amount flowing to Schedule C
+    depreciation_rental: float = 0.0         # Amount flowing to Schedule E
+    depreciation_assets_count: int = 0       # Number of depreciable assets
+
     # --- HSA / Form 8889 ---
     hsa_deduction: float = 0.0
     form_8889_contributions: float = 0.0     # Line 2: total personal contributions
@@ -582,6 +651,15 @@ class TaxResult:
                 "wash_sale_disallowed": round(self.crypto_wash_sale_disallowed, 2),
                 "transactions": self.crypto_transactions_count,
             } if self.crypto_transactions_count > 0 else None,
+            "depreciation": {
+                "total": round(self.depreciation_total, 2),
+                "section_179": round(self.depreciation_section_179, 2),
+                "bonus": round(self.depreciation_bonus, 2),
+                "macrs": round(self.depreciation_macrs, 2),
+                "business": round(self.depreciation_business, 2),
+                "rental": round(self.depreciation_rental, 2),
+                "assets": self.depreciation_assets_count,
+            } if self.depreciation_assets_count > 0 else None,
             "energy_credit": round(self.energy_total_credit, 2),
             "energy_clean_credit": round(self.energy_clean_credit, 2),
             "energy_improvement_credit": round(self.energy_improvement_credit, 2),
@@ -920,6 +998,7 @@ def compute_tax(
     energy_improvements: list[EnergyImprovement] | None = None,
     k1_incomes: list[K1Income] | None = None,
     crypto_transactions: list[CryptoTransaction] | None = None,
+    depreciable_assets: list[DepreciableAsset] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1076,6 +1155,70 @@ def compute_tax(
         result.sched_d_long_term_gain = long_term
         result.sched_d_net_gain = short_term + long_term
         result.line_7_capital_gain_loss = result.sched_d_net_gain
+
+    # =======================================================================
+    # FORM 4562 — Depreciation (MACRS, Section 179, Bonus)
+    # =======================================================================
+    depreciable_assets = depreciable_assets or []
+    if depreciable_assets:
+        result.depreciation_assets_count = len(depreciable_assets)
+
+        # Section 179 limit enforcement (aggregate across all assets)
+        total_s179_elected = sum(a.section_179_elected for a in depreciable_assets if not a.is_real_property)
+        s179_limit = c.SECTION_179_LIMIT
+        s179_phaseout_start = c.SECTION_179_PHASEOUT_START
+        total_asset_cost = sum(a.cost * min(a.business_use_pct, 100.0) / 100.0 for a in depreciable_assets)
+
+        # Phaseout: reduce limit dollar-for-dollar above phaseout start
+        if total_asset_cost > s179_phaseout_start:
+            s179_limit = max(0, s179_limit - (total_asset_cost - s179_phaseout_start))
+
+        # Cap total Section 179 at the limit
+        s179_ratio = min(1.0, s179_limit / total_s179_elected) if total_s179_elected > 0 else 1.0
+
+        for asset in depreciable_assets:
+            # Scale down Section 179 if over limit
+            if s179_ratio < 1.0 and asset.section_179_elected > 0:
+                asset.section_179_elected = round(asset.section_179_elected * s179_ratio, 2)
+
+            depr = asset.compute_depreciation(tax_year)
+
+            # Track components
+            biz_pct = min(asset.business_use_pct, 100.0) / 100.0
+            basis = asset.cost * biz_pct
+            s179_part = min(asset.section_179_elected, basis) if asset.recovery_year == 1 and not asset.is_real_property else 0.0
+            remaining = basis - s179_part
+            bonus_part = 0.0
+            if asset.recovery_year == 1 and asset.bonus_depreciation and not asset.is_real_property:
+                pis_year = tax_year
+                if asset.date_placed_in_service:
+                    try:
+                        pis_year = int(asset.date_placed_in_service.split("-")[0])
+                    except (ValueError, IndexError):
+                        pass
+                bonus_rate = c.BONUS_DEPRECIATION_RATES.get(pis_year, 0.0)
+                bonus_part = remaining * bonus_rate
+            macrs_part = depr - s179_part - bonus_part
+
+            result.depreciation_section_179 += s179_part
+            result.depreciation_bonus += bonus_part
+            result.depreciation_macrs += max(0, macrs_part)
+            result.depreciation_total += depr
+
+            if asset.asset_use == "rental":
+                result.depreciation_rental += depr
+            else:
+                result.depreciation_business += depr
+
+        # Business depreciation reduces Schedule C profit
+        if result.depreciation_business > 0:
+            result.sched_c_total_profit -= result.depreciation_business
+            result.line_8a_business_income = result.sched_c_total_profit
+
+        # Rental depreciation reduces Schedule E net income
+        if result.depreciation_rental > 0:
+            result.sched_e_net_income -= result.depreciation_rental
+            result.sched_e_total_expenses += result.depreciation_rental
 
     # =======================================================================
     # SCHEDULE K-1 — Passthrough Income
@@ -1758,6 +1901,8 @@ def compute_tax(
         result.forms_generated.append("Form 5695")
     if result.crypto_transactions_count > 0:
         result.forms_generated.append("Form 8949")
+    if result.depreciation_assets_count > 0:
+        result.forms_generated.append("Form 4562")
     if k1_incomes:
         result.forms_generated.append("Schedule K-1 Summary")
     # State forms

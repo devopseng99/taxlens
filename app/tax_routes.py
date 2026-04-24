@@ -13,6 +13,7 @@ from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
+    DepreciableAsset,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -189,6 +190,19 @@ class CryptoTransactionInput(BaseModel):
     wash_sale_loss_disallowed: float = 0.0
 
 
+class DepreciableAssetInput(BaseModel):
+    """Form 4562 — Depreciable business or rental asset."""
+    description: str = ""
+    cost: float = 0.0
+    date_placed_in_service: str = ""
+    macrs_class: int = Field(default=5, description="MACRS class: 3, 5, 7, 15, 27 (residential), 39 (nonresidential)")
+    asset_use: str = Field(default="business", description="'business' (Schedule C) or 'rental' (Schedule E)")
+    business_use_pct: float = Field(default=100.0, description="Business use percentage (0-100)")
+    section_179_elected: float = 0.0
+    bonus_depreciation: bool = True
+    recovery_year: int = Field(default=1, description="Current recovery year (1 = placed in service year)")
+
+
 class PaymentsInput(BaseModel):
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -238,6 +252,9 @@ class TaxDraftRequest(BaseModel):
 
     # Crypto transactions (Form 8949 / 1099-DA)
     crypto_transactions: list[CryptoTransactionInput] = Field(default=[], description="Digital asset transactions for Form 8949")
+
+    # Depreciable assets (Form 4562)
+    depreciable_assets: list[DepreciableAssetInput] = Field(default=[], description="Business/rental assets for depreciation (MACRS, Section 179, bonus)")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -534,6 +551,20 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for c in req.crypto_transactions
     ] if req.crypto_transactions else None
 
+    # --- Build depreciable assets ---
+    asset_list = [
+        DepreciableAsset(
+            description=a.description, cost=a.cost,
+            date_placed_in_service=a.date_placed_in_service,
+            macrs_class=a.macrs_class, asset_use=a.asset_use,
+            business_use_pct=a.business_use_pct,
+            section_179_elected=a.section_179_elected,
+            bonus_depreciation=a.bonus_depreciation,
+            recovery_year=a.recovery_year,
+        )
+        for a in req.depreciable_assets
+    ] if req.depreciable_assets else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -555,6 +586,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         energy_improvements=energy_list,
         k1_incomes=k1_list,
         crypto_transactions=crypto_list,
+        depreciable_assets=asset_list,
         tax_year=req.tax_year,
     )
 
@@ -646,6 +678,7 @@ async def download_pdf(
         "form_5695": "form_5695.pdf",
         "k1_summary": "k1_summary.pdf",
         "form_8949": "form_8949.pdf",
+        "form_4562": "form_4562.pdf",
         "il_1040": "il_1040.pdf",
     }
 

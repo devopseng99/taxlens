@@ -1378,6 +1378,70 @@ def generate_k1_summary(result: TaxResult) -> BytesIO:
     return buf
 
 
+def generate_form_4562(result: TaxResult) -> BytesIO:
+    """Generate Form 4562 (Depreciation and Amortization) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Form 4562 — Depreciation and Amortization")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Summary")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    lines = [
+        ("Number of assets", str(result.depreciation_assets_count)),
+        ("Section 179 deduction", f"${result.depreciation_section_179:,.2f}"),
+        ("Bonus depreciation", f"${result.depreciation_bonus:,.2f}"),
+        ("MACRS depreciation", f"${result.depreciation_macrs:,.2f}"),
+        ("Total depreciation", f"${result.depreciation_total:,.2f}"),
+    ]
+    for label, val in lines:
+        c.drawString(90, y, f"{label}: {val}")
+        y -= 16
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Allocation")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    alloc = [
+        ("Business use (Schedule C)", f"${result.depreciation_business:,.2f}"),
+        ("Rental use (Schedule E)", f"${result.depreciation_rental:,.2f}"),
+    ]
+    for label, val in alloc:
+        c.drawString(90, y, f"{label}: {val}")
+        y -= 16
+
+    y -= 20
+    c.setFont("Helvetica", 9)
+    c.drawString(72, y, "Section 179: Allows immediate expensing of qualifying business property.")
+    y -= 14
+    c.drawString(72, y, "Bonus depreciation: Additional first-year deduction (TCJA phasedown).")
+    y -= 14
+    c.drawString(72, y, "MACRS: Modified Accelerated Cost Recovery System (GDS half-year convention).")
+    y -= 14
+    c.drawString(72, y, "Real property (27.5/39 yr) uses straight-line; not eligible for §179 or bonus.")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 # ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
@@ -1514,6 +1578,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "k1_summary.pdf"
         p.write_bytes(buf.read())
         paths["k1_summary"] = str(p)
+
+    # Form 4562 — Depreciation (if depreciable assets)
+    if result.depreciation_assets_count > 0:
+        buf = generate_form_4562(result)
+        p = out / "form_4562.pdf"
+        p.write_bytes(buf.read())
+        paths["form_4562"] = str(p)
 
     # Form 2210 — Estimated Tax Penalty (if penalty assessed)
     if result.estimated_tax_penalty > 0:
