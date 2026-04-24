@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.23.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.24.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,14 @@ Updated: 2026-04-24 (v3.23.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 45 — Unemployment, Educator Expenses, Alimony (v3.24.0)
+
+199. **Unemployment compensation fully taxable** — Form 1099-G Box 1 unemployment compensation is fully taxable (post-2020 — the $10,200 ARPA exclusion expired). Flows to line_8_other_income alongside retirement and other income types. Withholding (Box 4) flows to line 25.
+
+200. **Educator expense as above-the-line deduction** — K-12 teachers get $300 above-the-line deduction ($600 MFJ if both spouses are educators). This is a simple flat cap — no phase-out or income test. The $300 limit has been static since 2022.
+
+201. **Alimony split by pre-2019 vs post-2019** — Only alimony under pre-2019 divorce agreements is deductible (payer) / taxable (recipient). Post-TCJA (2019+) divorces: alimony is neither deductible nor taxable. The engine accepts both alimony_paid and alimony_received as separate params since different agreements may apply.
 
 ## Wave 44 — Social Security Benefits (v3.23.0)
 

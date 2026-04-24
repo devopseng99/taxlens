@@ -450,6 +450,15 @@ class SocialSecurityBenefit:
 
 
 @dataclass
+class UnemploymentCompensation:
+    """Form 1099-G — Unemployment compensation."""
+    state: str = ""                 # State that paid benefits
+    compensation: float = 0.0      # Box 1: Total unemployment compensation
+    federal_withheld: float = 0.0  # Box 4: Federal income tax withheld
+    state_withheld: float = 0.0    # Box 11: State income tax withheld
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -597,6 +606,16 @@ class TaxResult:
     retirement_distributions_count: int = 0
     ira_deduction: float = 0.0                    # Traditional IRA above-the-line deduction
 
+    # --- Unemployment Compensation (Form 1099-G) ---
+    unemployment_compensation: float = 0.0   # Total unemployment received
+    unemployment_federal_withheld: float = 0.0
+    unemployment_state_withheld: float = 0.0
+
+    # --- Above-the-line Adjustments ---
+    educator_expense_deduction: float = 0.0  # K-12 teacher max $300 ($600 MFJ both educators)
+    alimony_paid: float = 0.0                # Pre-2019 divorce: above-the-line deduction
+    alimony_received: float = 0.0            # Pre-2019 divorce: taxable income
+
     # --- Social Security Benefits (SSA-1099) ---
     ss_gross_benefits: float = 0.0           # Total SS benefits received
     ss_taxable_amount: float = 0.0           # Taxable portion (0/50/85%)
@@ -728,6 +747,13 @@ class TaxResult:
                 "provisional_income": round(self.ss_provisional_income, 2),
                 "federal_withheld": round(self.ss_federal_withheld, 2),
             } if self.ss_gross_benefits > 0 else None,
+            "unemployment": {
+                "compensation": round(self.unemployment_compensation, 2),
+                "federal_withheld": round(self.unemployment_federal_withheld, 2),
+            } if self.unemployment_compensation > 0 else None,
+            "educator_expense_deduction": round(self.educator_expense_deduction, 2) if self.educator_expense_deduction > 0 else None,
+            "alimony_paid": round(self.alimony_paid, 2) if self.alimony_paid > 0 else None,
+            "alimony_received": round(self.alimony_received, 2) if self.alimony_received > 0 else None,
             "depreciation": {
                 "total": round(self.depreciation_total, 2),
                 "section_179": round(self.depreciation_section_179, 2),
@@ -1079,6 +1105,10 @@ def compute_tax(
     retirement_distributions: list[RetirementDistribution] | None = None,
     ira_contributions: list[IRAContribution] | None = None,
     social_security_benefits: list[SocialSecurityBenefit] | None = None,
+    unemployment_benefits: list[UnemploymentCompensation] | None = None,
+    educator_expenses: float = 0.0,
+    alimony_paid: float = 0.0,
+    alimony_received: float = 0.0,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1361,6 +1391,28 @@ def compute_tax(
         result.sched_e_net_income += result.k1_rental_income
 
     # =======================================================================
+    # FORM 1099-G — Unemployment Compensation
+    # =======================================================================
+    unemployment_benefits = unemployment_benefits or []
+    if unemployment_benefits:
+        for ub in unemployment_benefits:
+            result.unemployment_compensation += ub.compensation
+            result.unemployment_federal_withheld += ub.federal_withheld
+            result.unemployment_state_withheld += ub.state_withheld
+        # Unemployment compensation is fully taxable (Line 7 on 1040)
+        result.line_8_other_income += result.unemployment_compensation
+
+    # =======================================================================
+    # ALIMONY — Pre-2019 Divorce Agreements
+    # =======================================================================
+    if alimony_received > 0:
+        result.alimony_received = alimony_received
+        result.line_8_other_income += alimony_received
+    if alimony_paid > 0:
+        result.alimony_paid = alimony_paid
+        # Deduction applied in ADJUSTMENTS section below
+
+    # =======================================================================
     # SOCIAL SECURITY BENEFITS — IRC §86 Taxability
     # =======================================================================
     social_security_benefits = social_security_benefits or []
@@ -1497,6 +1549,18 @@ def compute_tax(
     # IRA above-the-line deduction
     if result.ira_deduction > 0:
         adjustments += result.ira_deduction
+
+    # Educator expense deduction — K-12 teachers, max $300 per educator
+    if educator_expenses > 0:
+        max_educator = 300.0
+        if filing_status == MFJ:
+            max_educator = 600.0  # Both spouses can be educators
+        result.educator_expense_deduction = min(educator_expenses, max_educator)
+        adjustments += result.educator_expense_deduction
+
+    # Alimony paid — above-the-line deduction (pre-2019 divorce agreements only)
+    if result.alimony_paid > 0:
+        adjustments += result.alimony_paid
 
     result.line_10_adjustments = adjustments
 
@@ -1866,7 +1930,7 @@ def compute_tax(
     # PAYMENTS (Lines 25-33)
     # =======================================================================
 
-    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding + result.retirement_federal_withheld + result.ss_federal_withheld
+    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding + result.retirement_federal_withheld + result.ss_federal_withheld + result.unemployment_federal_withheld
     result.estimated_payments = payments.estimated_federal
     result.line_33_total_payments = (
         result.line_25_federal_withheld
@@ -2061,6 +2125,8 @@ def compute_tax(
         result.forms_generated.append("1099-R Summary")
     if result.ss_gross_benefits > 0:
         result.forms_generated.append("SSA-1099 Summary")
+    if result.unemployment_compensation > 0:
+        result.forms_generated.append("1099-G Summary")
     if result.depreciation_assets_count > 0:
         result.forms_generated.append("Form 4562")
     if k1_incomes:

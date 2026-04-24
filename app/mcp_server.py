@@ -18,6 +18,7 @@ from tax_engine import (
     EducationExpense, DependentCareExpense, RetirementContribution,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
+    UnemploymentCompensation,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -96,6 +97,10 @@ def _build_inputs(
     retirement_distributions: list[dict] | None = None,
     ira_contributions: list[dict] | None = None,
     social_security_benefits: list[dict] | None = None,
+    unemployment_benefits: list[dict] | None = None,
+    educator_expenses: float = 0,
+    alimony_paid: float = 0,
+    alimony_received: float = 0,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -359,6 +364,19 @@ def _build_inputs(
             for s in social_security_benefits
         ]
 
+    # Build unemployment benefits
+    unemp_list = None
+    if unemployment_benefits:
+        unemp_list = [
+            UnemploymentCompensation(
+                state=u.get("state", ""),
+                compensation=u.get("compensation", 0),
+                federal_withheld=u.get("federal_withheld", 0),
+                state_withheld=u.get("state_withheld", 0),
+            )
+            for u in unemployment_benefits
+        ]
+
     return dict(
         filing_status=filing_status,
         filer=filer,
@@ -385,6 +403,10 @@ def _build_inputs(
         retirement_distributions=ret_dist_list,
         ira_contributions=ira_list,
         social_security_benefits=ss_list,
+        unemployment_benefits=unemp_list,
+        educator_expenses=educator_expenses,
+        alimony_paid=alimony_paid,
+        alimony_received=alimony_received,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -439,6 +461,10 @@ def compute_tax_scenario(
     retirement_distributions: list[dict] | None = None,
     ira_contributions: list[dict] | None = None,
     social_security_benefits: list[dict] | None = None,
+    unemployment_benefits: list[dict] | None = None,
+    educator_expenses: float = 0,
+    alimony_paid: float = 0,
+    alimony_received: float = 0,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -484,6 +510,10 @@ def compute_tax_scenario(
         retirement_distributions: Form 1099-R retirement distributions. Each dict: {"payer_name", "gross_distribution", "taxable_amount", "taxable_amount_not_determined" (bool), "federal_withheld", "distribution_code" ("1"=early, "7"=normal, "G"=rollover), "is_roth" (bool), "is_early" (bool)}. Roth and rollover distributions are non-taxable. Early distributions (code "1") incur 10% penalty.
         ira_contributions: Traditional IRA contributions for above-the-line deduction. Each dict: {"contributor" ("filer"/"spouse"), "contribution_amount", "age_50_plus" (bool)}. Limit: $7,000 ($8,000 if 50+).
         social_security_benefits: SSA-1099 Social Security benefits. Each dict: {"recipient" ("filer"/"spouse"), "gross_benefits", "federal_withheld"}. Taxable 0-85% based on provisional income (IRC §86). Single: base $25K/upper $34K. MFJ: base $32K/upper $44K.
+        unemployment_benefits: Form 1099-G unemployment compensation. Each dict: {"state", "compensation", "federal_withheld", "state_withheld"}. Fully taxable.
+        educator_expenses: K-12 teacher qualified expenses (above-the-line, max $300, $600 MFJ both educators).
+        alimony_paid: Alimony paid under pre-2019 divorce agreement (above-the-line deduction).
+        alimony_received: Alimony received under pre-2019 divorce agreement (taxable income).
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor).
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold).
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -517,6 +547,10 @@ def compute_tax_scenario(
         retirement_distributions=retirement_distributions,
         ira_contributions=ira_contributions,
         social_security_benefits=social_security_benefits,
+        unemployment_benefits=unemployment_benefits,
+        educator_expenses=educator_expenses,
+        alimony_paid=alimony_paid,
+        alimony_received=alimony_received,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.23.0)
+Updated: 2026-04-24 (v3.24.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -658,6 +658,26 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
 
+### Wave 45 — Unemployment, Educator Expenses, Alimony (v3.24.0) — 2026-04-24
+
+- [x] UnemploymentCompensation dataclass: Form 1099-G (state, compensation, withholding)
+- [x] Unemployment compensation fully taxable → other income
+- [x] Educator expense deduction: $300 single ($600 MFJ both educators), above-the-line
+- [x] Alimony paid: above-the-line deduction (pre-2019 divorce only)
+- [x] Alimony received: taxable income (pre-2019 divorce only)
+- [x] 1099-G withholding → line 25 federal withheld
+- [x] Full stack: engine + API + MCP
+- [x] 746/746 unit tests (19 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave45_unemployment_educator.py` — 19 tests (2 dataclass, 6 unemployment, 6 educator, 5 alimony)
+
+**Modified files:**
+- `app/tax_engine.py` — UnemploymentCompensation dataclass, TaxResult fields, compute_tax() processing
+- `app/tax_routes.py` — UnemploymentCompensationInput model, TaxDraftRequest fields
+- `app/mcp_server.py` — unemployment_benefits + educator_expenses + alimony params
+- `app/main.py` — version 3.24.0
+
 ### Wave 44 — Social Security Benefits (v3.23.0) — 2026-04-24
 
 - [x] SocialSecurityBenefit dataclass: recipient, gross_benefits, federal_withheld
@@ -793,4 +813,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** IRA income-based phaseout (active plan participants), Annualized installment method (Form 2210 Schedule AI), Form 8606 (nondeductible IRA basis tracking), Educator expense deduction ($300 above-the-line)
+- **Tax engine remaining:** IRA income-based phaseout (active plan participants), Annualized installment method (Form 2210 Schedule AI), Form 8606 (nondeductible IRA basis tracking), gambling income/losses, foreign tax credit (Form 1116)

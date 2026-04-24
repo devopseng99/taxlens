@@ -14,6 +14,7 @@ from tax_engine import (
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
+    UnemploymentCompensation,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -216,6 +217,14 @@ class SocialSecurityBenefitInput(BaseModel):
     federal_withheld: float = 0.0
 
 
+class UnemploymentCompensationInput(BaseModel):
+    """Form 1099-G — Unemployment compensation."""
+    state: str = ""
+    compensation: float = 0.0
+    federal_withheld: float = 0.0
+    state_withheld: float = 0.0
+
+
 class DepreciableAssetInput(BaseModel):
     """Form 4562 — Depreciable business or rental asset."""
     description: str = ""
@@ -290,6 +299,14 @@ class TaxDraftRequest(BaseModel):
 
     # Social Security benefits (SSA-1099)
     social_security_benefits: list[SocialSecurityBenefitInput] = Field(default=[], description="SSA-1099 Social Security benefits (taxable 0-85% based on income)")
+
+    # Unemployment compensation (Form 1099-G)
+    unemployment_benefits: list[UnemploymentCompensationInput] = Field(default=[], description="Form 1099-G unemployment compensation (fully taxable)")
+
+    # Above-the-line adjustments
+    educator_expenses: float = Field(default=0, description="K-12 teacher expenses (max $300, $600 MFJ both educators)")
+    alimony_paid: float = Field(default=0, description="Alimony paid under pre-2019 divorce agreement (above-the-line deduction)")
+    alimony_received: float = Field(default=0, description="Alimony received under pre-2019 divorce agreement (taxable income)")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -633,6 +650,15 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for s in req.social_security_benefits
     ] if req.social_security_benefits else None
 
+    # --- Build unemployment benefits ---
+    unemployment_list = [
+        UnemploymentCompensation(
+            state=u.state, compensation=u.compensation,
+            federal_withheld=u.federal_withheld, state_withheld=u.state_withheld,
+        )
+        for u in req.unemployment_benefits
+    ] if req.unemployment_benefits else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -658,6 +684,10 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         retirement_distributions=retirement_list,
         ira_contributions=ira_list,
         social_security_benefits=ss_list,
+        unemployment_benefits=unemployment_list,
+        educator_expenses=req.educator_expenses,
+        alimony_paid=req.alimony_paid,
+        alimony_received=req.alimony_received,
         tax_year=req.tax_year,
     )
 
