@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.13.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.14.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -343,6 +343,12 @@ Updated: 2026-04-23 (v3.13.0 API + v2.6.0 Portal)
 147. **Backward-compatible module-level exports** — `from tax_config import *` still works and exports 2025 constants. Existing tests, MCP server, state engine, and PDF generator continue using module-level names unchanged. Only `compute_tax()` uses the year-specific config object.
 
 148. **2024 constants from Rev. Proc. 2023-34** — Full 2024 federal tax constants: brackets (single 10% at $11,600 vs 2025's $11,925), standard deduction ($14,600 vs $15,000), SS wage base ($168,600 vs $176,100), AMT exemption ($85,700 vs $88,100), QBI limit ($182,100 vs $191,950), EITC max 0-child ($632 vs $649), IL exemption ($2,625 vs $2,775).
+
+149. **MCP parity via `_build_inputs` expansion** — Rather than creating separate MCP-specific engine wrappers, all new engine params (dependents, education, care, retirement, multi-state, penalty) are exposed through `_build_inputs()` dict-to-dataclass conversion. MCP clients send plain dicts, `_build_inputs` constructs the correct dataclass instances. Same pattern as the original implementation, just extended.
+
+150. **`get_tax_config` as MCP tool (not just resource)** — Exposes tax brackets, deductions, credit limits, and penalty constants as a callable tool so agents can look up rules before computing. Also available as `taxlens://config/{year}` resource for MCP clients that support resource reads. Tool params (filing_status, tax_year) allow targeted lookups vs the resource which returns a single filing status.
+
+151. **MCP tool signatures mirror engine params** — Every `compute_tax()` parameter is now accessible via MCP `compute_tax_scenario`. Agent clients get the same power as the REST API without needing to construct Pydantic models. The dict-based interface is more natural for LLM tool use.
 
 ## PDF Template Provenance
 

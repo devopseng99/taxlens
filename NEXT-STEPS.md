@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.13.0)
+Updated: 2026-04-23 (v3.14.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -487,6 +487,31 @@ Multi-year support: compute taxes for both 2024 and 2025 tax years with year-spe
 - `app/tax_routes.py` — `TaxDraftRequest.tax_year`, passed to compute_tax()
 - `app/mcp_server.py` — `tax_year` param on compute_tax_scenario and _build_inputs
 - `app/main.py` — version bump to 3.13.0
+
+## Wave 30 — MCP Parity (DEPLOYED — v3.14.0 API)
+
+Full parameter parity between MCP tools and the tax engine — agents now have the same capabilities as the REST API.
+
+**Delivered:**
+- [x] Structured dependents: `dependents` list with DOB, relationship, disabled/student flags → age-based CTC/EITC/CDCC eligibility
+- [x] Education expenses: `education_expenses` list → AOTC ($2,500 max, 40% refundable) + LLC ($2,000 max)
+- [x] Dependent care expenses: `dependent_care_expenses` list → CDCC (Form 2441)
+- [x] Retirement contributions: `retirement_contributions` list → Saver's Credit (Form 8880)
+- [x] Multi-state filing: `work_states` + `days_worked_by_state` → nonresident returns + credit allocation
+- [x] Penalty estimation: `prior_year_tax` + `prior_year_agi` → Form 2210 safe harbor check
+- [x] Additional deductions: `medical_expenses`, `charitable_noncash`, `other_income`, `additional_withholding`
+- [x] New `get_tax_config` tool: brackets, deductions, credit limits, penalty constants by year + filing status
+- [x] New `taxlens://config/{year}` MCP resource
+- [x] `optimize_deductions` upgraded: `tax_year`, `charitable_noncash`, `medical_expenses` params
+- [x] Updated MCP instructions with full capability list
+- [x] 452/452 unit tests (37 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave30_mcp_parity.py` — 37 tests (4 dependents, 2 education, 2 care, 2 retirement, 2 multi-state, 2 penalty, 4 additional params, 7 tax config, 8 build inputs, 2 optimize, 2 compare)
+
+**Modified files:**
+- `app/mcp_server.py` — Full parameter parity: 12 new params on compute_tax_scenario, new get_tax_config tool, new resource, updated instructions
+- `app/main.py` — version bump to 3.14.0
 
 ## Future Enhancements
 
