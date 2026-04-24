@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
-    AdditionalIncome, DividendIncome, Payments, TaxResult,
+    AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -35,6 +35,17 @@ class PersonInput(BaseModel):
     address_city: str = ""
     address_state: str = "IL"
     address_zip: str = ""
+
+
+class DependentInput(BaseModel):
+    first_name: str = ""
+    last_name: str = ""
+    ssn: str = "XXX-XX-XXXX"
+    date_of_birth: str = Field(default="", description="YYYY-MM-DD format")
+    relationship: str = Field(default="", description="son, daughter, stepchild, foster, sibling, other")
+    months_lived_with: int = Field(default=12, description="Months lived with filer (EITC requires > 6)")
+    is_disabled: bool = False
+    is_student: bool = False
 
 
 class CapitalTransactionInput(BaseModel):
@@ -105,7 +116,8 @@ class TaxDraftRequest(BaseModel):
     username: str = Field(..., description="TaxLens username (for document lookup)")
     filer: PersonInput = PersonInput()
     spouse: Optional[PersonInput] = None
-    num_dependents: int = 0
+    num_dependents: int = Field(default=0, description="Number of dependents (backward compat — prefer 'dependents' list)")
+    dependents: list[DependentInput] = Field(default=[], description="Structured dependent records with DOB for credit eligibility")
 
     # Multi-state support
     residence_state: str = Field(default="IL", description="Two-letter state code where filer lives")
@@ -347,6 +359,17 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for b in req.businesses
     ]
 
+    # --- Build structured dependents ---
+    dep_list = [
+        Dependent(
+            first_name=d.first_name, last_name=d.last_name, ssn=d.ssn,
+            date_of_birth=d.date_of_birth, relationship=d.relationship,
+            months_lived_with=d.months_lived_with,
+            is_disabled=d.is_disabled, is_student=d.is_student,
+        )
+        for d in req.dependents
+    ] if req.dependents else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -357,6 +380,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         payments=payments,
         spouse=spouse,
         num_dependents=req.num_dependents,
+        dependents=dep_list,
         businesses=biz_list + nec_businesses,
         residence_state=req.residence_state,
         work_states=req.work_states,

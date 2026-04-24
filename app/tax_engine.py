@@ -28,6 +28,63 @@ class PersonInfo:
 
 
 @dataclass
+class Dependent:
+    """Structured dependent record for accurate credit eligibility."""
+    first_name: str = ""
+    last_name: str = ""
+    ssn: str = "XXX-XX-XXXX"
+    date_of_birth: str = ""        # YYYY-MM-DD
+    relationship: str = ""          # "son", "daughter", "stepchild", "foster", "sibling", "other"
+    months_lived_with: int = 12     # Months lived with filer (EITC requires > 6)
+    is_disabled: bool = False       # Permanently disabled (age waiver for CTC/EITC)
+    is_student: bool = False        # Full-time student (EITC age 19→24)
+
+    def age_at_year_end(self, tax_year: int = 2025) -> int:
+        """Calculate age at end of tax year. Returns -1 if DOB not set."""
+        if not self.date_of_birth:
+            return -1
+        try:
+            parts = self.date_of_birth.split("-")
+            birth_year = int(parts[0])
+            birth_month = int(parts[1]) if len(parts) > 1 else 1
+            birth_day = int(parts[2]) if len(parts) > 2 else 1
+            # Age at Dec 31 of tax year
+            age = tax_year - birth_year
+            if (birth_month, birth_day) > (12, 31):
+                age -= 1
+            return max(0, age)
+        except (ValueError, IndexError):
+            return -1
+
+    def qualifies_ctc(self, tax_year: int = 2025) -> bool:
+        """Under 17 at year end (or disabled with no age limit for ODC)."""
+        age = self.age_at_year_end(tax_year)
+        if age == -1:
+            return True  # No DOB = assume qualifies (backward compat)
+        return age < 17
+
+    def qualifies_eitc(self, tax_year: int = 2025) -> bool:
+        """EITC qualifying child: under 19, or under 24 if student, or any age if disabled."""
+        if self.is_disabled:
+            return True
+        age = self.age_at_year_end(tax_year)
+        if age == -1:
+            return True  # No DOB = assume qualifies
+        if self.is_student:
+            return age < 24
+        return age < 19
+
+    def qualifies_cdcc(self, tax_year: int = 2025) -> bool:
+        """CDCC: under 13 at year end, or disabled (any age)."""
+        if self.is_disabled:
+            return True
+        age = self.age_at_year_end(tax_year)
+        if age == -1:
+            return True  # No DOB = assume qualifies
+        return age < 13
+
+
+@dataclass
 class StateWageInfo:
     """Per-state wage/withholding from a single W-2."""
     state: str = ""                  # Two-letter state code (e.g., "NY", "NJ")
@@ -180,6 +237,10 @@ class TaxResult:
     filer: Optional[PersonInfo] = None
     spouse: Optional[PersonInfo] = None
     num_dependents: int = 0
+    dependents: list = field(default_factory=list)  # list[Dependent]
+    num_ctc_children: int = 0      # Under 17 (or disabled)
+    num_eitc_children: int = 0     # Under 19/24-student/disabled
+    num_cdcc_dependents: int = 0   # Under 13 or disabled
 
     # --- Form 1040 lines ---
     # Income
@@ -314,6 +375,15 @@ class TaxResult:
             "filing_status": self.filing_status,
             "tax_year": self.tax_year,
             "filer_name": f"{self.filer.first_name} {self.filer.last_name}" if self.filer else "",
+            "num_dependents": self.num_dependents,
+            "num_ctc_children": self.num_ctc_children,
+            "num_eitc_children": self.num_eitc_children,
+            "dependents": [
+                {"name": f"{d.first_name} {d.last_name}", "dob": d.date_of_birth,
+                 "relationship": d.relationship, "ctc": d.qualifies_ctc(),
+                 "eitc": d.qualifies_eitc(), "cdcc": d.qualifies_cdcc()}
+                for d in self.dependents
+            ] if self.dependents else [],
             "residence_state": self.residence_state,
             "total_income": round(self.line_9_total_income, 2),
             "agi": round(self.line_11_agi, 2),
@@ -646,6 +716,7 @@ def compute_tax(
     payments: Payments,
     spouse: Optional[PersonInfo] = None,
     num_dependents: int = 0,
+    dependents: list[Dependent] | None = None,
     businesses: list[BusinessIncome] | None = None,
     residence_state: str = "IL",
     work_states: list[str] | None = None,
@@ -663,6 +734,19 @@ def compute_tax(
         raise ValueError(f"Invalid filing status: {filing_status}")
 
     businesses = businesses or []
+    dependents = dependents or []
+
+    # Derive dependent counts from structured records (or fall back to integer)
+    if dependents:
+        num_dependents = len(dependents)
+        num_ctc_children = sum(1 for d in dependents if d.qualifies_ctc(TAX_YEAR))
+        num_eitc_children = sum(1 for d in dependents if d.qualifies_eitc(TAX_YEAR))
+        num_cdcc_dependents = sum(1 for d in dependents if d.qualifies_cdcc(TAX_YEAR))
+    else:
+        # Backward compat: no structured dependents, use num_dependents for all
+        num_ctc_children = num_dependents
+        num_eitc_children = num_dependents
+        num_cdcc_dependents = 0  # Can't determine without age info
 
     result = TaxResult(
         draft_id=uuid.uuid4().hex[:12],
@@ -671,6 +755,10 @@ def compute_tax(
         filer=filer,
         spouse=spouse,
         num_dependents=num_dependents,
+        dependents=dependents,
+        num_ctc_children=num_ctc_children,
+        num_eitc_children=num_eitc_children,
+        num_cdcc_dependents=num_cdcc_dependents,
         w2s=w2s,
         businesses=businesses,
         capital_transactions=additional.capital_transactions,
@@ -942,9 +1030,9 @@ def compute_tax(
     # CREDITS
     # =======================================================================
 
-    # Child Tax Credit
-    if num_dependents > 0:
-        ctc_base = num_dependents * CTC_PER_CHILD
+    # Child Tax Credit (uses num_ctc_children — under 17 or disabled)
+    if num_ctc_children > 0:
+        ctc_base = num_ctc_children * CTC_PER_CHILD
         phaseout_start = CTC_PHASEOUT_START[filing_status]
         if result.line_11_agi > phaseout_start:
             reduction = ((result.line_11_agi - phaseout_start) // 1000) * CTC_PHASEOUT_RATE
@@ -1050,7 +1138,7 @@ def compute_tax(
 
     # EITC: refundable credit for low-to-moderate income workers
     # MFS filers generally ineligible (we disallow here; IRS has limited exception)
-    num_eitc_children = min(num_dependents, 3)  # 3+ treated as 3
+    num_eitc_children = min(num_eitc_children, 3)  # 3+ treated as 3
     earned_income = result.line_1a_wages + max(0, result.sched_se_taxable)
     result.eitc_earned_income = earned_income
 

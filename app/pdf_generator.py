@@ -170,7 +170,11 @@ def generate_summary_page(result: TaxResult) -> BytesIO:
         y = draw_info_row(c, "City/St/Zip:", f"{filer.address_city}, {filer.address_state} {filer.address_zip}", y)
     y = draw_info_row(c, "Filing Status:", status_labels.get(result.filing_status, result.filing_status), y)
     if result.num_dependents > 0:
-        y = draw_info_row(c, "Dependents:", str(result.num_dependents), y)
+        if result.dependents:
+            dep_names = ", ".join(f"{d.first_name} {d.last_name}" for d in result.dependents if d.first_name)
+            y = draw_info_row(c, "Dependents:", f"{result.num_dependents} — {dep_names}" if dep_names else str(result.num_dependents), y)
+        else:
+            y = draw_info_row(c, "Dependents:", str(result.num_dependents), y)
     y -= 5
 
     # Federal summary
