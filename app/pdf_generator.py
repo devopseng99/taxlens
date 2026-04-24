@@ -1442,6 +1442,64 @@ def generate_form_4562(result: TaxResult) -> BytesIO:
     return buf
 
 
+def generate_retirement_summary(result: TaxResult) -> BytesIO:
+    """Generate 1099-R / IRA summary PDF via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Retirement Income Summary")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Form 1099-R Distributions")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    lines = [
+        ("Number of 1099-R forms", str(result.retirement_distributions_count)),
+        ("Gross distributions", f"${result.retirement_gross_distributions:,.2f}"),
+        ("Taxable amount", f"${result.retirement_taxable_amount:,.2f}"),
+        ("Federal tax withheld", f"${result.retirement_federal_withheld:,.2f}"),
+    ]
+    if result.retirement_early_penalty > 0:
+        lines.append(("Early withdrawal penalty (10%)", f"${result.retirement_early_penalty:,.2f}"))
+    for label, val in lines:
+        c.drawString(90, y, f"{label}: {val}")
+        y -= 16
+
+    if result.ira_deduction > 0:
+        y -= 10
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(72, y, "IRA Deduction")
+        y -= 20
+        c.setFont("Helvetica", 10)
+        c.drawString(90, y, f"Traditional IRA deduction (above-the-line): ${result.ira_deduction:,.2f}")
+        y -= 16
+
+    y -= 20
+    c.setFont("Helvetica", 9)
+    c.drawString(72, y, "Distribution codes: 1=early, 7=normal, G=rollover (non-taxable).")
+    y -= 14
+    c.drawString(72, y, "Roth distributions are generally tax-free. Early withdrawals incur 10% penalty.")
+    y -= 14
+    c.drawString(72, y, "IRA contribution limit: $7,000 ($8,000 if age 50+) per year.")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 # ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
@@ -1578,6 +1636,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "k1_summary.pdf"
         p.write_bytes(buf.read())
         paths["k1_summary"] = str(p)
+
+    # Retirement Summary — 1099-R / IRA (if retirement distributions)
+    if result.retirement_distributions_count > 0:
+        buf = generate_retirement_summary(result)
+        p = out / "retirement_summary.pdf"
+        p.write_bytes(buf.read())
+        paths["retirement_summary"] = str(p)
 
     # Form 4562 — Depreciation (if depreciable assets)
     if result.depreciation_assets_count > 0:

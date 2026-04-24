@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.21.0)
+Updated: 2026-04-24 (v3.22.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -658,6 +658,30 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
 
+### Wave 43 — Retirement Income (v3.22.0) — 2026-04-24
+
+- [x] RetirementDistribution dataclass: distribution codes (1/7/G/H), Roth, early withdrawal
+- [x] IRAContribution dataclass: filer/spouse, contribution amount, age 50+ catch-up
+- [x] 1099-R processing: taxable distributions → other income, withholding → line 25
+- [x] Early withdrawal penalty: 10% on code "1" early distributions
+- [x] Roth/rollover exclusions: non-taxable per distribution code routing
+- [x] IRA deduction: above-the-line, $7,000 limit ($8,000 with $1,000 catch-up)
+- [x] MFJ dual IRA contributions: each spouse gets independent limit
+- [x] Retirement summary PDF via ReportLab
+- [x] Full stack: engine + API + MCP + PDF
+- [x] 708/708 unit tests (27 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave43_retirement.py` — 27 tests (9 dataclass, 2 IRA, 16 engine integration)
+
+**Modified files:**
+- `app/tax_engine.py` — RetirementDistribution + IRAContribution dataclasses, TaxResult fields, compute_tax() retirement/IRA logic
+- `app/tax_config.py` — IRA limits ($7,000), catch-up ($1,000), early withdrawal penalty rate (10%)
+- `app/tax_routes.py` — RetirementDistributionInput + IRAContributionInput models, TaxDraftRequest fields, file_map
+- `app/mcp_server.py` — retirement_distributions + ira_contributions params, build/forward logic, get_tax_config retirement section
+- `app/pdf_generator.py` — generate_retirement_summary(), generate_all_pdfs() hook
+- `app/main.py` — version 3.22.0
+
 ### Wave 42 — Depreciation & Form 4562 (v3.21.0) — 2026-04-24
 
 - [x] DepreciableAsset dataclass: MACRS class, Section 179, bonus depreciation, business/rental use
@@ -746,4 +770,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Annualized installment method (Form 2210 Schedule AI)
+- **Tax engine remaining:** IRA income-based phaseout (active plan participants), Annualized installment method (Form 2210 Schedule AI), Form 8606 (nondeductible IRA basis tracking)

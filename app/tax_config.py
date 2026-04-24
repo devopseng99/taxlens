@@ -56,6 +56,8 @@ SALT_CAP_MFS = 5_000
 STUDENT_LOAN_INTEREST_MAX = 2_500
 MEDICAL_AGI_THRESHOLD = 0.075
 HSA_CATCHUP = 1_000                  # Age 55+ catch-up (statutory, not indexed)
+IRA_CATCHUP = 1_000                   # Age 50+ catch-up (statutory, not indexed)
+EARLY_WITHDRAWAL_PENALTY_RATE = 0.10  # 10% early withdrawal from retirement acct
 RENTAL_LOSS_LIMIT = 25_000           # Passive activity loss limit (statutory)
 RENTAL_LOSS_PHASEOUT_START = 100_000 # AGI where $25K allowance starts phasing out
 RENTAL_LOSS_PHASEOUT_END = 150_000   # AGI where allowance is fully phased out
@@ -189,6 +191,8 @@ _YEAR_2024 = {
     # Section 179 — Rev. Proc. 2023-34
     "SECTION_179_LIMIT": 1_160_000,
     "SECTION_179_PHASEOUT_START": 2_890_000,
+    # IRA — Rev. Proc. 2023-34
+    "IRA_CONTRIBUTION_LIMIT": 7_000,
     # Estimated tax penalty rate (IRS sets quarterly)
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -266,6 +270,8 @@ _YEAR_2025 = {
     # Section 179 — Rev. Proc. 2024-40
     "SECTION_179_LIMIT": 1_250_000,
     "SECTION_179_PHASEOUT_START": 3_130_000,
+    # IRA — Rev. Proc. 2024-40
+    "IRA_CONTRIBUTION_LIMIT": 7_000,
     # Estimated tax penalty rate
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -337,6 +343,8 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.ENERGY_IMPROVEMENT_ENVELOPE_LIMIT = ENERGY_IMPROVEMENT_ENVELOPE_LIMIT
     ns.ENERGY_IMPROVEMENT_HP_LIMIT = ENERGY_IMPROVEMENT_HP_LIMIT
     # Depreciation
+    ns.IRA_CATCHUP = IRA_CATCHUP
+    ns.EARLY_WITHDRAWAL_PENALTY_RATE = EARLY_WITHDRAWAL_PENALTY_RATE
     ns.MACRS_TABLES = MACRS_TABLES
     ns.MACRS_RESIDENTIAL_YEARS = MACRS_RESIDENTIAL_YEARS
     ns.MACRS_NONRESIDENTIAL_YEARS = MACRS_NONRESIDENTIAL_YEARS

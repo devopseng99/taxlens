@@ -13,7 +13,7 @@ from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
-    DepreciableAsset,
+    DepreciableAsset, RetirementDistribution, IRAContribution,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -190,6 +190,25 @@ class CryptoTransactionInput(BaseModel):
     wash_sale_loss_disallowed: float = 0.0
 
 
+class RetirementDistributionInput(BaseModel):
+    """Form 1099-R — Retirement distribution."""
+    payer_name: str = ""
+    gross_distribution: float = 0.0
+    taxable_amount: float = 0.0
+    taxable_amount_not_determined: bool = False
+    federal_withheld: float = 0.0
+    distribution_code: str = "7"
+    is_roth: bool = False
+    is_early: bool = False
+
+
+class IRAContributionInput(BaseModel):
+    """Traditional IRA contribution."""
+    contributor: str = "filer"
+    contribution_amount: float = 0.0
+    age_50_plus: bool = False
+
+
 class DepreciableAssetInput(BaseModel):
     """Form 4562 — Depreciable business or rental asset."""
     description: str = ""
@@ -255,6 +274,12 @@ class TaxDraftRequest(BaseModel):
 
     # Depreciable assets (Form 4562)
     depreciable_assets: list[DepreciableAssetInput] = Field(default=[], description="Business/rental assets for depreciation (MACRS, Section 179, bonus)")
+
+    # Retirement income (Form 1099-R)
+    retirement_distributions: list[RetirementDistributionInput] = Field(default=[], description="1099-R retirement distributions (pension, IRA, 401k)")
+
+    # IRA contributions (deductible traditional IRA)
+    ira_contributions: list[IRAContributionInput] = Field(default=[], description="Traditional IRA contributions for above-the-line deduction")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -565,6 +590,29 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for a in req.depreciable_assets
     ] if req.depreciable_assets else None
 
+    # --- Build retirement distributions ---
+    retirement_list = [
+        RetirementDistribution(
+            payer_name=r.payer_name, gross_distribution=r.gross_distribution,
+            taxable_amount=r.taxable_amount,
+            taxable_amount_not_determined=r.taxable_amount_not_determined,
+            federal_withheld=r.federal_withheld,
+            distribution_code=r.distribution_code,
+            is_roth=r.is_roth, is_early=r.is_early,
+        )
+        for r in req.retirement_distributions
+    ] if req.retirement_distributions else None
+
+    # --- Build IRA contributions ---
+    ira_list = [
+        IRAContribution(
+            contributor=i.contributor,
+            contribution_amount=i.contribution_amount,
+            age_50_plus=i.age_50_plus,
+        )
+        for i in req.ira_contributions
+    ] if req.ira_contributions else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -587,6 +635,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         k1_incomes=k1_list,
         crypto_transactions=crypto_list,
         depreciable_assets=asset_list,
+        retirement_distributions=retirement_list,
+        ira_contributions=ira_list,
         tax_year=req.tax_year,
     )
 
@@ -679,6 +729,7 @@ async def download_pdf(
         "k1_summary": "k1_summary.pdf",
         "form_8949": "form_8949.pdf",
         "form_4562": "form_4562.pdf",
+        "retirement_summary": "retirement_summary.pdf",
         "il_1040": "il_1040.pdf",
     }
 

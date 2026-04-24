@@ -403,6 +403,45 @@ class K1Income:
 
 
 @dataclass
+class RetirementDistribution:
+    """Form 1099-R — Distributions from retirement accounts."""
+    payer_name: str = ""
+    gross_distribution: float = 0.0      # Box 1
+    taxable_amount: float = 0.0          # Box 2a (0 if unknown, use gross)
+    taxable_amount_not_determined: bool = False  # Box 2b checkbox
+    federal_withheld: float = 0.0        # Box 4
+    distribution_code: str = "7"         # Box 7: "1"=early, "7"=normal, "2"=Roth exception, "G"=rollover
+    is_roth: bool = False                # Roth IRA/401k (qualified = tax-free)
+    is_early: bool = False               # Under age 59½ (10% penalty unless exception)
+
+    @property
+    def taxable(self) -> float:
+        """Taxable portion of the distribution."""
+        if self.is_roth:
+            return 0.0  # Qualified Roth distributions are tax-free
+        if self.distribution_code in ("G", "H"):
+            return 0.0  # Rollover — not taxable
+        if self.taxable_amount_not_determined:
+            return self.gross_distribution  # Assume fully taxable
+        return self.taxable_amount if self.taxable_amount > 0 else self.gross_distribution
+
+    @property
+    def early_withdrawal_penalty(self) -> float:
+        """10% early withdrawal penalty (under 59½, no exception)."""
+        if self.is_early and self.distribution_code == "1":
+            return self.taxable * 0.10
+        return 0.0
+
+
+@dataclass
+class IRAContribution:
+    """Traditional IRA contribution — above-the-line deduction."""
+    contributor: str = "filer"       # "filer" or "spouse"
+    contribution_amount: float = 0.0
+    age_50_plus: bool = False        # $1,000 catch-up contribution
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -542,6 +581,14 @@ class TaxResult:
     quarterly_estimated_tax: float = 0.0     # Per-quarter estimated payment
     quarterly_schedule: list = field(default_factory=list)  # 4 quarterly amounts
 
+    # --- Retirement Income / Form 1099-R ---
+    retirement_gross_distributions: float = 0.0   # Total 1099-R Box 1
+    retirement_taxable_amount: float = 0.0        # Taxable portion → Line 4b/5b
+    retirement_federal_withheld: float = 0.0      # 1099-R Box 4 withholding
+    retirement_early_penalty: float = 0.0         # 10% early withdrawal penalty
+    retirement_distributions_count: int = 0
+    ira_deduction: float = 0.0                    # Traditional IRA above-the-line deduction
+
     # --- Depreciation / Form 4562 ---
     depreciation_total: float = 0.0          # Total depreciation deduction
     depreciation_section_179: float = 0.0    # Section 179 portion
@@ -651,6 +698,14 @@ class TaxResult:
                 "wash_sale_disallowed": round(self.crypto_wash_sale_disallowed, 2),
                 "transactions": self.crypto_transactions_count,
             } if self.crypto_transactions_count > 0 else None,
+            "retirement": {
+                "gross_distributions": round(self.retirement_gross_distributions, 2),
+                "taxable_amount": round(self.retirement_taxable_amount, 2),
+                "federal_withheld": round(self.retirement_federal_withheld, 2),
+                "early_penalty": round(self.retirement_early_penalty, 2),
+                "distributions_count": self.retirement_distributions_count,
+                "ira_deduction": round(self.ira_deduction, 2),
+            } if self.retirement_distributions_count > 0 or self.ira_deduction > 0 else None,
             "depreciation": {
                 "total": round(self.depreciation_total, 2),
                 "section_179": round(self.depreciation_section_179, 2),
@@ -999,6 +1054,8 @@ def compute_tax(
     k1_incomes: list[K1Income] | None = None,
     crypto_transactions: list[CryptoTransaction] | None = None,
     depreciable_assets: list[DepreciableAsset] | None = None,
+    retirement_distributions: list[RetirementDistribution] | None = None,
+    ira_contributions: list[IRAContribution] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1155,6 +1212,32 @@ def compute_tax(
         result.sched_d_long_term_gain = long_term
         result.sched_d_net_gain = short_term + long_term
         result.line_7_capital_gain_loss = result.sched_d_net_gain
+
+    # =======================================================================
+    # FORM 1099-R — Retirement Distributions
+    # =======================================================================
+    retirement_distributions = retirement_distributions or []
+    if retirement_distributions:
+        result.retirement_distributions_count = len(retirement_distributions)
+        for dist in retirement_distributions:
+            result.retirement_gross_distributions += dist.gross_distribution
+            result.retirement_taxable_amount += dist.taxable
+            result.retirement_federal_withheld += dist.federal_withheld
+            result.retirement_early_penalty += dist.early_withdrawal_penalty
+        # Taxable distributions → Line 4b/5b (treated as other income)
+        result.line_8_other_income += result.retirement_taxable_amount
+        # Withholding is added in the PAYMENTS section below
+
+    # IRA contributions — above-the-line deduction
+    ira_contributions = ira_contributions or []
+    if ira_contributions:
+        total_ira = 0.0
+        for contrib in ira_contributions:
+            limit = c.IRA_CONTRIBUTION_LIMIT
+            if contrib.age_50_plus:
+                limit += c.IRA_CATCHUP
+            total_ira += min(contrib.contribution_amount, limit)
+        result.ira_deduction = total_ira
 
     # =======================================================================
     # FORM 4562 — Depreciation (MACRS, Section 179, Bonus)
@@ -1343,6 +1426,10 @@ def compute_tax(
         result.form_8889_excess = total_excess
         adjustments += result.hsa_deduction
 
+    # IRA above-the-line deduction
+    if result.ira_deduction > 0:
+        adjustments += result.ira_deduction
+
     result.line_10_adjustments = adjustments
 
     # Line 11: AGI
@@ -1523,6 +1610,7 @@ def compute_tax(
         + result.niit
         + result.additional_medicare_tax
         + result.amt
+        + result.retirement_early_penalty
     )
 
     # =======================================================================
@@ -1710,7 +1798,7 @@ def compute_tax(
     # PAYMENTS (Lines 25-33)
     # =======================================================================
 
-    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding
+    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding + result.retirement_federal_withheld
     result.estimated_payments = payments.estimated_federal
     result.line_33_total_payments = (
         result.line_25_federal_withheld
@@ -1901,6 +1989,8 @@ def compute_tax(
         result.forms_generated.append("Form 5695")
     if result.crypto_transactions_count > 0:
         result.forms_generated.append("Form 8949")
+    if result.retirement_distributions_count > 0:
+        result.forms_generated.append("1099-R Summary")
     if result.depreciation_assets_count > 0:
         result.forms_generated.append("Form 4562")
     if k1_incomes:

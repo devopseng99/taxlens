@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.21.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.22.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,16 @@ Updated: 2026-04-24 (v3.21.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 43 — Retirement Income (v3.22.0)
+
+191. **RetirementDistribution with distribution code routing** — Distribution codes determine taxability: "7" (normal) = fully taxable, "1" (early) = taxable + 10% penalty, "G"/"H" (rollover) = non-taxable, Roth = non-taxable. The `taxable` property encapsulates this logic. This matches how IRS Form 1099-R Box 7 codes drive 1040 treatment.
+
+192. **Retirement income as other income (line 8)** — 1099-R taxable amounts flow to line_8_other_income alongside other income types. This is a simplification — IRS 1040 has separate lines (4a/4b for IRA, 5a/5b for pension), but the tax computation is identical. Full line separation is a future PDF enhancement.
+
+193. **IRA deduction as above-the-line adjustment** — Traditional IRA contributions are deducted from AGI (above-the-line), not as an itemized deduction. Each contributor (filer/spouse) has an independent $7,000 limit ($8,000 with $1,000 catch-up for age 50+). MFJ filing allows two full deductions. Income-based phaseout for active participants is deferred to a future wave.
+
+194. **Retirement withholding in PAYMENTS section** — 1099-R Box 4 federal withholding is aggregated in the PAYMENTS section (line 25) alongside W-2 withholding, not in the retirement processing section. This prevents the PAYMENTS section from overwriting retirement withholding when it resets line_25 from W-2s.
 
 ## Wave 41 — Crypto & Digital Assets (v3.20.0)
 
