@@ -77,7 +77,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.16.0",
+    version="3.17.0",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
@@ -319,7 +319,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.16.0",
+        "version": "3.17.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,

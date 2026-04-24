@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,8 @@ from tax_engine import (
     parse_1099b_from_structured,
 )
 from pdf_generator import generate_all_pdfs
+from audit_risk import assess_audit_risk
+from prior_year_import import extract_from_fillable_pdf, PriorYearData
 from auth import require_auth
 
 router = APIRouter(prefix="/tax-draft", tags=["Tax Drafts"])
@@ -459,8 +461,12 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
     pdf_paths = generate_all_pdfs(result, str(draft_dir))
     result.pdf_paths = pdf_paths
 
+    # Audit risk assessment
+    risk_report = assess_audit_risk(result)
+
     # Save computation result as JSON (include input for UI display)
     result_json = result.to_summary()
+    result_json["audit_risk"] = risk_report.to_dict()
     result_json["pdf_urls"] = {
         name: f"/api/tax-draft/{result.draft_id}/pdf/{name}?username={req.username}"
         for name in pdf_paths.keys()
@@ -551,6 +557,41 @@ async def download_pdf(
         filename=f"TaxLens_{draft_id}_{form_name}.pdf",
         content_disposition_type="attachment" if download else "inline",
     )
+
+
+@router.post("/import-prior-year")
+async def import_prior_year(
+    file: UploadFile = File(...),
+    tax_year: int = Query(default=0, description="Tax year of the uploaded return (auto-detected if 0)"),
+    _auth: str = Depends(require_auth),
+):
+    """Import a prior-year Form 1040 PDF to extract key values.
+
+    Upload a completed 1040 PDF (fillable or scanned). Extracts AGI,
+    total tax, filing status, income breakdown, and deduction info.
+    These values can be used to pre-populate the current year or
+    for Form 2210 penalty safe harbor calculations.
+
+    Returns extracted data with confidence level.
+    """
+    import tempfile
+
+    # Save uploaded file temporarily
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        data = extract_from_fillable_pdf(tmp_path)
+        if tax_year > 0:
+            data.tax_year = tax_year
+
+        result = data.to_dict()
+        result["filename"] = file.filename
+        return result
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 
 @router.get("/{draft_id}/pdfs")

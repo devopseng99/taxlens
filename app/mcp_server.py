@@ -555,6 +555,70 @@ def optimize_deductions(
 
 
 @mcp.tool()
+def assess_audit_risk_tool(
+    filing_status: str,
+    wages: float = 0,
+    federal_withheld: float = 0,
+    interest: float = 0,
+    ordinary_dividends: float = 0,
+    qualified_dividends: float = 0,
+    short_term_gains: float = 0,
+    long_term_gains: float = 0,
+    business_income: float = 0,
+    business_expenses: float = 0,
+    mortgage_interest: float = 0,
+    property_tax: float = 0,
+    state_tax_paid: float = 0,
+    charitable: float = 0,
+    charitable_noncash: float = 0,
+    medical_expenses: float = 0,
+    student_loan_interest: float = 0,
+    other_income: float = 0,
+    num_dependents: int = 0,
+    dependents: list[dict] | None = None,
+    residence_state: str = "IL",
+    rental_properties: list[dict] | None = None,
+    hsa_contributions: list[dict] | None = None,
+    tax_year: int = 2025,
+) -> str:
+    """Assess audit risk for a tax scenario based on IRS statistical norms.
+
+    Computes the tax return and then compares key metrics (charitable giving,
+    business expense ratios, home office %, rental losses, EITC+SE combinations)
+    against IRS Statistics of Income averages for the filer's AGI bracket.
+
+    Returns a risk score (0-100), overall risk level (low/medium/high), and
+    specific flags with explanations and norm comparisons.
+
+    NOTE: This is educational — not a prediction. The IRS DIF score is secret.
+
+    Args:
+        (Same parameters as compute_tax_scenario — provide the full tax scenario)
+
+    Returns:
+        JSON with risk_score, overall_risk, flags array, and base_audit_rate for income bracket
+    """
+    from audit_risk import assess_audit_risk
+    inputs = _build_inputs(
+        filing_status=filing_status, wages=wages, federal_withheld=federal_withheld,
+        interest=interest, ordinary_dividends=ordinary_dividends,
+        qualified_dividends=qualified_dividends, short_term_gains=short_term_gains,
+        long_term_gains=long_term_gains, business_income=business_income,
+        business_expenses=business_expenses, mortgage_interest=mortgage_interest,
+        property_tax=property_tax, state_tax_paid=state_tax_paid,
+        charitable=charitable, charitable_noncash=charitable_noncash,
+        medical_expenses=medical_expenses, student_loan_interest=student_loan_interest,
+        other_income=other_income, num_dependents=num_dependents,
+        dependents=dependents, residence_state=residence_state,
+        rental_properties=rental_properties, hsa_contributions=hsa_contributions,
+        tax_year=tax_year,
+    )
+    result = compute_tax(**inputs)
+    report = assess_audit_risk(result)
+    return json.dumps(report.to_dict(), indent=2, default=str)
+
+
+@mcp.tool()
 def get_tax_config(
     tax_year: int = 2025,
     filing_status: str = "single",
