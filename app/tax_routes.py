@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
-    RentalProperty, HSAContribution, EnergyImprovement, K1Income,
+    RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -175,6 +175,20 @@ class K1IncomeInput(BaseModel):
     tax_exempt_income: float = 0.0
 
 
+class CryptoTransactionInput(BaseModel):
+    """Digital asset transaction for Form 8949."""
+    asset_name: str = ""
+    date_acquired: str = ""
+    date_sold: str = ""
+    proceeds: float = 0.0
+    cost_basis: float = 0.0
+    is_long_term: bool = False
+    exchange: str = ""
+    tx_hash: str = ""
+    basis_method: str = "fifo"
+    wash_sale_loss_disallowed: float = 0.0
+
+
 class PaymentsInput(BaseModel):
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -221,6 +235,9 @@ class TaxDraftRequest(BaseModel):
 
     # K-1 passthrough income
     k1_incomes: list[K1IncomeInput] = Field(default=[], description="Schedule K-1 income from partnerships/S-corps/trusts")
+
+    # Crypto transactions (Form 8949 / 1099-DA)
+    crypto_transactions: list[CryptoTransactionInput] = Field(default=[], description="Digital asset transactions for Form 8949")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -506,6 +523,17 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for k in req.k1_incomes
     ] if req.k1_incomes else None
 
+    # --- Build crypto transactions ---
+    crypto_list = [
+        CryptoTransaction(
+            asset_name=c.asset_name, date_acquired=c.date_acquired,
+            date_sold=c.date_sold, proceeds=c.proceeds, cost_basis=c.cost_basis,
+            is_long_term=c.is_long_term, exchange=c.exchange, tx_hash=c.tx_hash,
+            basis_method=c.basis_method, wash_sale_loss_disallowed=c.wash_sale_loss_disallowed,
+        )
+        for c in req.crypto_transactions
+    ] if req.crypto_transactions else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -526,6 +554,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         hsa_contributions=hsa_list,
         energy_improvements=energy_list,
         k1_incomes=k1_list,
+        crypto_transactions=crypto_list,
         tax_year=req.tax_year,
     )
 
@@ -616,6 +645,7 @@ async def download_pdf(
         "form_8889": "form_8889.pdf",
         "form_5695": "form_5695.pdf",
         "k1_summary": "k1_summary.pdf",
+        "form_8949": "form_8949.pdf",
         "il_1040": "il_1040.pdf",
     }
 

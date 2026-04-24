@@ -1201,6 +1201,59 @@ def generate_form_8889(result: TaxResult) -> BytesIO:
     return buf
 
 
+def generate_form_8949(result: TaxResult) -> BytesIO:
+    """Generate Form 8949 (Sales and Other Dispositions of Capital Assets) summary."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Form 8949 — Digital Asset Transactions")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Summary")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    lines = [
+        ("Total transactions", str(result.crypto_transactions_count)),
+        ("Total proceeds", f"${result.crypto_total_proceeds:,.2f}"),
+        ("Total cost basis", f"${result.crypto_total_basis:,.2f}"),
+        ("Short-term gain/loss", f"${result.crypto_short_term_gain:,.2f}"),
+        ("Long-term gain/loss", f"${result.crypto_long_term_gain:,.2f}"),
+        ("Net gain/loss", f"${result.crypto_short_term_gain + result.crypto_long_term_gain:,.2f}"),
+    ]
+    if result.crypto_wash_sale_disallowed > 0:
+        lines.append(("Wash sale loss disallowed", f"${result.crypto_wash_sale_disallowed:,.2f}"))
+
+    for label, val in lines:
+        c.drawString(90, y, f"{label}: {val}")
+        y -= 16
+
+    y -= 20
+    c.setFont("Helvetica", 9)
+    c.drawString(72, y, "Note: Short-term gains (held ≤1 year) taxed as ordinary income.")
+    y -= 14
+    c.drawString(72, y, "Long-term gains (held >1 year) taxed at preferential 0/15/20% rates.")
+    y -= 14
+    if result.crypto_wash_sale_disallowed > 0:
+        c.drawString(72, y, "Wash sale: Loss deferred when substantially identical asset repurchased within 30 days.")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 def generate_form_5695(result: TaxResult) -> BytesIO:
     """Generate Form 5695 (Residential Energy Credits) summary via ReportLab."""
     buf = BytesIO()
@@ -1440,6 +1493,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "form_8889.pdf"
         p.write_bytes(buf.read())
         paths["form_8889"] = str(p)
+
+    # Form 8949 — Digital Asset Transactions (if crypto trades)
+    if result.crypto_transactions_count > 0:
+        buf = generate_form_8949(result)
+        p = out / "form_8949.pdf"
+        p.write_bytes(buf.read())
+        paths["form_8949"] = str(p)
 
     # Form 5695 — Residential Energy Credits (if energy credit claimed)
     if result.energy_total_credit > 0:

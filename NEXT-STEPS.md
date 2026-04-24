@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.19.0)
+Updated: 2026-04-24 (v3.20.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -657,6 +657,27 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/onboarding.py` — Welcome email on signup
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
+
+### Wave 41 — Crypto & Digital Assets (v3.20.0) — 2026-04-24
+
+- [x] CryptoTransaction dataclass: asset_name, exchange, tx_hash, basis_method, wash_sale_loss_disallowed
+- [x] Wash sale detection: loss disallowed amount adjusts cost basis (IRS proposed regs 2024)
+- [x] Cost basis methods: FIFO, LIFO, HIFO, specific ID (metadata — exchange computes)
+- [x] Crypto → CapitalTransaction conversion for Schedule D aggregation
+- [x] Schedule D totals recomputed after crypto injection (avoids double-count)
+- [x] Form 8949 summary PDF via ReportLab
+- [x] Full stack: engine + API + MCP + PDF
+- [x] 648/648 unit tests (22 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave41_crypto.py` — 22 tests (8 dataclass, 14 engine integration)
+
+**Modified files:**
+- `app/tax_engine.py` — CryptoTransaction dataclass, TaxResult crypto fields, compute_tax() crypto logic
+- `app/tax_routes.py` — CryptoTransactionInput model, TaxDraftRequest field, file_map
+- `app/mcp_server.py` — crypto_transactions param, build/forward logic
+- `app/pdf_generator.py` — generate_form_8949(), generate_all_pdfs() hook
+- `app/main.py` — version 3.20.0
 
 ### Wave 40 — Advanced Tax Features (v3.19.0) — 2026-04-24
 

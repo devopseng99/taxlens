@@ -16,7 +16,7 @@ from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     EducationExpense, DependentCareExpense, RetirementContribution,
-    RentalProperty, HSAContribution, EnergyImprovement, K1Income,
+    RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -90,6 +90,7 @@ def _build_inputs(
     hsa_contributions: list[dict] | None = None,
     energy_improvements: list[dict] | None = None,
     k1_incomes: list[dict] | None = None,
+    crypto_transactions: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -252,6 +253,24 @@ def _build_inputs(
             for e in energy_improvements
         ]
 
+    # Build crypto transactions
+    crypto_list = None
+    if crypto_transactions:
+        crypto_list = [
+            CryptoTransaction(
+                asset_name=ct.get("asset_name", ""),
+                date_acquired=ct.get("date_acquired", ""),
+                date_sold=ct.get("date_sold", ""),
+                proceeds=ct.get("proceeds", 0),
+                cost_basis=ct.get("cost_basis", 0),
+                is_long_term=ct.get("is_long_term", False),
+                exchange=ct.get("exchange", ""),
+                basis_method=ct.get("basis_method", "fifo"),
+                wash_sale_loss_disallowed=ct.get("wash_sale_loss_disallowed", 0),
+            )
+            for ct in crypto_transactions
+        ]
+
     # Build K-1 incomes
     k1_list = None
     if k1_incomes:
@@ -297,6 +316,7 @@ def _build_inputs(
         hsa_contributions=hsa_list,
         energy_improvements=energy_list,
         k1_incomes=k1_list,
+        crypto_transactions=crypto_list,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -346,6 +366,7 @@ def compute_tax_scenario(
     hsa_contributions: list[dict] | None = None,
     energy_improvements: list[dict] | None = None,
     k1_incomes: list[dict] | None = None,
+    crypto_transactions: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -385,7 +406,8 @@ def compute_tax_scenario(
         rental_properties: Rental real estate (Schedule E).
         hsa_contributions: HSA contributions (Form 8889, above-the-line deduction).
         energy_improvements: Residential energy credits (Form 5695). Each dict: {"solar_electric", "heat_pump", "insulation", "windows_skylights", "exterior_doors", "battery_storage", "energy_audit", ...}. §25D (solar/wind/geo): 30% no cap. §25C (improvements): 30% up to $3,200/yr ($1,200 envelope + $2,000 heat pump).
-        k1_incomes: Schedule K-1 passthrough income from partnerships/S-corps/trusts. Each dict: {"entity_name", "entity_type" ("partnership"/"s_corp"/"trust"), "ordinary_income", "guaranteed_payments", "interest_income", "dividend_income", "short_term_gain", "long_term_gain", "section_199a_income", ...}. Guaranteed payments subject to SE tax (partnerships only). §199A income eligible for QBI deduction.
+        k1_incomes: Schedule K-1 passthrough income from partnerships/S-corps/trusts.
+        crypto_transactions: Digital asset transactions for Form 8949. Each dict: {"asset_name" (e.g., "BTC"), "date_acquired", "date_sold", "proceeds", "cost_basis", "is_long_term" (bool), "exchange", "basis_method" ("fifo"/"lifo"/"hifo"/"specific_id"), "wash_sale_loss_disallowed" (float)}. Flows to Schedule D. Wash sale loss disallowed adjusts cost basis per IRS proposed regs 2024.
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor).
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold).
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -414,6 +436,7 @@ def compute_tax_scenario(
         hsa_contributions=hsa_contributions,
         energy_improvements=energy_improvements,
         k1_incomes=k1_incomes,
+        crypto_transactions=crypto_transactions,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )

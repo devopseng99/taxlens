@@ -126,6 +126,44 @@ class CapitalTransaction:
 
 
 @dataclass
+class CryptoTransaction:
+    """Digital asset transaction for Form 8949 / Schedule D."""
+    asset_name: str = ""            # e.g., "BTC", "ETH", "SOL"
+    date_acquired: str = ""         # YYYY-MM-DD or "Various"
+    date_sold: str = ""             # YYYY-MM-DD
+    proceeds: float = 0.0           # Sale price in USD
+    cost_basis: float = 0.0         # Acquisition cost in USD
+    is_long_term: bool = False      # Held > 1 year
+    exchange: str = ""              # e.g., "Coinbase", "Kraken"
+    tx_hash: str = ""               # Optional blockchain tx hash
+    basis_method: str = "fifo"      # "fifo", "lifo", "hifo", "specific_id"
+    wash_sale_loss_disallowed: float = 0.0  # IRS proposed regs 2024
+
+    @property
+    def gain_loss(self) -> float:
+        return self.proceeds - self.cost_basis
+
+    @property
+    def adjusted_gain_loss(self) -> float:
+        """Gain/loss after wash sale adjustment."""
+        raw = self.gain_loss
+        if raw < 0 and self.wash_sale_loss_disallowed > 0:
+            return raw + self.wash_sale_loss_disallowed  # Reduce loss by disallowed amount
+        return raw
+
+    def to_capital_transaction(self) -> CapitalTransaction:
+        """Convert to standard CapitalTransaction for Schedule D."""
+        return CapitalTransaction(
+            description=f"{self.asset_name} ({self.exchange})" if self.exchange else self.asset_name,
+            date_acquired=self.date_acquired,
+            date_sold=self.date_sold,
+            proceeds=self.proceeds,
+            cost_basis=self.cost_basis + self.wash_sale_loss_disallowed,  # Adjust basis for wash sale
+            is_long_term=self.is_long_term,
+        )
+
+
+@dataclass
 class Deductions:
     mortgage_interest: float = 0.0
     property_tax: float = 0.0
@@ -418,6 +456,14 @@ class TaxResult:
     sched_e_total_expenses: float = 0.0
     sched_e_net_income: float = 0.0
 
+    # --- Crypto / Form 8949 ---
+    crypto_short_term_gain: float = 0.0
+    crypto_long_term_gain: float = 0.0
+    crypto_total_proceeds: float = 0.0
+    crypto_total_basis: float = 0.0
+    crypto_wash_sale_disallowed: float = 0.0
+    crypto_transactions_count: int = 0
+
     # --- Form 5695 (Energy Credits) ---
     energy_clean_credit: float = 0.0         # §25D residential clean energy
     energy_improvement_credit: float = 0.0   # §25C home improvement
@@ -528,6 +574,14 @@ class TaxResult:
             "eitc": round(self.eitc, 2),
             "cdcc": round(self.cdcc, 2),
             "savers_credit": round(self.savers_credit, 2),
+            "crypto": {
+                "short_term_gain": round(self.crypto_short_term_gain, 2),
+                "long_term_gain": round(self.crypto_long_term_gain, 2),
+                "total_proceeds": round(self.crypto_total_proceeds, 2),
+                "total_basis": round(self.crypto_total_basis, 2),
+                "wash_sale_disallowed": round(self.crypto_wash_sale_disallowed, 2),
+                "transactions": self.crypto_transactions_count,
+            } if self.crypto_transactions_count > 0 else None,
             "energy_credit": round(self.energy_total_credit, 2),
             "energy_clean_credit": round(self.energy_clean_credit, 2),
             "energy_improvement_credit": round(self.energy_improvement_credit, 2),
@@ -865,6 +919,7 @@ def compute_tax(
     hsa_contributions: list[HSAContribution] | None = None,
     energy_improvements: list[EnergyImprovement] | None = None,
     k1_incomes: list[K1Income] | None = None,
+    crypto_transactions: list[CryptoTransaction] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -992,6 +1047,35 @@ def compute_tax(
                 reduction = (prelim_agi - c.RENTAL_LOSS_PHASEOUT_START) * 0.50
                 allowed_loss = max(0, min(abs(raw_net), c.RENTAL_LOSS_LIMIT - reduction))
             result.sched_e_net_income = -allowed_loss
+
+    # =======================================================================
+    # CRYPTO / FORM 8949 — Digital Asset Transactions
+    # =======================================================================
+    crypto_transactions = crypto_transactions or []
+    if crypto_transactions:
+        result.crypto_transactions_count = len(crypto_transactions)
+        for ct in crypto_transactions:
+            result.crypto_total_proceeds += ct.proceeds
+            result.crypto_total_basis += ct.cost_basis
+            result.crypto_wash_sale_disallowed += ct.wash_sale_loss_disallowed
+
+            adj_gain = ct.adjusted_gain_loss
+            if ct.is_long_term:
+                result.crypto_long_term_gain += adj_gain
+            else:
+                result.crypto_short_term_gain += adj_gain
+
+            # Convert to CapitalTransaction for Schedule D
+            cap_txn = ct.to_capital_transaction()
+            additional.capital_transactions.append(cap_txn)
+
+        # Recompute Schedule D totals with crypto included
+        short_term = sum(t.gain_loss for t in additional.capital_transactions if not t.is_long_term)
+        long_term = sum(t.gain_loss for t in additional.capital_transactions if t.is_long_term)
+        result.sched_d_short_term_gain = short_term
+        result.sched_d_long_term_gain = long_term
+        result.sched_d_net_gain = short_term + long_term
+        result.line_7_capital_gain_loss = result.sched_d_net_gain
 
     # =======================================================================
     # SCHEDULE K-1 — Passthrough Income
@@ -1672,6 +1756,8 @@ def compute_tax(
         result.forms_generated.append("Form 8889")
     if result.energy_total_credit > 0:
         result.forms_generated.append("Form 5695")
+    if result.crypto_transactions_count > 0:
+        result.forms_generated.append("Form 8949")
     if k1_incomes:
         result.forms_generated.append("Schedule K-1 Summary")
     # State forms

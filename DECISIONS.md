@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.19.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.20.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -399,6 +399,18 @@ Updated: 2026-04-24 (v3.19.0 API + v2.6.0 Portal)
 170. **Fire-and-forget email pattern** — Email calls in onboarding and billing webhook are wrapped in try/except with logging. Email failure never blocks tenant provisioning or plan upgrades. This follows the graceful feature degradation pattern.
 
 171. **Three email templates** — Welcome (with API key + MCP config), filing deadline reminder, plan upgrade confirmation. All include plain text fallback for email clients that don't render HTML.
+
+## Wave 41 — Crypto & Digital Assets (v3.20.0)
+
+181. **CryptoTransaction as separate dataclass from CapitalTransaction** — Crypto needs additional fields (asset_name, exchange, tx_hash, basis_method, wash_sale_loss_disallowed) that regular stock transactions don't have. CryptoTransaction converts to CapitalTransaction via `to_capital_transaction()` for Schedule D aggregation. This keeps the engine generic while tracking crypto-specific data for Form 8949.
+
+182. **Wash sale loss disallowed adjusts cost basis, not proceeds** — Per IRS proposed regs (2024), when a crypto wash sale occurs, the disallowed loss is added to the cost basis of the replacement asset. `to_capital_transaction()` does `cost_basis + wash_sale_loss_disallowed` so Schedule D reports the adjusted basis, not the original basis.
+
+183. **Crypto gains recompute Schedule D totals** — Because crypto transactions are added to `additional.capital_transactions` at processing time, Schedule D totals (short/long/net) are recomputed after crypto injection to avoid double-counting with pre-existing capital transactions.
+
+184. **Cost basis methods are metadata, not engine computation** — The engine accepts `basis_method` (FIFO, LIFO, HIFO, specific ID) as a field on each CryptoTransaction but doesn't compute cost basis from lot history. Basis computation is the exchange's or user's responsibility. This matches how brokerages provide 1099-B — they report the method and computed basis.
+
+185. **Form 8949 as summary PDF, not per-transaction** — The Form 8949 PDF is a ReportLab summary showing aggregate proceeds, basis, gains/losses, and wash sale amounts. Actual per-transaction detail belongs on the IRS Form 8949 CSV attachment. This matches how TurboTax handles high-volume crypto traders.
 
 ## Wave 40 — Advanced Tax Features (v3.19.0)
 
