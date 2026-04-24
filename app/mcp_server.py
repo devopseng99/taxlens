@@ -230,6 +230,7 @@ def _build_inputs(
             HSAContribution(
                 contributor=h.get("contributor", "filer"),
                 contribution_amount=h.get("contribution_amount", 0),
+                employer_contributions=h.get("employer_contributions", 0),
                 coverage_type=h.get("coverage_type", "self"),
                 age_55_plus=h.get("age_55_plus", False),
             )
@@ -339,7 +340,7 @@ def compute_tax_scenario(
         dependent_care_expenses: Child/dependent care expenses for CDCC (Form 2441). Each dict: {"dependent_name", "care_expenses"}. $3K limit (1 dependent) or $6K (2+).
         retirement_contributions: Retirement savings for Saver's Credit (Form 8880). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount"}. $2K max per person. 50%/20%/10% credit rate based on AGI.
         rental_properties: Rental real estate (Schedule E). Each dict: {"property_address", "gross_rents", "mortgage_interest", "taxes", "insurance", "repairs", "depreciation", ...}. Passive activity loss limited to $25K (phaseout $100K-$150K AGI).
-        hsa_contributions: Health Savings Account contributions (above-the-line deduction). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount", "coverage_type" ("self" or "family"), "age_55_plus" (bool)}. 2025 limits: $4,300 self / $8,550 family + $1,000 catch-up if 55+.
+        hsa_contributions: Health Savings Account contributions (Form 8889, above-the-line deduction). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount", "employer_contributions" (pre-tax/cafeteria), "coverage_type" ("self" or "family"), "age_55_plus" (bool)}. 2025 limits: $4,300 self / $8,550 family + $1,000 catch-up if 55+. Employer contributions reduce deductible room.
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor). If >$0, engine checks 100%/110% prior year safe harbor.
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold). High AGI = $150K/$75K MFS.
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -679,6 +680,10 @@ def get_tax_config(
             "limit_self": c.HSA_LIMIT_SELF,
             "limit_family": c.HSA_LIMIT_FAMILY,
             "catchup_55_plus": c.HSA_CATCHUP,
+            "hdhp_min_deductible_self": c.HDHP_MIN_DEDUCTIBLE_SELF,
+            "hdhp_min_deductible_family": c.HDHP_MIN_DEDUCTIBLE_FAMILY,
+            "hdhp_max_oop_self": c.HDHP_MAX_OOP_SELF,
+            "hdhp_max_oop_family": c.HDHP_MAX_OOP_FAMILY,
         },
         "rental": {
             "passive_loss_limit": c.RENTAL_LOSS_LIMIT,

@@ -148,6 +148,11 @@ _YEAR_2024 = {
     # HSA — Rev. Proc. 2023-34
     "HSA_LIMIT_SELF": 4_150,
     "HSA_LIMIT_FAMILY": 8_300,
+    # HDHP requirements (informational, for Form 8889) — Rev. Proc. 2023-34
+    "HDHP_MIN_DEDUCTIBLE_SELF": 1_600,
+    "HDHP_MIN_DEDUCTIBLE_FAMILY": 3_200,
+    "HDHP_MAX_OOP_SELF": 8_050,
+    "HDHP_MAX_OOP_FAMILY": 16_100,
     # Estimated tax penalty rate (IRS sets quarterly)
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -217,6 +222,11 @@ _YEAR_2025 = {
     # HSA — Rev. Proc. 2024-40
     "HSA_LIMIT_SELF": 4_300,
     "HSA_LIMIT_FAMILY": 8_550,
+    # HDHP requirements (informational, for Form 8889) — Rev. Proc. 2024-40
+    "HDHP_MIN_DEDUCTIBLE_SELF": 1_650,
+    "HDHP_MIN_DEDUCTIBLE_FAMILY": 3_300,
+    "HDHP_MAX_OOP_SELF": 8_300,
+    "HDHP_MAX_OOP_FAMILY": 16_600,
     # Estimated tax penalty rate
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois

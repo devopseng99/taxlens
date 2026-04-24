@@ -1154,6 +1154,54 @@ def generate_form_2210(result: TaxResult) -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Form 8889 — Health Savings Accounts (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_form_8889(result: TaxResult) -> BytesIO:
+    """Generate Form 8889 (HSA) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Form 8889", "Health Savings Accounts (HSAs)", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y -= 5
+
+    y = draw_section(c, "Part I — HSA Contributions and Deduction", y)
+    y = draw_line(c, "2", "HSA contributions you made (personal)", result.form_8889_contributions, y)
+    y = draw_line(c, "7", "Contribution limit", result.form_8889_limit, y)
+    y = draw_line(c, "9", "Employer contributions (incl. cafeteria plan)", result.form_8889_employer, y)
+
+    line_10 = max(0, result.form_8889_limit - result.form_8889_employer)
+    y = draw_line(c, "10", "Maximum deductible (limit minus employer)", line_10, y)
+    y = draw_line(c, "13", "HSA deduction (Line 25 of Schedule 1)", result.form_8889_deduction, y, bold=True)
+
+    if result.form_8889_excess > 0:
+        y -= 5
+        y = draw_section(c, "Excess Contributions", y)
+        y = draw_line(c, "", "Excess contributions (subject to 6% excise)", result.form_8889_excess, y)
+        c.setFont("Helvetica", 8)
+        y -= 2
+        c.drawString(80, y, "See Form 5329, Part VII for the 6% additional tax on excess contributions.")
+        y -= 16
+
+    y -= 10
+    c.setFont("Helvetica", 8)
+    c.drawString(58, y, "Form 8889 is required for any year you have an HSA or make/receive HSA contributions.")
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
 def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
@@ -1261,6 +1309,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "form_8880.pdf"
         p.write_bytes(buf.read())
         paths["form_8880"] = str(p)
+
+    # Form 8889 — HSA (if HSA contributions)
+    if result.hsa_deduction > 0 or result.form_8889_contributions > 0:
+        buf = generate_form_8889(result)
+        p = out / "form_8889.pdf"
+        p.write_bytes(buf.read())
+        paths["form_8889"] = str(p)
 
     # Form 2210 — Estimated Tax Penalty (if penalty assessed)
     if result.estimated_tax_penalty > 0:

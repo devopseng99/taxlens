@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.17.0)
+Updated: 2026-04-24 (v3.18.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -610,6 +610,32 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/mcp_server.py` — `assess_audit_risk_tool` MCP tool
 - `app/tax_routes.py` — `audit_risk` in draft response + `/import-prior-year` endpoint
 - `app/main.py` — version bump to 3.17.0
+
+### Wave 37 — Form 8889 HSA Reporting (v3.18.0) — 2026-04-24
+
+- [x] `employer_contributions` field on HSAContribution dataclass
+- [x] Form 8889 line item computation (Lines 2, 7, 9, 10, 13 + excess detection)
+- [x] Employer contributions reduce deductible room (IRC §223(b)(4))
+- [x] Excess contribution detection (personal + employer over limit → 6% excise)
+- [x] HDHP constants (min deductible, max OOP) for both 2024 and 2025
+- [x] Form 8889 PDF generation via ReportLab
+- [x] Summary includes `form_8889` section with all line items
+- [x] API model updated with `employer_contributions` field
+- [x] MCP `_build_inputs()` and `compute_tax_scenario()` updated
+- [x] MCP `get_tax_config()` returns HDHP limits
+- [x] `form_8889` added to file_map for PDF download
+- [x] 557/557 unit tests (21 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave37_form8889.py` — 21 tests (8 line items, 4 excess, 4 summary/forms, 3 MCP, 2 backward compat)
+
+**Modified files:**
+- `app/tax_engine.py` — HSAContribution.employer_contributions, TaxResult.form_8889_*, computation, summary, forms_generated
+- `app/tax_config.py` — HDHP_MIN_DEDUCTIBLE_*, HDHP_MAX_OOP_* for 2024+2025
+- `app/tax_routes.py` — HSAContributionInput.employer_contributions, form_8889 in file_map
+- `app/mcp_server.py` — employer_contributions in _build_inputs(), HDHP in get_tax_config()
+- `app/pdf_generator.py` — generate_form_8889() + integration in generate_all_pdfs()
+- `app/main.py` — version bump to 3.18.0
 
 ## Future Enhancements
 

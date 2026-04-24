@@ -132,9 +132,10 @@ class RentalPropertyInput(BaseModel):
 
 
 class HSAContributionInput(BaseModel):
-    """Health Savings Account contribution."""
+    """Health Savings Account contribution (Form 8889)."""
     contributor: str = "filer"
     contribution_amount: float = 0.0
+    employer_contributions: float = 0.0
     coverage_type: str = "self"
     age_55_plus: bool = False
 
@@ -430,6 +431,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
     hsa_list = [
         HSAContribution(
             contributor=h.contributor, contribution_amount=h.contribution_amount,
+            employer_contributions=h.employer_contributions,
             coverage_type=h.coverage_type, age_55_plus=h.age_55_plus,
         )
         for h in req.hsa_contributions
@@ -540,6 +542,7 @@ async def download_pdf(
         "form_2441": "form_2441.pdf",
         "form_8880": "form_8880.pdf",
         "form_2210": "form_2210.pdf",
+        "form_8889": "form_8889.pdf",
         "il_1040": "il_1040.pdf",
     }
 

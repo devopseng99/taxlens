@@ -1,0 +1,23 @@
+{
+  "name": "taxlens-wave-orchestrator",
+  "version": "1.0.0",
+  "description": "Claude Agent SDK workflow orchestrator for TaxLens wave delivery",
+  "type": "module",
+  "main": "dist/orchestrator.js",
+  "scripts": {
+    "build": "tsc",
+    "wave": "node --loader ts-node/esm orchestrator.ts",
+    "wave:dry": "node --loader ts-node/esm orchestrator.ts --dry-run",
+    "list": "node --loader ts-node/esm orchestrator.ts --list"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}

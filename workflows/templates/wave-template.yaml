@@ -1,0 +1,235 @@
+# TaxLens Wave Delivery Template
+# Copy and customize for each new wave.
+# Usage: node workflows/orchestrator.ts --config workflows/waves/wave-37.yaml
+
+name: "Wave {N}: {Feature Name}"
+description: "Brief description of what this wave delivers"
+version_bump: "3.18.0"  # Target version after this wave
+
+# Feature metadata
+feature:
+  wave_number: 37
+  name: "Form 8889 HSA Reporting"
+  forms: ["Form 8889"]
+  income_type: null          # e.g., "rental", "capital_gains"
+  deduction_type: null       # e.g., "hsa", "student_loan"
+  credit_type: null          # e.g., "energy", "childcare"
+  schedule: null             # e.g., "E", "C", "D"
+
+# Repository paths
+paths:
+  repo: "/var/lib/rancher/ansible/db/taxlens"
+  engine: "app/tax_engine.py"
+  config: "app/tax_config.py"
+  routes: "app/tax_routes.py"
+  mcp: "app/mcp_server.py"
+  main: "app/main.py"
+  tests: "tests/"
+
+# Build/deploy targets
+deploy:
+  image: "localhost/taxlens-api:latest"
+  node: "192.168.29.147"
+  ssh_key: "~/.ssh/id_rsa_devops_ssh"
+  namespace: "taxlens"
+  deployment: "taxlens-api"
+  health_url: "https://dropit.istayintek.com/health"
+
+# 9-step delivery sequence
+steps:
+  - name: "Data Structures"
+    id: "dataclasses"
+    agent: "tax-engineer"
+    depends_on: []
+    task: |
+      Add dataclass(es) to tax_engine.py for {feature.name}.
+      Add computed output fields to TaxResult.
+      Follow existing patterns (RentalProperty, HSAContribution).
+    files:
+      - "app/tax_engine.py"
+    acceptance:
+      - "Dataclass defined with all IRS-required fields"
+      - "TaxResult has output fields for computed values"
+
+  - name: "Constants"
+    id: "constants"
+    agent: "tax-engineer"
+    depends_on: ["dataclasses"]
+    task: |
+      Add year-specific constants to tax_config.py via get_year_config().
+      Add both _YEAR_2024 and _YEAR_2025 entries.
+      Add statutory (non-year-varying) constants at module level.
+      Source: IRS Rev. Proc. 2023-34 (2024), Rev. Proc. 2024-40 (2025).
+    files:
+      - "app/tax_config.py"
+    acceptance:
+      - "2024 constants from Rev. Proc. 2023-34"
+      - "2025 constants from Rev. Proc. 2024-40"
+      - "Accessible via get_year_config(year)"
+
+  - name: "Computation Logic"
+    id: "computation"
+    agent: "tax-engineer"
+    depends_on: ["constants"]
+    task: |
+      Add computation inside compute_tax() at the correct section.
+      Use c = get_year_config(tax_year) for all constants.
+      For AGI-dependent phaseouts, use preliminary AGI to avoid circularity.
+    files:
+      - "app/tax_engine.py"
+    acceptance:
+      - "Computation produces correct results for standard scenarios"
+      - "Phaseouts use preliminary AGI (if applicable)"
+      - "Results stored in TaxResult fields"
+
+  - name: "Summary Output"
+    id: "summary"
+    agent: "tax-engineer"
+    depends_on: ["computation"]
+    task: |
+      Add new fields to to_summary() method.
+      Add form name to forms_generated list if applicable.
+    files:
+      - "app/tax_engine.py"
+    acceptance:
+      - "Summary includes all new computed fields"
+      - "Form name in forms_generated"
+
+  - name: "API Models"
+    id: "api"
+    agent: "api-engineer"
+    depends_on: ["summary"]
+    task: |
+      Add Pydantic *Input model(s) matching the dataclass.
+      Add field(s) to TaxDraftRequest.
+      Build dataclass instances from Pydantic models in route handler.
+      Pass to compute_tax() call.
+    files:
+      - "app/tax_routes.py"
+    acceptance:
+      - "Pydantic model validates input correctly"
+      - "TaxDraftRequest accepts new fields"
+      - "Route handler constructs dataclass and passes to engine"
+
+  - name: "MCP Integration"
+    id: "mcp"
+    agent: "api-engineer"
+    depends_on: ["api"]
+    task: |
+      Add imports for new dataclass(es).
+      Add parameters to _build_inputs() with list/object construction.
+      Add same parameters to compute_tax_scenario() tool with docstrings.
+      Update get_tax_config() tool output with new constants section.
+    files:
+      - "app/mcp_server.py"
+    acceptance:
+      - "_build_inputs() constructs dataclass from params"
+      - "compute_tax_scenario() documents new params"
+      - "get_tax_config() returns new constants"
+
+  - name: "Tests"
+    id: "tests"
+    agent: "test-engineer"
+    depends_on: ["mcp"]
+    task: |
+      Create tests/test_wave{feature.wave_number}_{feature_slug}.py.
+      Engine tests: happy path, edge cases, boundary conditions, no-input baseline.
+      Summary tests: verify new fields in to_summary().
+      MCP tests: _build_inputs() construction, compute_tax_scenario(), get_tax_config().
+      Run full suite: python -m pytest tests/ -v (ALL must pass).
+    files:
+      - "tests/test_wave{N}_{slug}.py"
+    acceptance:
+      - "15-30 new tests"
+      - "Full test suite passes (existing + new)"
+      - "Edge cases covered"
+
+  - name: "Build & Deploy"
+    id: "deploy"
+    agent: "devops"
+    depends_on: ["tests"]
+    task: |
+      Build image: podman build --network=host -t {deploy.image} .
+      Save and import to node via SSH.
+      Restart deployment.
+      Verify health endpoint returns new version.
+    files: []
+    acceptance:
+      - "Pod running with new image"
+      - "Health endpoint returns version {version_bump}"
+      - "No error logs in first 60 seconds"
+
+  - name: "Documentation & Release"
+    id: "docs"
+    agent: "tech-writer"
+    depends_on: ["deploy"]
+    task: |
+      1. Version bump in main.py (TWO places: FastAPI constructor + health dict)
+      2. Update DECISIONS.md with wave entry
+      3. Update NEXT-STEPS.md (move completed, add discovered)
+      4. Update project memory
+      5. Save feedback memory (if non-obvious patterns learned)
+      6. Git commit + tag + push + gh release create
+    files:
+      - "app/main.py"
+      - "DECISIONS.md"
+      - "NEXT-STEPS.md"
+    acceptance:
+      - "Version string updated in both places"
+      - "DECISIONS.md has wave entry"
+      - "Git tag v{version_bump} created"
+      - "GitHub release published"
+
+# Agent role definitions
+agents:
+  tax-engineer:
+    display_name: "Tax Engine Specialist"
+    model: "claude-opus-4-6"
+    permission_mode: "acceptEdits"
+    system_prompt: |
+      You are a tax computation engineer working on the TaxLens platform.
+      You implement IRS tax rules as Python dataclasses and computation logic.
+      Always cite the IRC section or IRS publication for every rule.
+      Use additive scoring (not multiplicative) for risk assessments.
+      Use preliminary AGI for phaseout calculations to avoid circular dependencies.
+    max_turns: 30
+
+  api-engineer:
+    display_name: "API Integration Engineer"
+    model: "claude-opus-4-6"
+    permission_mode: "acceptEdits"
+    system_prompt: |
+      You are an API engineer maintaining FastAPI + MCP server integration.
+      Pydantic models must mirror engine dataclasses exactly.
+      MCP tools must have complete docstrings for Claude to call them correctly.
+    max_turns: 20
+
+  test-engineer:
+    display_name: "Test Engineer"
+    model: "claude-sonnet-4-6"
+    permission_mode: "acceptEdits"
+    system_prompt: |
+      You write comprehensive pytest tests for tax computation features.
+      Cover: happy path, edge cases, boundary values, zero/null inputs.
+      Always run the FULL test suite to verify no regressions.
+    max_turns: 20
+
+  devops:
+    display_name: "DevOps Engineer"
+    model: "claude-sonnet-4-6"
+    permission_mode: "acceptEdits"
+    system_prompt: |
+      You build and deploy containerized Python apps to RKE2 Kubernetes.
+      Build with podman, import via SSH+ctr, restart deployments.
+      Always verify health endpoint after deploy.
+    max_turns: 15
+
+  tech-writer:
+    display_name: "Technical Writer"
+    model: "claude-sonnet-4-6"
+    permission_mode: "acceptEdits"
+    system_prompt: |
+      You update documentation, version strings, and create git releases.
+      Version appears in TWO places in main.py - update both.
+      Commit messages follow: "Wave N: Feature (vX.Y.Z)"
+    max_turns: 15

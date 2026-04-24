@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.17.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.18.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -383,6 +383,14 @@ Updated: 2026-04-23 (v3.17.0 API + v2.6.0 Portal)
 164. **Prior-year import via pypdf (not OCR)** — Reads fillable PDF form fields directly using pypdf. Much faster and more accurate than OCR for PDFs output by tax software. Falls back to confidence="low" if no form fields found (scanned PDFs need OCR via the existing pipeline). Outputs `penalty_inputs` for Form 2210 safe harbor.
 
 165. **Field name mapping with fallbacks** — IRS fillable PDFs use field names like `f1_7`, `f1_21`, etc. Some PDFs use full XFA paths like `topmostSubform[0].Page1[0].f1_7[0]`. The parser tries direct match, then alt mappings, then base name extraction.
+
+## Wave 37 — Form 8889 HSA Reporting (v3.18.0)
+
+166. **Employer contributions reduce deductible room** — IRC §223(b)(4): the HSA contribution limit is shared between employer and personal contributions. Employer contributions (including cafeteria plan) reduce the amount the individual can deduct. Formula: deductible = min(personal, limit - employer). Total exceeding the limit is excess subject to 6% excise via Form 5329.
+
+167. **Form 8889 is required whenever HSA contributions exist** — IRS requires Form 8889 for any year the taxpayer (a) has an HSA, (b) makes or receives contributions, or (c) takes distributions. Generated via ReportLab (no IRS fillable template available). Includes Part I (contributions/deduction) and excess contribution detection.
+
+168. **HDHP limits are informational** — High-Deductible Health Plan minimum deductible and max OOP limits added to tax_config.py and exposed via get_tax_config MCP tool. These are prerequisites for HSA eligibility but not enforced in the engine (self-attested by the filer).
 
 ## PDF Template Provenance
 

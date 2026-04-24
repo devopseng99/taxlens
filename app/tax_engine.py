@@ -257,9 +257,10 @@ class RentalProperty:
 
 @dataclass
 class HSAContribution:
-    """Health Savings Account contribution for above-the-line deduction."""
+    """Health Savings Account contribution for above-the-line deduction + Form 8889."""
     contributor: str = "filer"        # "filer" or "spouse"
     contribution_amount: float = 0.0
+    employer_contributions: float = 0.0  # Employer (incl. cafeteria/pre-tax) — Form 8889 Line 9
     coverage_type: str = "self"       # "self" or "family"
     age_55_plus: bool = False         # Catch-up eligible ($1,000 extra)
 
@@ -378,8 +379,13 @@ class TaxResult:
     sched_e_total_expenses: float = 0.0
     sched_e_net_income: float = 0.0
 
-    # --- HSA ---
+    # --- HSA / Form 8889 ---
     hsa_deduction: float = 0.0
+    form_8889_contributions: float = 0.0     # Line 2: total personal contributions
+    form_8889_employer: float = 0.0          # Line 9: employer contributions
+    form_8889_limit: float = 0.0             # Line 7: contribution limit
+    form_8889_deduction: float = 0.0         # Line 13: deductible amount
+    form_8889_excess: float = 0.0            # Excess contributions (6% excise via Form 5329)
 
     # --- Illinois IL-1040 ---
     il_line_1_federal_agi: float = 0.0
@@ -448,6 +454,13 @@ class TaxResult:
             "business_income": round(self.sched_c_total_profit, 2),
             "rental_income": round(self.sched_e_net_income, 2),
             "hsa_deduction": round(self.hsa_deduction, 2),
+            "form_8889": {
+                "personal_contributions": round(self.form_8889_contributions, 2),
+                "employer_contributions": round(self.form_8889_employer, 2),
+                "contribution_limit": round(self.form_8889_limit, 2),
+                "deduction": round(self.form_8889_deduction, 2),
+                "excess_contributions": round(self.form_8889_excess, 2),
+            } if self.form_8889_contributions > 0 or self.form_8889_employer > 0 else None,
             "se_tax": round(self.se_tax, 2),
             "niit": round(self.niit, 2),
             "additional_medicare_tax": round(self.additional_medicare_tax, 2),
@@ -955,10 +968,12 @@ def compute_tax(
     result.se_tax_deduction = result.se_tax * 0.5
     adjustments += result.se_tax_deduction
 
-    # HSA deduction (above-the-line) — IRC §223
+    # HSA deduction (above-the-line) — IRC §223 / Form 8889
     hsa_contributions = hsa_contributions or []
     if hsa_contributions:
-        total_hsa = 0.0
+        total_personal = 0.0
+        total_employer = 0.0
+        total_limit = 0.0
         for hsa in hsa_contributions:
             if hsa.coverage_type == "family":
                 limit = c.HSA_LIMIT_FAMILY
@@ -966,8 +981,35 @@ def compute_tax(
                 limit = c.HSA_LIMIT_SELF
             if hsa.age_55_plus:
                 limit += c.HSA_CATCHUP
-            total_hsa += min(hsa.contribution_amount, limit)
-        result.hsa_deduction = total_hsa
+            total_limit += limit
+            total_personal += hsa.contribution_amount
+            total_employer += hsa.employer_contributions
+            # Deductible = personal contributions, capped at (limit - employer)
+            deductible_room = max(0, limit - hsa.employer_contributions)
+            total_hsa_ded = min(hsa.contribution_amount, deductible_room)
+        # Recompute deduction properly across all contributions
+        total_deductible = 0.0
+        total_excess = 0.0
+        for hsa in hsa_contributions:
+            if hsa.coverage_type == "family":
+                limit = c.HSA_LIMIT_FAMILY
+            else:
+                limit = c.HSA_LIMIT_SELF
+            if hsa.age_55_plus:
+                limit += c.HSA_CATCHUP
+            room = max(0, limit - hsa.employer_contributions)
+            allowed = min(hsa.contribution_amount, room)
+            total_deductible += allowed
+            # Excess = personal + employer over limit
+            total_contrib = hsa.contribution_amount + hsa.employer_contributions
+            if total_contrib > limit:
+                total_excess += total_contrib - limit
+        result.hsa_deduction = total_deductible
+        result.form_8889_contributions = total_personal
+        result.form_8889_employer = total_employer
+        result.form_8889_limit = total_limit
+        result.form_8889_deduction = total_deductible
+        result.form_8889_excess = total_excess
         adjustments += result.hsa_deduction
 
     result.line_10_adjustments = adjustments
@@ -1455,6 +1497,8 @@ def compute_tax(
         result.forms_generated.append("Form 8880")
     if result.estimated_tax_penalty > 0:
         result.forms_generated.append("Form 2210")
+    if result.hsa_deduction > 0 or result.form_8889_contributions > 0:
+        result.forms_generated.append("Form 8889")
     # State forms
     for sr in state_returns:
         if sr.form_name:

@@ -1,0 +1,120 @@
+# Wave 37: Form 8889 HSA Reporting
+# Generated from wave-template.yaml
+
+name: "Wave 37: Form 8889 HSA Reporting PDF"
+description: "Generate IRS Form 8889 PDF from existing HSA computation data. HSA deduction already computed in Wave 32-33; this wave adds the required reporting form."
+version_bump: "3.18.0"
+
+feature:
+  wave_number: 37
+  name: "Form 8889 HSA Reporting"
+  forms: ["Form 8889"]
+  income_type: null
+  deduction_type: "hsa"
+  credit_type: null
+  schedule: null
+
+paths:
+  repo: "/var/lib/rancher/ansible/db/taxlens"
+  engine: "app/tax_engine.py"
+  config: "app/tax_config.py"
+  routes: "app/tax_routes.py"
+  mcp: "app/mcp_server.py"
+  main: "app/main.py"
+  tests: "tests/"
+
+deploy:
+  image: "localhost/taxlens-api:latest"
+  node: "192.168.29.147"
+  ssh_key: "~/.ssh/id_rsa_devops_ssh"
+  namespace: "taxlens"
+  deployment: "taxlens-api"
+  health_url: "https://dropit.istayintek.com/health"
+
+steps:
+  - name: "Data Structures"
+    id: "dataclasses"
+    agent: "tax-engineer"
+    depends_on: []
+    task: |
+      HSAContribution dataclass already exists. Add Form 8889-specific output fields to TaxResult:
+      - form_8889_total_contributions (Line 2)
+      - form_8889_employer_contributions (Line 9)
+      - form_8889_deduction (Line 13 = total - employer)
+      - form_8889_excess_contributions (Line 14-15 if over limit)
+    files: ["app/tax_engine.py"]
+
+  - name: "Constants"
+    id: "constants"
+    agent: "tax-engineer"
+    depends_on: ["dataclasses"]
+    task: |
+      HSA limits already in tax_config.py. Add Form 8889-specific:
+      - HDHP minimum deductible (2025: $1,650 self / $3,300 family)
+      - HDHP max out-of-pocket (2025: $8,300 self / $16,600 family)
+    files: ["app/tax_config.py"]
+
+  - name: "Computation Logic"
+    id: "computation"
+    agent: "tax-engineer"
+    depends_on: ["constants"]
+    task: |
+      Add Form 8889 line computation after HSA deduction calculation.
+      Compute excess contributions (amount over annual limit).
+      6% excise tax on excess (Form 5329 reference).
+    files: ["app/tax_engine.py"]
+
+  - name: "Summary Output"
+    id: "summary"
+    agent: "tax-engineer"
+    depends_on: ["computation"]
+    task: |
+      Add form_8889 section to to_summary() with all line values.
+      Ensure "Form 8889" is in forms_generated.
+    files: ["app/tax_engine.py"]
+
+  - name: "API Models"
+    id: "api"
+    agent: "api-engineer"
+    depends_on: ["summary"]
+    task: |
+      Add employer_contributions field to HSAContributionInput Pydantic model.
+      Pass through to engine. Add Form 8889 PDF to generate_all_pdfs file_map.
+    files: ["app/tax_routes.py"]
+
+  - name: "MCP Integration"
+    id: "mcp"
+    agent: "api-engineer"
+    depends_on: ["api"]
+    task: |
+      Add employer_contributions param to _build_inputs() HSA section.
+      Update get_tax_config() HSA section with HDHP limits.
+    files: ["app/mcp_server.py"]
+
+  - name: "Tests"
+    id: "tests"
+    agent: "test-engineer"
+    depends_on: ["mcp"]
+    task: |
+      Create tests/test_wave37_form8889.py with:
+      - Form 8889 line computation tests (5+)
+      - Excess contribution detection (3+)
+      - Employer contribution handling (3+)
+      - Summary output verification (2+)
+      - MCP integration (2+)
+      Target: 15+ new tests, full suite passes.
+    files: ["tests/test_wave37_form8889.py"]
+
+  - name: "Build & Deploy"
+    id: "deploy"
+    agent: "devops"
+    depends_on: ["tests"]
+    task: "Standard build/deploy/verify cycle."
+    files: []
+
+  - name: "Documentation & Release"
+    id: "docs"
+    agent: "tech-writer"
+    depends_on: ["deploy"]
+    task: "Version bump to 3.18.0, update DECISIONS.md, NEXT-STEPS.md, project memory, commit+tag+release."
+    files: ["app/main.py", "DECISIONS.md", "NEXT-STEPS.md"]
