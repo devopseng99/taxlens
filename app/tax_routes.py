@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
+    RentalProperty, HSAContribution,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -106,6 +107,36 @@ class BrokerageTransactionInput(BaseModel):
     is_long_term: bool = False
 
 
+class RentalPropertyInput(BaseModel):
+    """Schedule E — Rental real estate income/expenses."""
+    property_address: str = ""
+    rental_days: int = 365
+    personal_use_days: int = 0
+    gross_rents: float = 0.0
+    advertising: float = 0.0
+    auto_travel: float = 0.0
+    cleaning_maintenance: float = 0.0
+    commissions: float = 0.0
+    insurance: float = 0.0
+    legal_professional: float = 0.0
+    management_fees: float = 0.0
+    mortgage_interest: float = 0.0
+    repairs: float = 0.0
+    supplies: float = 0.0
+    taxes: float = 0.0
+    utilities: float = 0.0
+    depreciation: float = 0.0
+    other_expenses: float = 0.0
+
+
+class HSAContributionInput(BaseModel):
+    """Health Savings Account contribution."""
+    contributor: str = "filer"
+    contribution_amount: float = 0.0
+    coverage_type: str = "self"
+    age_55_plus: bool = False
+
+
 class PaymentsInput(BaseModel):
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -140,6 +171,12 @@ class TaxDraftRequest(BaseModel):
 
     # Business income (Schedule C)
     businesses: list[BusinessIncomeInput] = Field(default=[], description="Self-employment / business income")
+
+    # Rental income (Schedule E)
+    rental_properties: list[RentalPropertyInput] = Field(default=[], description="Rental real estate properties")
+
+    # HSA contributions
+    hsa_contributions: list[HSAContributionInput] = Field(default=[], description="HSA contributions for above-the-line deduction")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -371,6 +408,31 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for d in req.dependents
     ] if req.dependents else None
 
+    # --- Build rental properties ---
+    rental_list = [
+        RentalProperty(
+            property_address=r.property_address, rental_days=r.rental_days,
+            personal_use_days=r.personal_use_days, gross_rents=r.gross_rents,
+            advertising=r.advertising, auto_travel=r.auto_travel,
+            cleaning_maintenance=r.cleaning_maintenance, commissions=r.commissions,
+            insurance=r.insurance, legal_professional=r.legal_professional,
+            management_fees=r.management_fees, mortgage_interest=r.mortgage_interest,
+            repairs=r.repairs, supplies=r.supplies, taxes=r.taxes,
+            utilities=r.utilities, depreciation=r.depreciation,
+            other_expenses=r.other_expenses,
+        )
+        for r in req.rental_properties
+    ] if req.rental_properties else None
+
+    # --- Build HSA contributions ---
+    hsa_list = [
+        HSAContribution(
+            contributor=h.contributor, contribution_amount=h.contribution_amount,
+            coverage_type=h.coverage_type, age_55_plus=h.age_55_plus,
+        )
+        for h in req.hsa_contributions
+    ] if req.hsa_contributions else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -387,6 +449,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         work_states=req.work_states,
         days_worked_by_state=req.days_worked_by_state or None,
         additional_withholding=ocr_div_withheld + nec_withheld,
+        rental_properties=rental_list,
+        hsa_contributions=hsa_list,
         tax_year=req.tax_year,
     )
 

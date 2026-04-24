@@ -55,6 +55,10 @@ SALT_CAP = 10_000
 SALT_CAP_MFS = 5_000
 STUDENT_LOAN_INTEREST_MAX = 2_500
 MEDICAL_AGI_THRESHOLD = 0.075
+HSA_CATCHUP = 1_000                  # Age 55+ catch-up (statutory, not indexed)
+RENTAL_LOSS_LIMIT = 25_000           # Passive activity loss limit (statutory)
+RENTAL_LOSS_PHASEOUT_START = 100_000 # AGI where $25K allowance starts phasing out
+RENTAL_LOSS_PHASEOUT_END = 150_000   # AGI where allowance is fully phased out
 
 # These thresholds are statutory (set by ACA/law), not inflation-adjusted
 ADDITIONAL_MEDICARE_THRESHOLD = {
@@ -141,6 +145,9 @@ _YEAR_2024 = {
         MFJ:    (46_000, 50_000, 73_000),
         MFS:    (23_000, 25_000, 36_500),
     },
+    # HSA — Rev. Proc. 2023-34
+    "HSA_LIMIT_SELF": 4_150,
+    "HSA_LIMIT_FAMILY": 8_300,
     # Estimated tax penalty rate (IRS sets quarterly)
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -207,6 +214,9 @@ _YEAR_2025 = {
         MFJ:    (47_500, 51_500, 73_000),
         MFS:    (23_750, 25_750, 36_500),
     },
+    # HSA — Rev. Proc. 2024-40
+    "HSA_LIMIT_SELF": 4_300,
+    "HSA_LIMIT_FAMILY": 8_550,
     # Estimated tax penalty rate
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -267,6 +277,10 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.SALT_CAP_MFS = SALT_CAP_MFS
     ns.STUDENT_LOAN_INTEREST_MAX = STUDENT_LOAN_INTEREST_MAX
     ns.MEDICAL_AGI_THRESHOLD = MEDICAL_AGI_THRESHOLD
+    ns.HSA_CATCHUP = HSA_CATCHUP
+    ns.RENTAL_LOSS_LIMIT = RENTAL_LOSS_LIMIT
+    ns.RENTAL_LOSS_PHASEOUT_START = RENTAL_LOSS_PHASEOUT_START
+    ns.RENTAL_LOSS_PHASEOUT_END = RENTAL_LOSS_PHASEOUT_END
 
     return ns
 

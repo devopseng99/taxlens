@@ -220,6 +220,51 @@ class RetirementContribution:
 
 
 @dataclass
+class RentalProperty:
+    """Schedule E — Supplemental Income from rental real estate."""
+    property_address: str = ""
+    rental_days: int = 365            # Days rented at fair market value
+    personal_use_days: int = 0        # Days of personal use
+    gross_rents: float = 0.0          # Gross rental income received
+    # Expenses
+    advertising: float = 0.0
+    auto_travel: float = 0.0
+    cleaning_maintenance: float = 0.0
+    commissions: float = 0.0
+    insurance: float = 0.0
+    legal_professional: float = 0.0
+    management_fees: float = 0.0
+    mortgage_interest: float = 0.0
+    repairs: float = 0.0
+    supplies: float = 0.0
+    taxes: float = 0.0
+    utilities: float = 0.0
+    depreciation: float = 0.0
+    other_expenses: float = 0.0
+
+    @property
+    def total_expenses(self) -> float:
+        return (self.advertising + self.auto_travel + self.cleaning_maintenance +
+                self.commissions + self.insurance + self.legal_professional +
+                self.management_fees + self.mortgage_interest + self.repairs +
+                self.supplies + self.taxes + self.utilities + self.depreciation +
+                self.other_expenses)
+
+    @property
+    def net_income(self) -> float:
+        return self.gross_rents - self.total_expenses
+
+
+@dataclass
+class HSAContribution:
+    """Health Savings Account contribution for above-the-line deduction."""
+    contributor: str = "filer"        # "filer" or "spouse"
+    contribution_amount: float = 0.0
+    coverage_type: str = "self"       # "self" or "family"
+    age_55_plus: bool = False         # Catch-up eligible ($1,000 extra)
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -327,6 +372,15 @@ class TaxResult:
     sched_d_long_term_gain: float = 0.0
     sched_d_net_gain: float = 0.0
 
+    # --- Schedule E (Rental Income) ---
+    sched_e_properties: list = field(default_factory=list)
+    sched_e_total_income: float = 0.0
+    sched_e_total_expenses: float = 0.0
+    sched_e_net_income: float = 0.0
+
+    # --- HSA ---
+    hsa_deduction: float = 0.0
+
     # --- Illinois IL-1040 ---
     il_line_1_federal_agi: float = 0.0
     il_line_3_additions: float = 0.0
@@ -392,6 +446,8 @@ class TaxResult:
             "deduction_amount": round(self.line_13_deduction, 2),
             "taxable_income": round(self.line_15_taxable_income, 2),
             "business_income": round(self.sched_c_total_profit, 2),
+            "rental_income": round(self.sched_e_net_income, 2),
+            "hsa_deduction": round(self.hsa_deduction, 2),
             "se_tax": round(self.se_tax, 2),
             "niit": round(self.niit, 2),
             "additional_medicare_tax": round(self.additional_medicare_tax, 2),
@@ -726,6 +782,8 @@ def compute_tax(
     education_expenses: list[EducationExpense] | None = None,
     dependent_care_expenses: list[DependentCareExpense] | None = None,
     retirement_contributions: list[RetirementContribution] | None = None,
+    rental_properties: list[RentalProperty] | None = None,
+    hsa_contributions: list[HSAContribution] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -816,6 +874,44 @@ def compute_tax(
     result.sched_c_total_profit = sum(b.net_profit for b in businesses)
     result.line_8a_business_income = result.sched_c_total_profit
 
+    # Schedule E: Rental income (passive activity)
+    rental_properties = rental_properties or []
+    if rental_properties:
+        for prop in rental_properties:
+            result.sched_e_properties.append({
+                "address": prop.property_address,
+                "rental_days": prop.rental_days,
+                "personal_use_days": prop.personal_use_days,
+                "gross_rents": prop.gross_rents,
+                "total_expenses": prop.total_expenses,
+                "net_income": prop.net_income,
+            })
+        result.sched_e_total_income = sum(p.gross_rents for p in rental_properties)
+        result.sched_e_total_expenses = sum(p.total_expenses for p in rental_properties)
+        raw_net = sum(p.net_income for p in rental_properties)
+
+        if raw_net >= 0:
+            # Net rental income — fully included
+            result.sched_e_net_income = raw_net
+        else:
+            # Net rental loss — passive activity loss rules (IRC §469)
+            # Active participation: up to $25K loss allowed, phased out for AGI $100K-$150K
+            # Use a preliminary AGI estimate (income before rental loss adjustment)
+            prelim_agi = (
+                result.line_1a_wages + result.line_2b_taxable_interest
+                + result.line_3b_ordinary_dividends + result.line_7_capital_gain_loss
+                + result.line_8_other_income + result.line_8a_business_income
+            )
+            if prelim_agi <= c.RENTAL_LOSS_PHASEOUT_START:
+                allowed_loss = min(abs(raw_net), c.RENTAL_LOSS_LIMIT)
+            elif prelim_agi >= c.RENTAL_LOSS_PHASEOUT_END:
+                allowed_loss = 0.0
+            else:
+                # Phase out: reduce $25K by 50% of excess over $100K
+                reduction = (prelim_agi - c.RENTAL_LOSS_PHASEOUT_START) * 0.50
+                allowed_loss = max(0, min(abs(raw_net), c.RENTAL_LOSS_LIMIT - reduction))
+            result.sched_e_net_income = -allowed_loss
+
     # Line 9: Total income
     result.line_9_total_income = (
         result.line_1a_wages
@@ -824,6 +920,7 @@ def compute_tax(
         + result.line_7_capital_gain_loss
         + result.line_8_other_income
         + result.line_8a_business_income
+        + result.sched_e_net_income
     )
 
     # =======================================================================
@@ -857,6 +954,22 @@ def compute_tax(
     # 50% of SE tax is deductible above-the-line
     result.se_tax_deduction = result.se_tax * 0.5
     adjustments += result.se_tax_deduction
+
+    # HSA deduction (above-the-line) — IRC §223
+    hsa_contributions = hsa_contributions or []
+    if hsa_contributions:
+        total_hsa = 0.0
+        for hsa in hsa_contributions:
+            if hsa.coverage_type == "family":
+                limit = c.HSA_LIMIT_FAMILY
+            else:
+                limit = c.HSA_LIMIT_SELF
+            if hsa.age_55_plus:
+                limit += c.HSA_CATCHUP
+            total_hsa += min(hsa.contribution_amount, limit)
+        result.hsa_deduction = total_hsa
+        adjustments += result.hsa_deduction
+
     result.line_10_adjustments = adjustments
 
     # Line 11: AGI
@@ -1320,6 +1433,8 @@ def compute_tax(
         result.forms_generated.append("Schedule A")
     if result.sched_b_interest_total > 1500 or result.sched_b_dividends_total > 1500:
         result.forms_generated.append("Schedule B")
+    if rental_properties:
+        result.forms_generated.append("Schedule E")
     if additional.capital_transactions:
         result.forms_generated.append("Schedule D")
     if result.niit > 0 or result.additional_medicare_tax > 0 or result.se_tax > 0:

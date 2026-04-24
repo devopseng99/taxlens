@@ -16,6 +16,7 @@ from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     EducationExpense, DependentCareExpense, RetirementContribution,
+    RentalProperty, HSAContribution,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -85,6 +86,8 @@ def _build_inputs(
     education_expenses: list[dict] | None = None,
     dependent_care_expenses: list[dict] | None = None,
     retirement_contributions: list[dict] | None = None,
+    rental_properties: list[dict] | None = None,
+    hsa_contributions: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -193,6 +196,46 @@ def _build_inputs(
             for r in retirement_contributions
         ]
 
+    # Build rental properties
+    rental_list = None
+    if rental_properties:
+        rental_list = [
+            RentalProperty(
+                property_address=r.get("property_address", ""),
+                rental_days=r.get("rental_days", 365),
+                personal_use_days=r.get("personal_use_days", 0),
+                gross_rents=r.get("gross_rents", 0),
+                advertising=r.get("advertising", 0),
+                auto_travel=r.get("auto_travel", 0),
+                cleaning_maintenance=r.get("cleaning_maintenance", 0),
+                commissions=r.get("commissions", 0),
+                insurance=r.get("insurance", 0),
+                legal_professional=r.get("legal_professional", 0),
+                management_fees=r.get("management_fees", 0),
+                mortgage_interest=r.get("mortgage_interest", 0),
+                repairs=r.get("repairs", 0),
+                supplies=r.get("supplies", 0),
+                taxes=r.get("taxes", 0),
+                utilities=r.get("utilities", 0),
+                depreciation=r.get("depreciation", 0),
+                other_expenses=r.get("other_expenses", 0),
+            )
+            for r in rental_properties
+        ]
+
+    # Build HSA contributions
+    hsa_list = None
+    if hsa_contributions:
+        hsa_list = [
+            HSAContribution(
+                contributor=h.get("contributor", "filer"),
+                contribution_amount=h.get("contribution_amount", 0),
+                coverage_type=h.get("coverage_type", "self"),
+                age_55_plus=h.get("age_55_plus", False),
+            )
+            for h in hsa_contributions
+        ]
+
     return dict(
         filing_status=filing_status,
         filer=filer,
@@ -210,6 +253,8 @@ def _build_inputs(
         education_expenses=edu_list,
         dependent_care_expenses=care_list,
         retirement_contributions=ret_list,
+        rental_properties=rental_list,
+        hsa_contributions=hsa_list,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -255,6 +300,8 @@ def compute_tax_scenario(
     education_expenses: list[dict] | None = None,
     dependent_care_expenses: list[dict] | None = None,
     retirement_contributions: list[dict] | None = None,
+    rental_properties: list[dict] | None = None,
+    hsa_contributions: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -291,6 +338,8 @@ def compute_tax_scenario(
         education_expenses: Per-student education expenses for AOTC/LLC credits. Each dict: {"student_name", "qualified_expenses", "credit_type" ("aotc" or "llc")}. AOTC: $2,500 max (40% refundable). LLC: $2,000 max (nonrefundable).
         dependent_care_expenses: Child/dependent care expenses for CDCC (Form 2441). Each dict: {"dependent_name", "care_expenses"}. $3K limit (1 dependent) or $6K (2+).
         retirement_contributions: Retirement savings for Saver's Credit (Form 8880). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount"}. $2K max per person. 50%/20%/10% credit rate based on AGI.
+        rental_properties: Rental real estate (Schedule E). Each dict: {"property_address", "gross_rents", "mortgage_interest", "taxes", "insurance", "repairs", "depreciation", ...}. Passive activity loss limited to $25K (phaseout $100K-$150K AGI).
+        hsa_contributions: Health Savings Account contributions (above-the-line deduction). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount", "coverage_type" ("self" or "family"), "age_55_plus" (bool)}. 2025 limits: $4,300 self / $8,550 family + $1,000 catch-up if 55+.
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor). If >$0, engine checks 100%/110% prior year safe harbor.
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold). High AGI = $150K/$75K MFS.
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -315,6 +364,8 @@ def compute_tax_scenario(
         education_expenses=education_expenses,
         dependent_care_expenses=dependent_care_expenses,
         retirement_contributions=retirement_contributions,
+        rental_properties=rental_properties,
+        hsa_contributions=hsa_contributions,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )
@@ -560,6 +611,16 @@ def get_tax_config(
             "taxable_income_limit": c.QBI_TAXABLE_INCOME_LIMIT.get(filing_status),
         },
         "salt_cap": c.SALT_CAP,
+        "hsa": {
+            "limit_self": c.HSA_LIMIT_SELF,
+            "limit_family": c.HSA_LIMIT_FAMILY,
+            "catchup_55_plus": c.HSA_CATCHUP,
+        },
+        "rental": {
+            "passive_loss_limit": c.RENTAL_LOSS_LIMIT,
+            "phaseout_start_agi": c.RENTAL_LOSS_PHASEOUT_START,
+            "phaseout_end_agi": c.RENTAL_LOSS_PHASEOUT_END,
+        },
         "penalty": {
             "threshold": c.ESTIMATED_TAX_PENALTY_THRESHOLD,
             "rate": c.ESTIMATED_TAX_PENALTY_RATE,
