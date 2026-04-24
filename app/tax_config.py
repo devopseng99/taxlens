@@ -55,6 +55,11 @@ SALT_CAP = 10_000
 SALT_CAP_MFS = 5_000
 STUDENT_LOAN_INTEREST_MAX = 2_500
 MEDICAL_AGI_THRESHOLD = 0.075
+
+# --- Charitable Contribution AGI Limits (IRC §170) ---
+# Statutory percentages — same for all tax years
+CHARITABLE_CASH_AGI_LIMIT = 0.60     # Cash to public charities: 60% of AGI
+CHARITABLE_NONCASH_AGI_LIMIT = 0.30  # Non-cash property: 30% of AGI
 HSA_CATCHUP = 1_000                  # Age 55+ catch-up (statutory, not indexed)
 IRA_CATCHUP = 1_000                   # Age 50+ catch-up (statutory, not indexed)
 EARLY_WITHDRAWAL_PENALTY_RATE = 0.10  # 10% early withdrawal from retirement acct
@@ -370,6 +375,8 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.SALT_CAP_MFS = SALT_CAP_MFS
     ns.STUDENT_LOAN_INTEREST_MAX = STUDENT_LOAN_INTEREST_MAX
     ns.MEDICAL_AGI_THRESHOLD = MEDICAL_AGI_THRESHOLD
+    ns.CHARITABLE_CASH_AGI_LIMIT = CHARITABLE_CASH_AGI_LIMIT
+    ns.CHARITABLE_NONCASH_AGI_LIMIT = CHARITABLE_NONCASH_AGI_LIMIT
     ns.HSA_CATCHUP = HSA_CATCHUP
     ns.CAPITAL_LOSS_LIMIT = CAPITAL_LOSS_LIMIT
     ns.CAPITAL_LOSS_LIMIT_MFS = CAPITAL_LOSS_LIMIT_MFS

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.28.0)
+Updated: 2026-04-24 (v3.29.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -896,6 +896,27 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
 
+### Wave 50 — Charitable Contribution AGI Limits (v3.29.0) — 2026-04-24
+
+- [x] IRC §170 cash contribution limit: 60% of AGI
+- [x] IRC §170 non-cash contribution limit: 30% of AGI
+- [x] Overall charitable cap: 60% of AGI (combined cash + non-cash)
+- [x] `charitable_carryforward` tracked on TaxResult for excess over AGI limits
+- [x] `charitable_cash_before_limit` / `charitable_noncash_before_limit` preserve raw inputs
+- [x] Carryforward appears in summary JSON when > 0
+- [x] Zero AGI edge case: zero charitable allowed (no division error)
+- [x] Statutory percentages: same for 2024 and 2025 (not inflation-indexed)
+- [x] Full backward compatibility: small donations unchanged
+- [x] 844/844 unit tests (17 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave50_charitable_limits.py` — 17 tests (4 cash, 3 non-cash, 5 combined, 4 edge cases, 1 backward compat)
+
+**Modified files:**
+- `app/tax_engine.py` — TaxResult charitable fields, §170 AGI limit logic in Schedule A section
+- `app/tax_config.py` — CHARITABLE_CASH_AGI_LIMIT (60%), CHARITABLE_NONCASH_AGI_LIMIT (30%)
+- `app/main.py` — version 3.29.0
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
@@ -905,4 +926,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI), charitable AGI limits, Schedule 1/3/E PDF generation
+- **Tax engine remaining:** Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI), Schedule 1/3/E PDF generation

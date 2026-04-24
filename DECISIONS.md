@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.28.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.29.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,14 @@ Updated: 2026-04-24 (v3.28.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 50 — Charitable Contribution AGI Limits (v3.29.0)
+
+215. **IRC §170 percentage limits on charitable deductions** — Cash contributions to public charities are capped at 60% of AGI, non-cash contributions at 30% of AGI, and total charitable at 60% of AGI. Previously charitable was an unlimited pass-through. These are statutory percentages (not inflation-indexed) — same for all tax years. Excess creates a 5-year carryforward tracked on `charitable_carryforward`.
+
+216. **Three-layer charitable cap: cash, non-cash, overall** — Cash is individually capped at 60%, non-cash at 30%, and their sum is capped at 60% overall. This means a $100K AGI filer with $55K cash + $25K non-cash gets limited: cash passes ($55K < $60K), non-cash passes ($25K < $30K), but combined $80K exceeds $60K overall → capped at $60K. The overall cap is the binding constraint in many real cases.
+
+217. **Pre-limit tracking for audit and carryforward** — `charitable_cash_before_limit` and `charitable_noncash_before_limit` preserve the raw input amounts. This enables: (1) audit risk scoring can flag large donations relative to income even after the limit reduces the deduction, (2) the carryforward amount is precisely `raw_total - allowed_total`, (3) users can see exactly how much was limited.
 
 ## Wave 49 — Student Loan Phaseout + Foreign Tax Credit + Gambling (v3.28.0)
 

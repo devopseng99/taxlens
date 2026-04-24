@@ -564,6 +564,9 @@ class TaxResult:
     sched_a_salt: float = 0.0
     sched_a_mortgage_interest: float = 0.0
     sched_a_charitable: float = 0.0
+    charitable_cash_before_limit: float = 0.0   # Cash before AGI cap
+    charitable_noncash_before_limit: float = 0.0 # Non-cash before AGI cap
+    charitable_carryforward: float = 0.0         # Excess over AGI limits → 5-year carryforward
     sched_a_total: float = 0.0
 
     # --- Schedule B ---
@@ -824,6 +827,7 @@ class TaxResult:
             } if self.gambling_winnings > 0 else None,
             "student_loan_deduction": round(self.student_loan_deduction, 2) if self.student_loan_deduction > 0 else None,
             "student_loan_phaseout_applied": self.student_loan_phaseout_applied if self.student_loan_phaseout_applied else None,
+            "charitable_carryforward": round(self.charitable_carryforward, 2) if self.charitable_carryforward > 0 else None,
             "capital_loss_carryforward": round(self.capital_loss_carryforward, 2) if self.capital_loss_carryforward > 0 else None,
             "capital_loss_carryover_used": round(self.capital_loss_carryover_used, 2) if self.capital_loss_carryover_used > 0 else None,
             "k1_ordinary_income": round(self.k1_ordinary_income, 2),
@@ -1745,8 +1749,23 @@ def compute_tax(
     # Mortgage interest
     result.sched_a_mortgage_interest = deductions.mortgage_interest
 
-    # Charitable contributions
-    result.sched_a_charitable = deductions.charitable_cash + deductions.charitable_noncash
+    # Charitable contributions — IRC §170 AGI limits
+    raw_cash = deductions.charitable_cash
+    raw_noncash = deductions.charitable_noncash
+    result.charitable_cash_before_limit = raw_cash
+    result.charitable_noncash_before_limit = raw_noncash
+
+    cash_limit = result.line_11_agi * c.CHARITABLE_CASH_AGI_LIMIT    # 60% of AGI
+    noncash_limit = result.line_11_agi * c.CHARITABLE_NONCASH_AGI_LIMIT  # 30% of AGI
+
+    allowed_cash = min(raw_cash, cash_limit)
+    allowed_noncash = min(raw_noncash, noncash_limit)
+    # Total charitable also capped at 60% of AGI (IRC §170(b))
+    overall_limit = result.line_11_agi * c.CHARITABLE_CASH_AGI_LIMIT
+    total_allowed = min(allowed_cash + allowed_noncash, overall_limit)
+    result.sched_a_charitable = round(total_allowed, 2)
+    total_raw = raw_cash + raw_noncash
+    result.charitable_carryforward = round(max(0, total_raw - total_allowed), 2)
 
     result.sched_a_total = (
         result.sched_a_medical
