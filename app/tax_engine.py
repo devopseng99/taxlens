@@ -319,6 +319,23 @@ class RetirementContribution:
 
 
 @dataclass
+class GamblingIncome:
+    """Form W-2G — Certain Gambling Winnings."""
+    payer_name: str = ""
+    winnings: float = 0.0               # Box 1: Reportable winnings
+    federal_withheld: float = 0.0       # Box 4: Federal income tax withheld
+    type_of_wager: str = ""             # Box 15: Type (slots, poker, lottery, etc.)
+
+
+@dataclass
+class ForeignTaxCredit:
+    """Simplified foreign tax credit — Form 1116."""
+    country: str = ""
+    foreign_source_income: float = 0.0  # Income earned in foreign country
+    foreign_tax_paid: float = 0.0       # Tax paid to foreign government
+
+
+@dataclass
 class RentalProperty:
     """Schedule E — Supplemental Income from rental real estate."""
     property_address: str = ""
@@ -623,6 +640,21 @@ class TaxResult:
     unemployment_federal_withheld: float = 0.0
     unemployment_state_withheld: float = 0.0
 
+    # --- Gambling Income (Form W-2G) ---
+    gambling_winnings: float = 0.0           # Total W-2G winnings (line 8 other income)
+    gambling_losses: float = 0.0             # Losses offset (limited to winnings per §165(d))
+    gambling_federal_withheld: float = 0.0   # W-2G Box 4 withholding
+
+    # --- Foreign Tax Credit (Form 1116) ---
+    foreign_tax_credit: float = 0.0          # Nonrefundable credit on line 21
+    foreign_source_income: float = 0.0       # Total foreign source income
+    foreign_tax_paid: float = 0.0            # Total tax paid to foreign governments
+
+    # --- Student Loan Interest Phaseout ---
+    student_loan_deduction: float = 0.0                  # After phaseout
+    student_loan_deduction_before_phaseout: float = 0.0  # Before phaseout
+    student_loan_phaseout_applied: bool = False
+
     # --- Above-the-line Adjustments ---
     educator_expense_deduction: float = 0.0  # K-12 teacher max $300 ($600 MFJ both educators)
     alimony_paid: float = 0.0                # Pre-2019 divorce: above-the-line deduction
@@ -783,6 +815,15 @@ class TaxResult:
             "energy_credit": round(self.energy_total_credit, 2),
             "energy_clean_credit": round(self.energy_clean_credit, 2),
             "energy_improvement_credit": round(self.energy_improvement_credit, 2),
+            "foreign_tax_credit": round(self.foreign_tax_credit, 2) if self.foreign_tax_credit > 0 else None,
+            "gambling": {
+                "winnings": round(self.gambling_winnings, 2),
+                "losses_offset": round(self.gambling_losses, 2),
+                "net_income": round(self.gambling_winnings - self.gambling_losses, 2),
+                "federal_withheld": round(self.gambling_federal_withheld, 2),
+            } if self.gambling_winnings > 0 else None,
+            "student_loan_deduction": round(self.student_loan_deduction, 2) if self.student_loan_deduction > 0 else None,
+            "student_loan_phaseout_applied": self.student_loan_phaseout_applied if self.student_loan_phaseout_applied else None,
             "capital_loss_carryforward": round(self.capital_loss_carryforward, 2) if self.capital_loss_carryforward > 0 else None,
             "capital_loss_carryover_used": round(self.capital_loss_carryover_used, 2) if self.capital_loss_carryover_used > 0 else None,
             "k1_ordinary_income": round(self.k1_ordinary_income, 2),
@@ -1125,6 +1166,9 @@ def compute_tax(
     ira_contributions: list[IRAContribution] | None = None,
     social_security_benefits: list[SocialSecurityBenefit] | None = None,
     unemployment_benefits: list[UnemploymentCompensation] | None = None,
+    gambling_income: list[GamblingIncome] | None = None,
+    gambling_losses: float = 0.0,
+    foreign_tax_credits: list[ForeignTaxCredit] | None = None,
     educator_expenses: float = 0.0,
     alimony_paid: float = 0.0,
     alimony_received: float = 0.0,
@@ -1464,6 +1508,22 @@ def compute_tax(
         # Deduction applied in ADJUSTMENTS section below
 
     # =======================================================================
+    # FORM W-2G — Gambling Income (IRC §165(d) loss limitation)
+    # =======================================================================
+    gambling_income = gambling_income or []
+    if gambling_income:
+        total_winnings = sum(g.winnings for g in gambling_income)
+        total_withheld = sum(g.federal_withheld for g in gambling_income)
+        result.gambling_winnings = total_winnings
+        result.gambling_federal_withheld = total_withheld
+        # Gambling losses: capped at winnings per §165(d)
+        if gambling_losses > 0:
+            result.gambling_losses = min(gambling_losses, total_winnings)
+        # Net gambling income → line 8 other income (winnings minus allowed losses)
+        net_gambling = total_winnings - result.gambling_losses
+        result.line_8_other_income += net_gambling
+
+    # =======================================================================
     # SOCIAL SECURITY BENEFITS — IRC §86 Taxability
     # =======================================================================
     social_security_benefits = social_security_benefits or []
@@ -1551,8 +1611,8 @@ def compute_tax(
     # =======================================================================
 
     adjustments = 0.0
-    # Student loan interest deduction (above-the-line, max $2,500)
-    adjustments += min(deductions.student_loan_interest, c.STUDENT_LOAN_INTEREST_MAX)
+    # Student loan interest — computed later after other adjustments (needs MAGI for phaseout)
+    raw_student_loan = min(deductions.student_loan_interest, c.STUDENT_LOAN_INTEREST_MAX)
     # 50% of SE tax is deductible above-the-line
     result.se_tax_deduction = result.se_tax * 0.5
     adjustments += result.se_tax_deduction
@@ -1640,6 +1700,29 @@ def compute_tax(
     # Alimony paid — above-the-line deduction (pre-2019 divorce agreements only)
     if result.alimony_paid > 0:
         adjustments += result.alimony_paid
+
+    # Student loan interest deduction with MAGI phaseout (IRC §221(b)(2))
+    if raw_student_loan > 0:
+        result.student_loan_deduction_before_phaseout = raw_student_loan
+        # MAGI for student loan = total income - all other adjustments (excluding student loan itself)
+        magi_sl = result.line_9_total_income - adjustments
+        phaseout = c.STUDENT_LOAN_PHASEOUT.get(filing_status, (0, 0))
+        start, end = phaseout
+        if start == 0 and end == 0:
+            # MFS: no deduction allowed
+            result.student_loan_deduction = 0.0
+            result.student_loan_phaseout_applied = True
+        elif magi_sl >= end:
+            result.student_loan_deduction = 0.0
+            result.student_loan_phaseout_applied = True
+        elif magi_sl > start:
+            # Linear phaseout
+            reduction_frac = (magi_sl - start) / (end - start)
+            result.student_loan_deduction = round(raw_student_loan * (1 - reduction_frac), 2)
+            result.student_loan_phaseout_applied = True
+        else:
+            result.student_loan_deduction = raw_student_loan
+        adjustments += result.student_loan_deduction
 
     result.line_10_adjustments = adjustments
 
@@ -1986,6 +2069,21 @@ def compute_tax(
         result.line_24_total_tax -= result.energy_total_credit
 
     # =======================================================================
+    # FOREIGN TAX CREDIT — Form 1116 (simplified)
+    # =======================================================================
+    foreign_tax_credits = foreign_tax_credits or []
+    if foreign_tax_credits and result.line_24_total_tax > 0:
+        total_foreign_income = sum(f.foreign_source_income for f in foreign_tax_credits)
+        total_foreign_tax = sum(f.foreign_tax_paid for f in foreign_tax_credits)
+        result.foreign_source_income = total_foreign_income
+        result.foreign_tax_paid = total_foreign_tax
+        # Credit limitation: lesser of (a) tax paid or (b) tax * (foreign income / taxable income)
+        if result.line_15_taxable_income > 0 and total_foreign_income > 0:
+            limitation = result.line_16_tax * (total_foreign_income / result.line_15_taxable_income)
+            result.foreign_tax_credit = min(total_foreign_tax, limitation, result.line_24_total_tax)
+            result.line_24_total_tax -= result.foreign_tax_credit
+
+    # =======================================================================
     # EARNED INCOME TAX CREDIT (EITC) — Schedule EIC
     # =======================================================================
 
@@ -2026,7 +2124,7 @@ def compute_tax(
     # PAYMENTS (Lines 25-33)
     # =======================================================================
 
-    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding + result.retirement_federal_withheld + result.ss_federal_withheld + result.unemployment_federal_withheld
+    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding + result.retirement_federal_withheld + result.ss_federal_withheld + result.unemployment_federal_withheld + result.gambling_federal_withheld
     result.estimated_payments = payments.estimated_federal
     result.line_33_total_payments = (
         result.line_25_federal_withheld

@@ -15,6 +15,7 @@ from tax_engine import (
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
     UnemploymentCompensation, EducationExpense, DependentCareExpense, RetirementContribution,
+    GamblingIncome, ForeignTaxCredit,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -245,6 +246,21 @@ class RetirementContributionInput(BaseModel):
     contribution_amount: float = 0.0
 
 
+class GamblingIncomeInput(BaseModel):
+    """Form W-2G — Certain Gambling Winnings."""
+    payer_name: str = ""
+    winnings: float = 0.0
+    federal_withheld: float = 0.0
+    type_of_wager: str = ""
+
+
+class ForeignTaxCreditInput(BaseModel):
+    """Form 1116 — Foreign Tax Credit (simplified)."""
+    country: str = ""
+    foreign_source_income: float = 0.0
+    foreign_tax_paid: float = 0.0
+
+
 class DepreciableAssetInput(BaseModel):
     """Form 4562 — Depreciable business or rental asset."""
     description: str = ""
@@ -333,6 +349,11 @@ class TaxDraftRequest(BaseModel):
     education_expenses: list[EducationExpenseInput] = Field(default=[], description="Per-student education expenses (AOTC $2,500 max, LLC $2,000 max)")
     dependent_care_expenses: list[DependentCareExpenseInput] = Field(default=[], description="Child/dependent care expenses (Form 2441)")
     retirement_contributions: list[RetirementContributionInput] = Field(default=[], description="Retirement contributions for Saver's Credit (Form 8880)")
+
+    # Gambling income (Form W-2G) + foreign tax credit (Form 1116)
+    gambling_income: list[GamblingIncomeInput] = Field(default=[], description="Form W-2G gambling winnings")
+    gambling_losses: float = Field(default=0, description="Total gambling losses (limited to winnings per IRC §165(d))")
+    foreign_tax_credits: list[ForeignTaxCreditInput] = Field(default=[], description="Foreign tax credits (Form 1116 simplified)")
 
     # Filer/spouse age and vision status (for additional standard deduction)
     filer_age_65_plus: bool = Field(default=False, description="Filer is age 65 or older at end of tax year")
@@ -720,6 +741,24 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for r in req.retirement_contributions
     ] if req.retirement_contributions else None
 
+    # --- Build gambling income ---
+    gambling_list = [
+        GamblingIncome(
+            payer_name=g.payer_name, winnings=g.winnings,
+            federal_withheld=g.federal_withheld, type_of_wager=g.type_of_wager,
+        )
+        for g in req.gambling_income
+    ] if req.gambling_income else None
+
+    # --- Build foreign tax credits ---
+    ftc_list = [
+        ForeignTaxCredit(
+            country=f.country, foreign_source_income=f.foreign_source_income,
+            foreign_tax_paid=f.foreign_tax_paid,
+        )
+        for f in req.foreign_tax_credits
+    ] if req.foreign_tax_credits else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -746,6 +785,9 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         ira_contributions=ira_list,
         social_security_benefits=ss_list,
         unemployment_benefits=unemployment_list,
+        gambling_income=gambling_list,
+        gambling_losses=req.gambling_losses,
+        foreign_tax_credits=ftc_list,
         education_expenses=edu_list,
         dependent_care_expenses=care_list,
         retirement_contributions=ret_contrib_list,

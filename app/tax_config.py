@@ -59,6 +59,13 @@ HSA_CATCHUP = 1_000                  # Age 55+ catch-up (statutory, not indexed)
 IRA_CATCHUP = 1_000                   # Age 50+ catch-up (statutory, not indexed)
 EARLY_WITHDRAWAL_PENALTY_RATE = 0.10  # 10% early withdrawal from retirement acct
 
+# --- Student Loan Interest Deduction Phaseout ---
+# Per IRC §221(b)(2) — MAGI-based linear phaseout, MFS gets $0
+STUDENT_LOAN_PHASEOUT = {
+    2024: {SINGLE: (80_000, 95_000), HOH: (80_000, 95_000), MFJ: (165_000, 195_000), MFS: (0, 0)},
+    2025: {SINGLE: (80_000, 95_000), HOH: (80_000, 95_000), MFJ: (165_000, 195_000), MFS: (0, 0)},
+}
+
 # --- IRA Deduction Phaseout (active plan participants) ---
 # Per IRC §219(g) — phase out IRA deduction when filer/spouse is covered by employer plan
 # Ranges are (start, end) — deduction phases out linearly between start and end
@@ -380,6 +387,7 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.EARLY_WITHDRAWAL_PENALTY_RATE = EARLY_WITHDRAWAL_PENALTY_RATE
     ns.IRA_PHASEOUT_ACTIVE = IRA_PHASEOUT_ACTIVE.get(tax_year, IRA_PHASEOUT_ACTIVE[2025])
     ns.IRA_PHASEOUT_SPOUSE_ACTIVE = IRA_PHASEOUT_SPOUSE_ACTIVE.get(tax_year, IRA_PHASEOUT_SPOUSE_ACTIVE[2025])
+    ns.STUDENT_LOAN_PHASEOUT = STUDENT_LOAN_PHASEOUT.get(tax_year, STUDENT_LOAN_PHASEOUT[2025])
     # Social Security taxability
     ns.SS_TAXABLE_BASE_THRESHOLD = SS_TAXABLE_BASE_THRESHOLD
     ns.SS_TAXABLE_UPPER_THRESHOLD = SS_TAXABLE_UPPER_THRESHOLD

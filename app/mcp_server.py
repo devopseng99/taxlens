@@ -18,7 +18,7 @@ from tax_engine import (
     EducationExpense, DependentCareExpense, RetirementContribution,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
-    UnemploymentCompensation,
+    UnemploymentCompensation, GamblingIncome, ForeignTaxCredit,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -98,6 +98,9 @@ def _build_inputs(
     ira_contributions: list[dict] | None = None,
     social_security_benefits: list[dict] | None = None,
     unemployment_benefits: list[dict] | None = None,
+    gambling_income: list[dict] | None = None,
+    gambling_losses: float = 0,
+    foreign_tax_credits: list[dict] | None = None,
     educator_expenses: float = 0,
     alimony_paid: float = 0,
     alimony_received: float = 0,
@@ -385,6 +388,31 @@ def _build_inputs(
             for u in unemployment_benefits
         ]
 
+    # Build gambling income
+    gamb_list = None
+    if gambling_income:
+        gamb_list = [
+            GamblingIncome(
+                payer_name=g.get("payer_name", ""),
+                winnings=g.get("winnings", 0),
+                federal_withheld=g.get("federal_withheld", 0),
+                type_of_wager=g.get("type_of_wager", ""),
+            )
+            for g in gambling_income
+        ]
+
+    # Build foreign tax credits
+    ftc_list = None
+    if foreign_tax_credits:
+        ftc_list = [
+            ForeignTaxCredit(
+                country=f.get("country", ""),
+                foreign_source_income=f.get("foreign_source_income", 0),
+                foreign_tax_paid=f.get("foreign_tax_paid", 0),
+            )
+            for f in foreign_tax_credits
+        ]
+
     return dict(
         filing_status=filing_status,
         filer=filer,
@@ -412,6 +440,9 @@ def _build_inputs(
         ira_contributions=ira_list,
         social_security_benefits=ss_list,
         unemployment_benefits=unemp_list,
+        gambling_income=gamb_list,
+        gambling_losses=gambling_losses,
+        foreign_tax_credits=ftc_list,
         educator_expenses=educator_expenses,
         alimony_paid=alimony_paid,
         alimony_received=alimony_received,
@@ -477,6 +508,9 @@ def compute_tax_scenario(
     ira_contributions: list[dict] | None = None,
     social_security_benefits: list[dict] | None = None,
     unemployment_benefits: list[dict] | None = None,
+    gambling_income: list[dict] | None = None,
+    gambling_losses: float = 0,
+    foreign_tax_credits: list[dict] | None = None,
     educator_expenses: float = 0,
     alimony_paid: float = 0,
     alimony_received: float = 0,
@@ -533,6 +567,9 @@ def compute_tax_scenario(
         ira_contributions: Traditional IRA contributions for above-the-line deduction. Each dict: {"contributor" ("filer"/"spouse"), "contribution_amount", "age_50_plus" (bool)}. Limit: $7,000 ($8,000 if 50+).
         social_security_benefits: SSA-1099 Social Security benefits. Each dict: {"recipient" ("filer"/"spouse"), "gross_benefits", "federal_withheld"}. Taxable 0-85% based on provisional income (IRC §86). Single: base $25K/upper $34K. MFJ: base $32K/upper $44K.
         unemployment_benefits: Form 1099-G unemployment compensation. Each dict: {"state", "compensation", "federal_withheld", "state_withheld"}. Fully taxable.
+        gambling_income: Form W-2G gambling winnings. Each dict: {"payer_name", "winnings", "federal_withheld", "type_of_wager"}. All winnings are taxable income.
+        gambling_losses: Total gambling losses (limited to gambling winnings per IRC §165(d)). Offset against winnings.
+        foreign_tax_credits: Foreign tax credits (Form 1116 simplified). Each dict: {"country", "foreign_source_income", "foreign_tax_paid"}. Nonrefundable credit limited by taxable income ratio.
         educator_expenses: K-12 teacher qualified expenses (above-the-line, max $300, $600 MFJ both educators).
         alimony_paid: Alimony paid under pre-2019 divorce agreement (above-the-line deduction).
         alimony_received: Alimony received under pre-2019 divorce agreement (taxable income).
@@ -577,6 +614,9 @@ def compute_tax_scenario(
         ira_contributions=ira_contributions,
         social_security_benefits=social_security_benefits,
         unemployment_benefits=unemployment_benefits,
+        gambling_income=gambling_income,
+        gambling_losses=gambling_losses,
+        foreign_tax_credits=foreign_tax_credits,
         educator_expenses=educator_expenses,
         alimony_paid=alimony_paid,
         alimony_received=alimony_received,

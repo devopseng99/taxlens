@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.27.0)
+Updated: 2026-04-24 (v3.28.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -658,6 +658,29 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
 
+### Wave 49 — Student Loan Phaseout + Foreign Tax Credit + Gambling (v3.28.0) — 2026-04-24
+
+- [x] IRC §221(b)(2) student loan interest MAGI phaseout: single/HoH $80K-$95K, MFJ $165K-$195K, MFS $0
+- [x] Student loan phaseout computed after all other adjustments (avoids circular MAGI dependency)
+- [x] GamblingIncome dataclass: Form W-2G (winnings, withholding, wager type)
+- [x] IRC §165(d): gambling losses capped at winnings, netted in line_8_other_income
+- [x] W-2G withholding → line_25 federal withholding
+- [x] ForeignTaxCredit dataclass: simplified Form 1116 (country, foreign income, tax paid)
+- [x] Foreign tax credit: nonrefundable, limited by income ratio and total tax
+- [x] Multiple W-2G and foreign tax credit forms aggregate correctly
+- [x] Full stack: engine + REST API + MCP server
+- [x] 827/827 unit tests (24 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave49_misc_income.py` — 24 tests (10 student loan, 7 gambling, 6 foreign tax, 1 backward compat)
+
+**Modified files:**
+- `app/tax_engine.py` — GamblingIncome/ForeignTaxCredit dataclasses, student_loan_deduction fields, gambling/FTC processing, phaseout logic
+- `app/tax_config.py` — STUDENT_LOAN_PHASEOUT constant (2024+2025)
+- `app/tax_routes.py` — GamblingIncomeInput/ForeignTaxCreditInput models, TaxDraftRequest fields
+- `app/mcp_server.py` — gambling/FTC params on _build_inputs + compute_tax_scenario
+- `app/main.py` — version 3.28.0
+
 ### Wave 48 — Retirement Line Reclassification + IRA Phaseout (v3.27.0) — 2026-04-24
 
 - [x] IRA distributions route to 1040 lines 4a/4b (was lumped in line_8_other_income)
@@ -882,4 +905,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Student loan interest MAGI phaseout, foreign tax credit (Form 1116), gambling income/losses, Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI)
+- **Tax engine remaining:** Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI), charitable AGI limits, Schedule 1/3/E PDF generation

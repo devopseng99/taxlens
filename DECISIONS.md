@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.27.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.28.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,14 @@ Updated: 2026-04-24 (v3.27.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 49 — Student Loan Phaseout + Foreign Tax Credit + Gambling (v3.28.0)
+
+212. **Student loan interest MAGI phaseout per IRC §221(b)(2)** — Student loan interest deduction ($2,500 max) was previously a flat cap with no income test. Now phased out linearly: single/HoH $80K-$95K, MFJ $165K-$195K, MFS gets $0 (no deduction allowed). MAGI for this purpose = total income minus all other adjustments (excluding student loan deduction itself). Same pattern as IRA phaseout — avoids circular dependency.
+
+213. **Gambling income as net in line_8_other_income** — W-2G gambling winnings flow to line_8_other_income, with gambling losses immediately netted against winnings (limited to winnings per IRC §165(d)). Strictly, gambling losses should be a Schedule A itemized deduction, but netting at the income level is the pragmatic approach and matches economic reality. W-2G federal withholding flows to line_25.
+
+214. **Simplified foreign tax credit (Form 1116)** — Foreign tax paid is a nonrefundable credit limited by: `line_16_tax * (foreign_source_income / line_15_taxable_income)`. This is the simplified limitation method — it doesn't handle separate basket categories (general vs passive), carryforward/carryback, or AMT foreign tax credit. Sufficient for most individual filers with straightforward foreign income.
 
 ## Wave 48 — Retirement Line Reclassification + IRA Phaseout (v3.27.0)
 
