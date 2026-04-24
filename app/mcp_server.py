@@ -14,9 +14,11 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
-    AdditionalIncome, DividendIncome, Payments, TaxResult,
+    AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
+    EducationExpense, DependentCareExpense, RetirementContribution,
     compute_tax,
 )
+from tax_config import get_year_config, SUPPORTED_TAX_YEARS
 from state_configs import get_state_config, NO_TAX_STATES
 
 STORAGE_ROOT = Path(os.getenv("TAXLENS_STORAGE_ROOT", "/data/documents"))
@@ -26,8 +28,12 @@ mcp = FastMCP(
     name="TaxLens",
     instructions=(
         "TaxLens is a tax computation engine for US federal + state taxes (tax years 2024 and 2025). "
-        "Use compute_tax to calculate taxes for any scenario. Use compare_scenarios to "
-        "compare filing strategies side-by-side. Use list_states to see supported states. "
+        "Use compute_tax_scenario to calculate taxes for any scenario — supports structured dependents "
+        "(with DOB for age-based credit eligibility), education expenses (AOTC/LLC), dependent care "
+        "expenses (CDCC), retirement contributions (Saver's Credit), multi-state filing, and penalty "
+        "estimation via prior_year_tax/prior_year_agi. Use compare_scenarios to compare filing "
+        "strategies side-by-side. Use get_tax_config to look up brackets, deductions, and credit "
+        "limits for a specific tax year and filing status. Use list_states to see supported states. "
         "Set tax_year=2024 for prior year returns."
     ),
     stateless_http=True,
@@ -64,11 +70,23 @@ def _build_inputs(
     property_tax: float = 0,
     state_tax_paid: float = 0,
     charitable: float = 0,
+    charitable_noncash: float = 0,
+    medical_expenses: float = 0,
     student_loan_interest: float = 0,
+    other_income: float = 0,
     num_dependents: int = 0,
+    dependents: list[dict] | None = None,
     residence_state: str = "IL",
+    work_states: list[str] | None = None,
+    days_worked_by_state: dict[str, int] | None = None,
     estimated_federal: float = 0,
     estimated_state: float = 0,
+    additional_withholding: float = 0,
+    education_expenses: list[dict] | None = None,
+    dependent_care_expenses: list[dict] | None = None,
+    retirement_contributions: list[dict] | None = None,
+    prior_year_tax: float = 0,
+    prior_year_agi: float = 0,
     tax_year: int = 2025,
 ) -> dict:
     """Convert simplified params to engine-ready inputs."""
@@ -99,6 +117,7 @@ def _build_inputs(
         ordinary_dividends=ordinary_dividends,
         qualified_dividends=qualified_dividends,
         capital_transactions=cap_txns,
+        other_income=other_income,
     )
 
     businesses = []
@@ -114,6 +133,8 @@ def _build_inputs(
         property_tax=property_tax,
         state_income_tax_paid=state_tax_paid,
         charitable_cash=charitable,
+        charitable_noncash=charitable_noncash,
+        medical_expenses=medical_expenses,
         student_loan_interest=student_loan_interest,
     )
 
@@ -121,6 +142,56 @@ def _build_inputs(
         estimated_federal=estimated_federal,
         estimated_state=estimated_state,
     )
+
+    # Build structured dependents from dicts
+    dep_list = None
+    if dependents:
+        dep_list = [
+            Dependent(
+                first_name=d.get("first_name", ""),
+                last_name=d.get("last_name", ""),
+                date_of_birth=d.get("date_of_birth", ""),
+                relationship=d.get("relationship", ""),
+                months_lived_with=d.get("months_lived_with", 12),
+                is_disabled=d.get("is_disabled", False),
+                is_student=d.get("is_student", False),
+            )
+            for d in dependents
+        ]
+
+    # Build education expenses
+    edu_list = None
+    if education_expenses:
+        edu_list = [
+            EducationExpense(
+                student_name=e.get("student_name", ""),
+                qualified_expenses=e.get("qualified_expenses", 0),
+                credit_type=e.get("credit_type", "aotc"),
+            )
+            for e in education_expenses
+        ]
+
+    # Build dependent care expenses
+    care_list = None
+    if dependent_care_expenses:
+        care_list = [
+            DependentCareExpense(
+                dependent_name=d.get("dependent_name", ""),
+                care_expenses=d.get("care_expenses", 0),
+            )
+            for d in dependent_care_expenses
+        ]
+
+    # Build retirement contributions
+    ret_list = None
+    if retirement_contributions:
+        ret_list = [
+            RetirementContribution(
+                contributor=r.get("contributor", "filer"),
+                contribution_amount=r.get("contribution_amount", 0),
+            )
+            for r in retirement_contributions
+        ]
 
     return dict(
         filing_status=filing_status,
@@ -130,8 +201,17 @@ def _build_inputs(
         deductions=deductions,
         payments=payments,
         num_dependents=num_dependents,
+        dependents=dep_list,
         businesses=businesses,
         residence_state=residence_state,
+        work_states=work_states,
+        days_worked_by_state=days_worked_by_state,
+        additional_withholding=additional_withholding,
+        education_expenses=edu_list,
+        dependent_care_expenses=care_list,
+        retirement_contributions=ret_list,
+        prior_year_tax=prior_year_tax,
+        prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )
 
@@ -160,11 +240,23 @@ def compute_tax_scenario(
     property_tax: float = 0,
     state_tax_paid: float = 0,
     charitable: float = 0,
+    charitable_noncash: float = 0,
+    medical_expenses: float = 0,
     student_loan_interest: float = 0,
+    other_income: float = 0,
     num_dependents: int = 0,
+    dependents: list[dict] | None = None,
     residence_state: str = "IL",
+    work_states: list[str] | None = None,
+    days_worked_by_state: dict[str, int] | None = None,
     estimated_federal: float = 0,
     estimated_state: float = 0,
+    additional_withholding: float = 0,
+    education_expenses: list[dict] | None = None,
+    dependent_care_expenses: list[dict] | None = None,
+    retirement_contributions: list[dict] | None = None,
+    prior_year_tax: float = 0,
+    prior_year_agi: float = 0,
     tax_year: int = 2025,
 ) -> str:
     """Compute federal + state taxes for a given scenario.
@@ -183,16 +275,28 @@ def compute_tax_scenario(
         mortgage_interest: Mortgage interest paid (1098 Box 1)
         property_tax: Real estate property tax paid
         state_tax_paid: State income tax paid (for SALT deduction)
-        charitable: Charitable contributions
-        student_loan_interest: Student loan interest paid (above-the-line deduction)
-        num_dependents: Number of qualifying children for Child Tax Credit
-        residence_state: Two-letter state code (e.g., "CA", "TX", "IL")
-        estimated_federal: Estimated federal tax payments made
-        estimated_state: Estimated state tax payments made
+        charitable: Cash charitable contributions
+        charitable_noncash: Non-cash charitable contributions (clothing, goods, etc.)
+        medical_expenses: Unreimbursed medical expenses (deductible above 7.5% AGI)
+        student_loan_interest: Student loan interest paid (above-the-line deduction, max $2,500)
+        other_income: Other taxable income (prizes, gambling, etc.)
+        num_dependents: Number of qualifying children (backward compat — prefer 'dependents' list)
+        dependents: Structured dependent records for accurate credit eligibility. Each dict: {"first_name", "last_name", "date_of_birth" (YYYY-MM-DD), "relationship", "is_disabled", "is_student", "months_lived_with"}. DOB determines CTC (under 17), EITC (under 19/24-student/disabled), CDCC (under 13/disabled) eligibility.
+        residence_state: Two-letter state code where filer lives (e.g., "CA", "TX", "IL")
+        work_states: Additional states where income was earned (triggers multi-state returns)
+        days_worked_by_state: Manual allocation of work days per state (e.g., {"NY": 200, "NJ": 40})
+        estimated_federal: Estimated federal tax payments already made
+        estimated_state: Estimated state tax payments already made
+        additional_withholding: Additional federal withholding from 1099s or other sources
+        education_expenses: Per-student education expenses for AOTC/LLC credits. Each dict: {"student_name", "qualified_expenses", "credit_type" ("aotc" or "llc")}. AOTC: $2,500 max (40% refundable). LLC: $2,000 max (nonrefundable).
+        dependent_care_expenses: Child/dependent care expenses for CDCC (Form 2441). Each dict: {"dependent_name", "care_expenses"}. $3K limit (1 dependent) or $6K (2+).
+        retirement_contributions: Retirement savings for Saver's Credit (Form 8880). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount"}. $2K max per person. 50%/20%/10% credit rate based on AGI.
+        prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor). If >$0, engine checks 100%/110% prior year safe harbor.
+        prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold). High AGI = $150K/$75K MFS.
         tax_year: Tax year (2024 or 2025, default 2025)
 
     Returns:
-        JSON with full tax computation: income, AGI, deductions, federal tax, state tax, refund/owed
+        JSON with full tax computation: income, AGI, deductions, federal tax, credits, state tax, refund/owed, penalty
     """
     inputs = _build_inputs(
         filing_status=filing_status, wages=wages, federal_withheld=federal_withheld,
@@ -201,9 +305,17 @@ def compute_tax_scenario(
         long_term_gains=long_term_gains, business_income=business_income,
         business_expenses=business_expenses, mortgage_interest=mortgage_interest,
         property_tax=property_tax, state_tax_paid=state_tax_paid,
-        charitable=charitable, student_loan_interest=student_loan_interest,
-        num_dependents=num_dependents, residence_state=residence_state,
+        charitable=charitable, charitable_noncash=charitable_noncash,
+        medical_expenses=medical_expenses, student_loan_interest=student_loan_interest,
+        other_income=other_income, num_dependents=num_dependents,
+        dependents=dependents, residence_state=residence_state,
+        work_states=work_states, days_worked_by_state=days_worked_by_state,
         estimated_federal=estimated_federal, estimated_state=estimated_state,
+        additional_withholding=additional_withholding,
+        education_expenses=education_expenses,
+        dependent_care_expenses=dependent_care_expenses,
+        retirement_contributions=retirement_contributions,
+        prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )
     result = compute_tax(**inputs)
@@ -310,11 +422,32 @@ def optimize_deductions(
     property_tax: float = 0,
     state_tax_paid: float = 0,
     charitable: float = 0,
+    charitable_noncash: float = 0,
+    medical_expenses: float = 0,
     student_loan_interest: float = 0,
     num_dependents: int = 0,
     residence_state: str = "IL",
+    tax_year: int = 2025,
 ) -> str:
     """Compare itemized vs standard deduction and recommend the better option.
+
+    Args:
+        filing_status: "single", "mfj", "mfs", or "hoh"
+        wages: Total W-2 wages
+        federal_withheld: Federal income tax withheld
+        interest: Taxable interest income
+        ordinary_dividends: Total ordinary dividends
+        qualified_dividends: Qualified dividends
+        mortgage_interest: Mortgage interest paid
+        property_tax: Real estate property tax paid
+        state_tax_paid: State income tax paid
+        charitable: Cash charitable contributions
+        charitable_noncash: Non-cash charitable contributions
+        medical_expenses: Unreimbursed medical expenses
+        student_loan_interest: Student loan interest paid
+        num_dependents: Number of qualifying children
+        residence_state: Two-letter state code
+        tax_year: Tax year (2024 or 2025, default 2025)
 
     Returns both computation paths and the savings from the optimal choice.
     """
@@ -324,8 +457,10 @@ def optimize_deductions(
         interest=interest, ordinary_dividends=ordinary_dividends,
         qualified_dividends=qualified_dividends, mortgage_interest=mortgage_interest,
         property_tax=property_tax, state_tax_paid=state_tax_paid,
-        charitable=charitable, student_loan_interest=student_loan_interest,
+        charitable=charitable, charitable_noncash=charitable_noncash,
+        medical_expenses=medical_expenses, student_loan_interest=student_loan_interest,
         num_dependents=num_dependents, residence_state=residence_state,
+        tax_year=tax_year,
     )
 
     result = compute_tax(**base)
@@ -337,11 +472,13 @@ def optimize_deductions(
         interest=interest, ordinary_dividends=ordinary_dividends,
         qualified_dividends=qualified_dividends,
         num_dependents=num_dependents, residence_state=residence_state,
+        tax_year=tax_year,
     )
     std_result = compute_tax(**no_itemized)
     std_summary = _result_to_dict(std_result)
 
-    itemized_total = mortgage_interest + min(property_tax + state_tax_paid, 10000) + charitable
+    itemized_total = (mortgage_interest + min(property_tax + state_tax_paid, 10000)
+                      + charitable + charitable_noncash)
     std_amount = std_summary["deduction_amount"]
 
     return json.dumps({
@@ -354,7 +491,9 @@ def optimize_deductions(
             "mortgage_interest": mortgage_interest,
             "salt_capped": min(property_tax + state_tax_paid, 10000),
             "salt_uncapped": round(property_tax + state_tax_paid, 2),
-            "charitable": charitable,
+            "charitable_cash": charitable,
+            "charitable_noncash": charitable_noncash,
+            "medical_expenses": medical_expenses,
         },
         "savings_from_optimal": round(abs(summary["federal_tax"] - std_summary["federal_tax"]), 2),
         "recommendation": (
@@ -362,6 +501,72 @@ def optimize_deductions(
             f"— saves ${abs(summary['federal_tax'] - std_summary['federal_tax']):,.2f} in federal tax"
         ),
     }, indent=2, default=str)
+
+
+@mcp.tool()
+def get_tax_config(
+    tax_year: int = 2025,
+    filing_status: str = "single",
+) -> str:
+    """Look up tax brackets, standard deduction, credit limits, and other constants for a tax year.
+
+    Useful for agents to understand the tax rules before computing scenarios.
+
+    Args:
+        tax_year: Tax year (2024 or 2025)
+        filing_status: Filing status for bracket/deduction lookup ("single", "mfj", "mfs", "hoh")
+
+    Returns:
+        JSON with brackets, deductions, credit limits, SS/Medicare rates, AMT thresholds
+    """
+    c = get_year_config(tax_year)
+
+    brackets = c.FEDERAL_BRACKETS.get(filing_status, c.FEDERAL_BRACKETS["single"])
+    bracket_info = [{"up_to": b[0], "rate": f"{b[1]*100:.0f}%"} for b in brackets]
+
+    return json.dumps({
+        "tax_year": tax_year,
+        "filing_status": filing_status,
+        "supported_years": sorted(SUPPORTED_TAX_YEARS),
+        "federal_brackets": bracket_info,
+        "standard_deduction": c.STANDARD_DEDUCTION.get(filing_status, c.STANDARD_DEDUCTION["single"]),
+        "payroll": {
+            "ss_wage_base": c.SS_WAGE_BASE,
+            "ss_rate": c.SS_RATE,
+            "medicare_rate": c.MEDICARE_RATE,
+            "additional_medicare_threshold": c.ADDITIONAL_MEDICARE_THRESHOLD.get(filing_status),
+            "additional_medicare_rate": c.ADDITIONAL_MEDICARE_RATE,
+        },
+        "credits": {
+            "ctc_per_child": c.CTC_PER_CHILD,
+            "ctc_phaseout_start": c.CTC_PHASEOUT_START.get(filing_status),
+            "aotc_max": c.AOTC_MAX,
+            "llc_max": c.LLC_MAX,
+            "eitc_max_credit": {str(k): v for k, v in c.EITC_MAX_CREDIT.items()},
+            "savers_credit_max_contribution": c.SAVERS_MAX_CONTRIBUTION,
+            "cdcc_max_expenses_one": c.CDCC_MAX_EXPENSES_ONE,
+            "cdcc_max_expenses_two": c.CDCC_MAX_EXPENSES_TWO,
+        },
+        "amt": {
+            "exemption": c.AMT_EXEMPTION.get(filing_status),
+            "phaseout_start": c.AMT_PHASEOUT_START.get(filing_status),
+        },
+        "niit": {
+            "rate": c.NIIT_RATE,
+            "threshold": c.NIIT_THRESHOLD.get(filing_status),
+        },
+        "qbi": {
+            "rate": c.QBI_DEDUCTION_RATE,
+            "taxable_income_limit": c.QBI_TAXABLE_INCOME_LIMIT.get(filing_status),
+        },
+        "salt_cap": c.SALT_CAP,
+        "penalty": {
+            "threshold": c.ESTIMATED_TAX_PENALTY_THRESHOLD,
+            "rate": c.ESTIMATED_TAX_PENALTY_RATE,
+            "safe_harbor_pct": c.ESTIMATED_TAX_SAFE_HARBOR_PCT,
+            "high_agi_prior_year_pct": c.ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI,
+        },
+    }, indent=2)
 
 
 @mcp.tool()
@@ -448,6 +653,12 @@ def list_states() -> str:
 def resource_states() -> str:
     """Supported states and their tax configurations."""
     return list_states()
+
+
+@mcp.resource("taxlens://config/{tax_year}")
+def resource_tax_config(tax_year: str) -> str:
+    """Tax configuration for a specific year (brackets, deductions, credits)."""
+    return get_tax_config(tax_year=int(tax_year))
 
 
 @mcp.resource("taxlens://drafts/{username}")
