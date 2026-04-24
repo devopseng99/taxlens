@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.11.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.12.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -323,6 +323,16 @@ Updated: 2026-04-23 (v3.11.0 API + v2.6.0 Portal)
 139. **Summary page credits section** — The branded cover page now includes a Credits section showing CTC, education credits, CDCC, Saver's, EITC, AMT, and estimated tax penalty. Previously only showed total tax and withholding without breaking out credits.
 
 140. **Form 6251 and 8863 added to forms_generated** — Waves 23 added AMT and education credit computation but didn't add their form names to `forms_generated`. Fixed: engine now appends "Form 6251" (if AMT > 0) and "Form 8863" (if any education credit) to the list.
+
+## Wave 28 — Structured Dependent Model (v3.12.0 API)
+
+141. **Dependent dataclass with age-based eligibility methods** — Each `Dependent` record has `qualifies_ctc()` (under 17), `qualifies_eitc()` (under 19, 24 student, disabled), `qualifies_cdcc()` (under 13, disabled). Engine derives `num_ctc_children`, `num_eitc_children`, `num_cdcc_dependents` from the list. This replaces the naive assumption that all dependents qualify for all credits.
+
+142. **Backward-compatible with num_dependents integer** — When no structured `dependents` list is provided, `num_dependents` is used as before. Empty `dependents=[]` triggers fallback to integer. Structured list overrides the integer count. Existing smoke tests, MCP tools, and portal calls continue working without modification.
+
+143. **CTC doesn't waive age for disabled** — Unlike EITC and CDCC (which treat disabled dependents as qualifying regardless of age), CTC strictly requires under 17. Disabled adults 17+ qualify for the Other Dependents Credit (ODC, $500), not the full CTC ($2,000). ODC is not yet implemented; disabled dependents 17+ get no CTC until ODC is added.
+
+144. **No-DOB assumes qualifying** — If `date_of_birth` is empty or invalid, `age_at_year_end()` returns -1 and all qualification methods return True. This prevents data entry gaps from accidentally disqualifying dependents and maintains backward compat with tests that don't set DOB.
 
 ## PDF Template Provenance
 

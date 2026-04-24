@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.11.0)
+Updated: 2026-04-23 (v3.12.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -432,6 +432,34 @@ PDF generation for all 6 credits computed in Waves 23-26 that previously only ap
 - `app/tax_engine.py` — Form 6251/8863 added to forms_generated
 - `app/tax_routes.py` — file_map expanded with 6 new form entries
 - `app/main.py` — version bump to 3.11.0
+
+## Wave 28 — Structured Dependent Model (DEPLOYED — v3.12.0 API)
+
+Replaces integer `num_dependents` with structured `Dependent` records for accurate credit eligibility.
+
+**Delivered:**
+- [x] `Dependent` dataclass: first_name, last_name, SSN, DOB, relationship, months_lived_with, disabled, student
+- [x] `age_at_year_end()` method for precise age calculation
+- [x] `qualifies_ctc()` — under 17 at year end
+- [x] `qualifies_eitc()` — under 19, or under 24 if student, or any age if disabled
+- [x] `qualifies_cdcc()` — under 13, or any age if disabled
+- [x] Engine derives `num_ctc_children`, `num_eitc_children`, `num_cdcc_dependents` from structured records
+- [x] CTC uses `num_ctc_children` instead of `num_dependents`
+- [x] EITC uses `num_eitc_children` instead of `num_dependents`
+- [x] Full backward compatibility: `num_dependents` integer still works
+- [x] `DependentInput` Pydantic model in API with DOB, relationship, disability flags
+- [x] Summary JSON includes per-dependent credit eligibility breakdown
+- [x] PDF summary shows dependent names when structured records provided
+- [x] 391/391 unit tests (29 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave28_dependents.py` — 29 tests (4 age, 6 CTC, 6 EITC, 3 CDCC, 3 backward compat, 5 mixed, 2 summary)
+
+**Modified files:**
+- `app/tax_engine.py` — Dependent dataclass, compute_tax accepts dependents list, CTC/EITC use derived counts
+- `app/tax_routes.py` — DependentInput model, TaxDraftRequest.dependents field
+- `app/pdf_generator.py` — Summary page shows dependent names
+- `app/main.py` — version bump to 3.12.0
 
 ## Future Enhancements
 
