@@ -63,7 +63,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.18.0)")
+    logger.info("TaxLens API starting (v3.18.1)")
 
     async with mcp.session_manager.run():
         yield
@@ -77,7 +77,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.18.0",
+    version="3.18.1",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
@@ -297,6 +297,7 @@ _STARTUP_TIME = _time.time()
 async def health(deep: bool = False):
     from plaid_routes import PLAID_ENABLED
     from billing import STRIPE_ENABLED, STRIPE_MODE
+    from email_service import EMAIL_ENABLED
 
     db_ok = False
     db_latency_ms = None
@@ -319,7 +320,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.18.0",
+        "version": "3.18.1",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -331,6 +332,7 @@ async def health(deep: bool = False):
         "stripe_mode": STRIPE_MODE,
         "mcp_endpoint": "/api/mcp",
         "plaid_enabled": PLAID_ENABLED,
+        "email_enabled": EMAIL_ENABLED,
     }
 
     if deep and db_latency_ms is not None:

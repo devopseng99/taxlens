@@ -150,6 +150,26 @@ async def _handle_subscription_updated(subscription: dict):
     await update_subscription_status(customer_id, status, plan_tier, period_end)
     if plan_tier:
         await _sync_plan_limits(customer_id, plan_tier)
+        # Send upgrade confirmation email (fire-and-forget)
+        try:
+            from email_service import send_plan_upgrade_confirmation, EMAIL_ENABLED
+            if EMAIL_ENABLED:
+                # Look up tenant email from billing customer
+                admin_token = postgrest.mint_jwt("__admin__", role="app_admin")
+                customers = await postgrest.get("billing_customers",
+                    {"stripe_customer_id": f"eq.{customer_id}"}, token=admin_token)
+                if customers:
+                    tenant_id = customers[0].get("tenant_id", "")
+                    users = await postgrest.get("users",
+                        {"tenant_id": f"eq.{tenant_id}", "role": "eq.admin"}, token=admin_token)
+                    if users and users[0].get("email"):
+                        tenants = await postgrest.get("tenants",
+                            {"id": f"eq.{tenant_id}"}, token=admin_token)
+                        tenant_name = tenants[0]["name"] if tenants else "your account"
+                        await send_plan_upgrade_confirmation(
+                            users[0]["email"], tenant_name, plan_tier)
+        except Exception as e:
+            logger.warning("Upgrade email failed (non-blocking): %s", e)
 
 
 async def _handle_subscription_deleted(subscription: dict):

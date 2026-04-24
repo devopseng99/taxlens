@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.18.0)
+Updated: 2026-04-24 (v3.18.1)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -636,6 +636,27 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/mcp_server.py` — employer_contributions in _build_inputs(), HDHP in get_tax_config()
 - `app/pdf_generator.py` — generate_form_8889() + integration in generate_all_pdfs()
 - `app/main.py` — version bump to 3.18.0
+
+### Wave 38 — Email & Notifications (v3.18.1) — 2026-04-24
+
+- [x] `email_service.py` — Resend API via httpx (no SDK dependency)
+- [x] Graceful degradation: disabled when RESEND_API_KEY not set
+- [x] Welcome email template (API key + MCP config + portal link)
+- [x] Filing deadline reminder template
+- [x] Plan upgrade confirmation template
+- [x] Onboarding integration: welcome email on signup (fire-and-forget)
+- [x] Billing webhook integration: upgrade email on subscription change
+- [x] Health endpoint reports `email_enabled` status
+- [x] 570/570 unit tests (13 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/email_service.py` — Transactional email via Resend API
+- `tests/test_wave38_email.py` — 13 tests (5 degradation, 3 templates, 2 onboarding, 2 billing, 1 health)
+
+**Modified files:**
+- `app/onboarding.py` — Welcome email on signup
+- `app/billing_routes.py` — Upgrade email on plan change
+- `app/main.py` — email_enabled in health endpoint
 
 ## Future Enhancements
 

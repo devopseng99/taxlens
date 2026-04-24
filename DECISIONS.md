@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.18.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.18.1 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -391,6 +391,14 @@ Updated: 2026-04-24 (v3.18.0 API + v2.6.0 Portal)
 167. **Form 8889 is required whenever HSA contributions exist** — IRS requires Form 8889 for any year the taxpayer (a) has an HSA, (b) makes or receives contributions, or (c) takes distributions. Generated via ReportLab (no IRS fillable template available). Includes Part I (contributions/deduction) and excess contribution detection.
 
 168. **HDHP limits are informational** — High-Deductible Health Plan minimum deductible and max OOP limits added to tax_config.py and exposed via get_tax_config MCP tool. These are prerequisites for HSA eligibility but not enforced in the engine (self-attested by the filer).
+
+## Wave 38 — Email & Notifications (v3.18.1)
+
+169. **Resend via httpx (no SDK)** — Uses httpx (already a dependency) to POST to Resend's REST API directly. No new pip dependency. Gracefully disabled when RESEND_API_KEY is not set — all send functions return `{"status": "disabled"}`.
+
+170. **Fire-and-forget email pattern** — Email calls in onboarding and billing webhook are wrapped in try/except with logging. Email failure never blocks tenant provisioning or plan upgrades. This follows the graceful feature degradation pattern.
+
+171. **Three email templates** — Welcome (with API key + MCP config), filing deadline reminder, plan upgrade confirmation. All include plain text fallback for email clients that don't render HTML.
 
 ## PDF Template Provenance
 

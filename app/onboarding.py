@@ -106,6 +106,15 @@ async def provision_tenant(tenant_name: str, plan_tier: str = "starter",
 
     logger.info("Provisioned tenant: %s (%s) id=%s", tenant_name, plan_tier, tenant_id)
 
+    # 7. Send welcome email (fire-and-forget, don't block provisioning)
+    if email:
+        try:
+            from email_service import send_welcome_email, EMAIL_ENABLED
+            if EMAIL_ENABLED:
+                await send_welcome_email(email, tenant_name, raw_key)
+        except Exception as e:
+            logger.warning("Welcome email failed (non-blocking): %s", e)
+
     return {
         "tenant_id": tenant_id,
         "slug": slug,
