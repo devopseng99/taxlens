@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.10.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.11.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -313,6 +313,16 @@ Updated: 2026-04-23 (v3.10.0 API + v2.6.0 Portal)
 135. **Prior year tax as optional parameter** — `prior_year_tax` and `prior_year_agi` are optional parameters to `compute_tax()`. First-time filers or users without prior year data get no penalty. This avoids false penalties while enabling accurate computation for returning filers. Prior-year import (future wave) will populate these automatically.
 
 136. **Simplified short method over annualized** — Full Form 2210 supports annualized income installment method for uneven quarterly income. We implement the short method (same underpayment all 4 quarters) which covers the vast majority of filers. The annualized method is a future enhancement for self-employed with seasonal income.
+
+## Wave 27 — Credit Form PDFs (v3.11.0 API)
+
+137. **ReportLab for credit forms (not fillable IRS PDFs)** — The 6 new credit forms (Form 6251, 8863, Schedule EIC, 2441, 8880, 2210) use ReportLab-generated summary PDFs rather than official IRS fillable templates. IRS fillable PDFs for these forms have complex multi-page structures with conditional sections (e.g., Form 6251 has 7 lines of adjustments). ReportLab summaries show the key computation values clearly. Official IRS templates can be added later as a follow-up.
+
+138. **Conditional PDF generation** — Each credit form is only generated when its credit/penalty is nonzero. This matches the existing pattern (Schedule SE only if SE tax > 0, Schedule D only if capital transactions exist). Prevents cluttering draft output with empty forms.
+
+139. **Summary page credits section** — The branded cover page now includes a Credits section showing CTC, education credits, CDCC, Saver's, EITC, AMT, and estimated tax penalty. Previously only showed total tax and withholding without breaking out credits.
+
+140. **Form 6251 and 8863 added to forms_generated** — Waves 23 added AMT and education credit computation but didn't add their form names to `forms_generated`. Fixed: engine now appends "Form 6251" (if AMT > 0) and "Form 8863" (if any education credit) to the list.
 
 ## PDF Template Provenance
 

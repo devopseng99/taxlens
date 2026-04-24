@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.10.0)
+Updated: 2026-04-23 (v3.11.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -406,6 +406,32 @@ Form 2210 simplified short method — penalty for underpayment of estimated tax.
 **Modified files:**
 - `app/tax_config.py` — Form 2210 constants (threshold, rates, safe harbor percentages)
 - `app/tax_engine.py` — Penalty computation, prior_year_tax/agi params, TaxResult fields
+
+## Wave 27 — Credit Form PDFs (DEPLOYED — v3.11.0 API)
+
+PDF generation for all 6 credits computed in Waves 23-26 that previously only appeared in JSON.
+
+**Delivered:**
+- [x] Form 6251 (AMT) — ReportLab summary with AMTI, exemption, tentative tax, AMT amount
+- [x] Form 8863 (Education Credits) — AOTC refundable + nonrefundable, LLC
+- [x] Schedule EIC (EITC) — earned income, AGI, qualifying children, credit amount
+- [x] Form 2441 (CDCC) — AGI-based rate, care expenses, credit amount
+- [x] Form 8880 (Saver's Credit) — AGI tier, contribution cap, credit amount
+- [x] Form 2210 (Estimated Tax Penalty) — required payment, underpayment, penalty rate
+- [x] Summary cover page enriched with Credits section (CTC, education, CDCC, Saver's, EITC)
+- [x] Form 6251 and Form 8863 added to `forms_generated` in tax engine
+- [x] `generate_all_pdfs()` conditionally produces each form
+- [x] `tax_routes.py` file_map updated for all 6 new downloadable forms
+- [x] 362/362 unit tests (20 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave27_pdfs.py` — 20 tests (3 AMT, 3 education, 3 EITC, 3 CDCC, 3 Saver's, 3 penalty, 2 summary)
+
+**Modified files:**
+- `app/pdf_generator.py` — 6 new generation functions, summary page credits section, generate_all_pdfs updates
+- `app/tax_engine.py` — Form 6251/8863 added to forms_generated
+- `app/tax_routes.py` — file_map expanded with 6 new form entries
+- `app/main.py` — version bump to 3.11.0
 
 ## Future Enhancements
 
