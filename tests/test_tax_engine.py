@@ -236,7 +236,9 @@ class TestCapitalGains:
         txn = CapitalTransaction(description="Crypto", proceeds=5000, cost_basis=15000, is_long_term=False)
         r = simple_compute(wages=50000, cap_txns=[txn])
         assert r.sched_d_short_term_gain == -10000
-        assert r.line_7_capital_gain_loss == -10000
+        # IRC §1211(b): net capital loss limited to $3,000
+        assert r.line_7_capital_gain_loss == -3000
+        assert r.capital_loss_carryforward == 7000
 
     def test_mixed_short_long(self):
         txns = [

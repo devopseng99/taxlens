@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.24.0)
+Updated: 2026-04-24 (v3.25.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -657,6 +657,27 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/onboarding.py` — Welcome email on signup
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
+
+### Wave 46 — Capital Loss Limitation (v3.25.0) — 2026-04-24
+
+- [x] IRC §1211(b) capital loss limitation: $3,000 single/MFJ/HoH, $1,500 MFS
+- [x] `capital_loss_carryforward` tracked on TaxResult for next-year use
+- [x] `capital_loss_carryover` input param: prior-year carryover applied as short-term loss
+- [x] §1211 applied AFTER all capital sources (Schedule D, crypto, K-1) aggregated
+- [x] MFS gets half the limit ($1,500 per IRC §1211(b)(1))
+- [x] Full stack: engine + API + MCP + summary
+- [x] 763/763 unit tests (17 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave46_capital_loss.py` — 17 tests (8 limitation, 6 carryover, 2 summary, 1 multi-year)
+
+**Modified files:**
+- `app/tax_engine.py` — TaxResult capital loss fields, §1211 limitation logic, carryover input
+- `app/tax_config.py` — CAPITAL_LOSS_LIMIT ($3,000), CAPITAL_LOSS_LIMIT_MFS ($1,500)
+- `app/tax_routes.py` — capital_loss_carryover on TaxDraftRequest
+- `app/mcp_server.py` — capital_loss_carryover param on _build_inputs + compute_tax_scenario
+- `app/main.py` — version 3.25.0
+- `tests/test_tax_engine.py` — Updated test_capital_loss to expect §1211 cap
 
 ### Wave 45 — Unemployment, Educator Expenses, Alimony (v3.24.0) — 2026-04-24
 

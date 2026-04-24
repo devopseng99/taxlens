@@ -69,6 +69,9 @@ SS_TAXABLE_UPPER_THRESHOLD = {        # Above this: up to 85% taxable
 }
 SS_TAXABLE_MAX_PCT = 0.85             # Maximum taxable percentage
 
+CAPITAL_LOSS_LIMIT = 3_000            # IRC §1211(b) — max deductible net capital loss
+CAPITAL_LOSS_LIMIT_MFS = 1_500        # MFS gets half the limit
+
 RENTAL_LOSS_LIMIT = 25_000           # Passive activity loss limit (statutory)
 RENTAL_LOSS_PHASEOUT_START = 100_000 # AGI where $25K allowance starts phasing out
 RENTAL_LOSS_PHASEOUT_END = 150_000   # AGI where allowance is fully phased out
@@ -344,6 +347,8 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.STUDENT_LOAN_INTEREST_MAX = STUDENT_LOAN_INTEREST_MAX
     ns.MEDICAL_AGI_THRESHOLD = MEDICAL_AGI_THRESHOLD
     ns.HSA_CATCHUP = HSA_CATCHUP
+    ns.CAPITAL_LOSS_LIMIT = CAPITAL_LOSS_LIMIT
+    ns.CAPITAL_LOSS_LIMIT_MFS = CAPITAL_LOSS_LIMIT_MFS
     ns.RENTAL_LOSS_LIMIT = RENTAL_LOSS_LIMIT
     ns.RENTAL_LOSS_PHASEOUT_START = RENTAL_LOSS_PHASEOUT_START
     ns.RENTAL_LOSS_PHASEOUT_END = RENTAL_LOSS_PHASEOUT_END

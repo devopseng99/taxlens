@@ -565,6 +565,9 @@ class TaxResult:
     sched_d_short_term_gain: float = 0.0
     sched_d_long_term_gain: float = 0.0
     sched_d_net_gain: float = 0.0
+    capital_loss_limited: float = 0.0        # Amount of loss disallowed by §1211
+    capital_loss_carryforward: float = 0.0   # Excess loss carried to next year
+    capital_loss_carryover_used: float = 0.0 # Prior-year carryover applied this year
 
     # --- Schedule E (Rental Income) ---
     sched_e_properties: list = field(default_factory=list)
@@ -766,6 +769,8 @@ class TaxResult:
             "energy_credit": round(self.energy_total_credit, 2),
             "energy_clean_credit": round(self.energy_clean_credit, 2),
             "energy_improvement_credit": round(self.energy_improvement_credit, 2),
+            "capital_loss_carryforward": round(self.capital_loss_carryforward, 2) if self.capital_loss_carryforward > 0 else None,
+            "capital_loss_carryover_used": round(self.capital_loss_carryover_used, 2) if self.capital_loss_carryover_used > 0 else None,
             "k1_ordinary_income": round(self.k1_ordinary_income, 2),
             "k1_rental_income": round(self.k1_rental_income, 2),
             "k1_capital_gains": round(self.k1_capital_gains, 2),
@@ -1109,6 +1114,7 @@ def compute_tax(
     educator_expenses: float = 0.0,
     alimony_paid: float = 0.0,
     alimony_received: float = 0.0,
+    capital_loss_carryover: float = 0.0,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1389,6 +1395,26 @@ def compute_tax(
         result.line_7_capital_gain_loss = result.sched_d_net_gain
         # Rental income → Schedule E
         result.sched_e_net_income += result.k1_rental_income
+
+    # =======================================================================
+    # IRC §1211 — CAPITAL LOSS LIMITATION ($3,000 / $1,500 MFS)
+    # =======================================================================
+    # Prior-year carryover is treated as short-term loss (already in net)
+    if capital_loss_carryover > 0:
+        result.capital_loss_carryover_used = capital_loss_carryover
+        result.sched_d_short_term_gain -= capital_loss_carryover
+        result.sched_d_net_gain -= capital_loss_carryover
+
+    # Apply §1211(b) limitation: net capital loss deductible against ordinary
+    # income is capped at $3,000 ($1,500 MFS)
+    loss_limit = c.CAPITAL_LOSS_LIMIT_MFS if filing_status == "mfs" else c.CAPITAL_LOSS_LIMIT
+    if result.sched_d_net_gain < 0:
+        allowed_loss = max(-loss_limit, result.sched_d_net_gain)  # e.g., max(-3000, -50000) = -3000
+        result.capital_loss_limited = result.sched_d_net_gain - allowed_loss  # negative = disallowed
+        result.capital_loss_carryforward = abs(result.capital_loss_limited)
+        result.line_7_capital_gain_loss = allowed_loss
+    else:
+        result.line_7_capital_gain_loss = result.sched_d_net_gain
 
     # =======================================================================
     # FORM 1099-G — Unemployment Compensation

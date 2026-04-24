@@ -101,6 +101,7 @@ def _build_inputs(
     educator_expenses: float = 0,
     alimony_paid: float = 0,
     alimony_received: float = 0,
+    capital_loss_carryover: float = 0,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -407,6 +408,7 @@ def _build_inputs(
         educator_expenses=educator_expenses,
         alimony_paid=alimony_paid,
         alimony_received=alimony_received,
+        capital_loss_carryover=capital_loss_carryover,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -465,6 +467,7 @@ def compute_tax_scenario(
     educator_expenses: float = 0,
     alimony_paid: float = 0,
     alimony_received: float = 0,
+    capital_loss_carryover: float = 0,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -514,6 +517,7 @@ def compute_tax_scenario(
         educator_expenses: K-12 teacher qualified expenses (above-the-line, max $300, $600 MFJ both educators).
         alimony_paid: Alimony paid under pre-2019 divorce agreement (above-the-line deduction).
         alimony_received: Alimony received under pre-2019 divorce agreement (taxable income).
+        capital_loss_carryover: Prior-year capital loss carryover from Schedule D (IRC §1211). Applied as additional short-term loss.
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor).
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold).
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -551,6 +555,7 @@ def compute_tax_scenario(
         educator_expenses=educator_expenses,
         alimony_paid=alimony_paid,
         alimony_received=alimony_received,
+        capital_loss_carryover=capital_loss_carryover,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )

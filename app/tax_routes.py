@@ -307,6 +307,7 @@ class TaxDraftRequest(BaseModel):
     educator_expenses: float = Field(default=0, description="K-12 teacher expenses (max $300, $600 MFJ both educators)")
     alimony_paid: float = Field(default=0, description="Alimony paid under pre-2019 divorce agreement (above-the-line deduction)")
     alimony_received: float = Field(default=0, description="Alimony received under pre-2019 divorce agreement (taxable income)")
+    capital_loss_carryover: float = Field(default=0, description="Prior-year capital loss carryover from Schedule D (IRC §1211)")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -688,6 +689,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         educator_expenses=req.educator_expenses,
         alimony_paid=req.alimony_paid,
         alimony_received=req.alimony_received,
+        capital_loss_carryover=req.capital_loss_carryover,
         tax_year=req.tax_year,
     )
 

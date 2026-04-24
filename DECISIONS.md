@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.24.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.25.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,14 @@ Updated: 2026-04-24 (v3.24.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 46 — Capital Loss Limitation (v3.25.0)
+
+202. **IRC §1211(b) $3K/$1.5K cap on net capital losses** — Net capital losses deductible against ordinary income are capped at $3,000/year ($1,500 MFS). Previously the engine allowed unlimited capital loss deductions, which produced wildly incorrect tax liability for anyone with net losses. Excess loss is tracked as `capital_loss_carryforward` for use in future tax years.
+
+203. **Prior-year capital loss carryover as input** — Added `capital_loss_carryover` parameter to `compute_tax()`, the REST API, and MCP server. Prior-year carryover is treated as additional short-term loss (per IRS instructions for Schedule D), then subject to the same $3K annual limitation.
+
+204. **§1211 applied after all capital sources aggregated** — The limitation runs AFTER Schedule D transactions, crypto (Form 8949), and K-1 capital gains are all accumulated, but BEFORE line_9_total_income computation. This ensures all sources participate in netting before the cap is applied.
 
 ## Wave 45 — Unemployment, Educator Expenses, Alimony (v3.24.0)
 
