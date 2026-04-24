@@ -442,6 +442,14 @@ class IRAContribution:
 
 
 @dataclass
+class SocialSecurityBenefit:
+    """SSA-1099 — Social Security benefits received."""
+    recipient: str = "filer"       # "filer" or "spouse"
+    gross_benefits: float = 0.0    # Box 5: net benefits (Box 3 - Box 4 repayments)
+    federal_withheld: float = 0.0  # Box 6: voluntary federal tax withholding (Form W-4V)
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -589,6 +597,13 @@ class TaxResult:
     retirement_distributions_count: int = 0
     ira_deduction: float = 0.0                    # Traditional IRA above-the-line deduction
 
+    # --- Social Security Benefits (SSA-1099) ---
+    ss_gross_benefits: float = 0.0           # Total SS benefits received
+    ss_taxable_amount: float = 0.0           # Taxable portion (0/50/85%)
+    ss_federal_withheld: float = 0.0         # W-4V voluntary withholding
+    ss_provisional_income: float = 0.0       # MAGI + 50% of SS for threshold test
+    ss_taxable_pct: float = 0.0              # Effective taxable percentage
+
     # --- Depreciation / Form 4562 ---
     depreciation_total: float = 0.0          # Total depreciation deduction
     depreciation_section_179: float = 0.0    # Section 179 portion
@@ -706,6 +721,13 @@ class TaxResult:
                 "distributions_count": self.retirement_distributions_count,
                 "ira_deduction": round(self.ira_deduction, 2),
             } if self.retirement_distributions_count > 0 or self.ira_deduction > 0 else None,
+            "social_security": {
+                "gross_benefits": round(self.ss_gross_benefits, 2),
+                "taxable_amount": round(self.ss_taxable_amount, 2),
+                "taxable_pct": round(self.ss_taxable_pct * 100, 1),
+                "provisional_income": round(self.ss_provisional_income, 2),
+                "federal_withheld": round(self.ss_federal_withheld, 2),
+            } if self.ss_gross_benefits > 0 else None,
             "depreciation": {
                 "total": round(self.depreciation_total, 2),
                 "section_179": round(self.depreciation_section_179, 2),
@@ -1056,6 +1078,7 @@ def compute_tax(
     depreciable_assets: list[DepreciableAsset] | None = None,
     retirement_distributions: list[RetirementDistribution] | None = None,
     ira_contributions: list[IRAContribution] | None = None,
+    social_security_benefits: list[SocialSecurityBenefit] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1337,7 +1360,51 @@ def compute_tax(
         # Rental income → Schedule E
         result.sched_e_net_income += result.k1_rental_income
 
-    # Line 9: Total income
+    # =======================================================================
+    # SOCIAL SECURITY BENEFITS — IRC §86 Taxability
+    # =======================================================================
+    social_security_benefits = social_security_benefits or []
+    if social_security_benefits:
+        total_ss = sum(ss.gross_benefits for ss in social_security_benefits)
+        ss_withheld = sum(ss.federal_withheld for ss in social_security_benefits)
+        result.ss_gross_benefits = total_ss
+        result.ss_federal_withheld = ss_withheld
+
+        # Provisional income = other income (before SS) + 50% of SS benefits
+        other_income = (
+            result.line_1a_wages
+            + result.line_2b_taxable_interest
+            + result.line_3b_ordinary_dividends
+            + result.line_7_capital_gain_loss
+            + result.line_8_other_income
+            + result.line_8a_business_income
+            + result.sched_e_net_income
+        )
+        provisional = other_income + (total_ss * 0.5)
+        result.ss_provisional_income = provisional
+
+        base_threshold = c.SS_TAXABLE_BASE_THRESHOLD.get(filing_status, 25_000)
+        upper_threshold = c.SS_TAXABLE_UPPER_THRESHOLD.get(filing_status, 34_000)
+
+        if provisional <= base_threshold:
+            # Below base threshold: 0% taxable
+            taxable_ss = 0.0
+        elif provisional <= upper_threshold:
+            # Between base and upper: up to 50% of benefits
+            taxable_ss = min(total_ss * 0.5, (provisional - base_threshold) * 0.5)
+        else:
+            # Above upper threshold: up to 85% of benefits
+            # Step 1: 50% amount (capped at the base-to-upper range)
+            fifty_pct = min(total_ss * 0.5, (upper_threshold - base_threshold) * 0.5)
+            # Step 2: 85% of excess above upper
+            eighty_five_pct = (provisional - upper_threshold) * 0.85
+            # Total: lesser of (Step1 + Step2) or 85% of total benefits
+            taxable_ss = min(fifty_pct + eighty_five_pct, total_ss * c.SS_TAXABLE_MAX_PCT)
+
+        result.ss_taxable_amount = round(taxable_ss, 2)
+        result.ss_taxable_pct = round(taxable_ss / total_ss, 4) if total_ss > 0 else 0.0
+
+    # Line 9: Total income (includes taxable SS on line 6b)
     result.line_9_total_income = (
         result.line_1a_wages
         + result.line_2b_taxable_interest
@@ -1346,6 +1413,7 @@ def compute_tax(
         + result.line_8_other_income
         + result.line_8a_business_income
         + result.sched_e_net_income
+        + result.ss_taxable_amount
     )
 
     # =======================================================================
@@ -1798,7 +1866,7 @@ def compute_tax(
     # PAYMENTS (Lines 25-33)
     # =======================================================================
 
-    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding + result.retirement_federal_withheld
+    result.line_25_federal_withheld = sum(w.federal_withheld for w in w2s) + additional_withholding + result.retirement_federal_withheld + result.ss_federal_withheld
     result.estimated_payments = payments.estimated_federal
     result.line_33_total_payments = (
         result.line_25_federal_withheld
@@ -1991,6 +2059,8 @@ def compute_tax(
         result.forms_generated.append("Form 8949")
     if result.retirement_distributions_count > 0:
         result.forms_generated.append("1099-R Summary")
+    if result.ss_gross_benefits > 0:
+        result.forms_generated.append("SSA-1099 Summary")
     if result.depreciation_assets_count > 0:
         result.forms_generated.append("Form 4562")
     if k1_incomes:

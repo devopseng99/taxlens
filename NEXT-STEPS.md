@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.22.0)
+Updated: 2026-04-24 (v3.23.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -658,6 +658,29 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
 
+### Wave 44 — Social Security Benefits (v3.23.0) — 2026-04-24
+
+- [x] SocialSecurityBenefit dataclass: recipient, gross_benefits, federal_withheld
+- [x] IRC §86 two-threshold taxability formula: 0%/50%/85% based on provisional income
+- [x] Provisional income = other income + 50% of SS benefits (avoids circular dependency)
+- [x] Filing status thresholds: Single/HoH $25K/$34K, MFJ $32K/$44K, MFS $0/$0
+- [x] MFS anti-abuse: $0 thresholds → SS nearly always 85% taxable
+- [x] SSA-1099 summary PDF via ReportLab
+- [x] W-4V voluntary withholding → line 25
+- [x] Full stack: engine + API + MCP + PDF
+- [x] 727/727 unit tests (19 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave44_social_security.py` — 19 tests (3 dataclass, 16 engine integration)
+
+**Modified files:**
+- `app/tax_engine.py` — SocialSecurityBenefit dataclass, TaxResult SS fields, compute_tax() SS taxability logic
+- `app/tax_config.py` — SS thresholds (base/upper per filing status, 85% max)
+- `app/tax_routes.py` — SocialSecurityBenefitInput model, TaxDraftRequest field, file_map
+- `app/mcp_server.py` — social_security_benefits param, build/forward logic, get_tax_config SS section
+- `app/pdf_generator.py` — generate_ss_summary(), generate_all_pdfs() hook
+- `app/main.py` — version 3.23.0
+
 ### Wave 43 — Retirement Income (v3.22.0) — 2026-04-24
 
 - [x] RetirementDistribution dataclass: distribution codes (1/7/G/H), Roth, early withdrawal
@@ -770,4 +793,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** IRA income-based phaseout (active plan participants), Annualized installment method (Form 2210 Schedule AI), Form 8606 (nondeductible IRA basis tracking)
+- **Tax engine remaining:** IRA income-based phaseout (active plan participants), Annualized installment method (Form 2210 Schedule AI), Form 8606 (nondeductible IRA basis tracking), Educator expense deduction ($300 above-the-line)

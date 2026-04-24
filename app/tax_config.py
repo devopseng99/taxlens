@@ -58,6 +58,17 @@ MEDICAL_AGI_THRESHOLD = 0.075
 HSA_CATCHUP = 1_000                  # Age 55+ catch-up (statutory, not indexed)
 IRA_CATCHUP = 1_000                   # Age 50+ catch-up (statutory, not indexed)
 EARLY_WITHDRAWAL_PENALTY_RATE = 0.10  # 10% early withdrawal from retirement acct
+
+# --- Social Security Benefits Taxability (IRC §86) ---
+# Thresholds are statutory (NOT inflation-indexed since 1983)
+SS_TAXABLE_BASE_THRESHOLD = {         # Below this: 0% taxable
+    "single": 25_000, "mfs": 0, "hoh": 25_000, "mfj": 32_000,
+}
+SS_TAXABLE_UPPER_THRESHOLD = {        # Above this: up to 85% taxable
+    "single": 34_000, "mfs": 0, "hoh": 34_000, "mfj": 44_000,
+}
+SS_TAXABLE_MAX_PCT = 0.85             # Maximum taxable percentage
+
 RENTAL_LOSS_LIMIT = 25_000           # Passive activity loss limit (statutory)
 RENTAL_LOSS_PHASEOUT_START = 100_000 # AGI where $25K allowance starts phasing out
 RENTAL_LOSS_PHASEOUT_END = 150_000   # AGI where allowance is fully phased out
@@ -345,6 +356,10 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     # Depreciation
     ns.IRA_CATCHUP = IRA_CATCHUP
     ns.EARLY_WITHDRAWAL_PENALTY_RATE = EARLY_WITHDRAWAL_PENALTY_RATE
+    # Social Security taxability
+    ns.SS_TAXABLE_BASE_THRESHOLD = SS_TAXABLE_BASE_THRESHOLD
+    ns.SS_TAXABLE_UPPER_THRESHOLD = SS_TAXABLE_UPPER_THRESHOLD
+    ns.SS_TAXABLE_MAX_PCT = SS_TAXABLE_MAX_PCT
     ns.MACRS_TABLES = MACRS_TABLES
     ns.MACRS_RESIDENTIAL_YEARS = MACRS_RESIDENTIAL_YEARS
     ns.MACRS_NONRESIDENTIAL_YEARS = MACRS_NONRESIDENTIAL_YEARS

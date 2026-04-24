@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.22.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.23.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,16 @@ Updated: 2026-04-24 (v3.22.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 44 — Social Security Benefits (v3.23.0)
+
+195. **IRC §86 two-threshold taxability formula** — Social Security benefits are taxable based on "provisional income" (modified AGI + 50% of SS benefits). Below base threshold ($25K single/$32K MFJ): 0% taxable. Between base and upper ($34K/$44K): up to 50%. Above upper: up to 85%. These thresholds are statutory (NOT inflation-indexed since 1983), making more retirees taxable each year via bracket creep.
+
+196. **Provisional income computed from pre-SS income** — The SS taxability calculation uses all other income (wages, interest, dividends, capital gains, business, rental, retirement distributions) BEFORE adding SS benefits. This avoids circular dependency — SS taxable amount depends on other income, not on itself.
+
+197. **MFS threshold of $0** — Married filing separately gets $0/$0 thresholds, meaning SS benefits are almost always 85% taxable for MFS filers. This is an IRS anti-abuse measure to discourage MFS for SS benefits tax avoidance.
+
+198. **SS withholding in PAYMENTS section** — SSA-1099 Box 6 voluntary withholding (Form W-4V) is aggregated alongside W-2, 1099-R, and other withholding in the PAYMENTS section. Same pattern as retirement withholding (Wave 43 decision #194).
 
 ## Wave 43 — Retirement Income (v3.22.0)
 

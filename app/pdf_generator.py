@@ -1442,6 +1442,57 @@ def generate_form_4562(result: TaxResult) -> BytesIO:
     return buf
 
 
+def generate_ss_summary(result: TaxResult) -> BytesIO:
+    """Generate Social Security Benefits summary PDF via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Social Security Benefits Summary")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "SSA-1099 Benefits")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    lines = [
+        ("Total benefits received (Box 5)", f"${result.ss_gross_benefits:,.2f}"),
+        ("Taxable amount", f"${result.ss_taxable_amount:,.2f}"),
+        ("Taxable percentage", f"{result.ss_taxable_pct * 100:.1f}%"),
+        ("Provisional income", f"${result.ss_provisional_income:,.2f}"),
+    ]
+    if result.ss_federal_withheld > 0:
+        lines.append(("Federal tax withheld (W-4V)", f"${result.ss_federal_withheld:,.2f}"))
+    for label, val in lines:
+        c.drawString(90, y, f"{label}: {val}")
+        y -= 16
+
+    y -= 20
+    c.setFont("Helvetica", 9)
+    c.drawString(72, y, "IRC §86: Up to 85% of benefits may be taxable based on provisional income.")
+    y -= 14
+    c.drawString(72, y, "Provisional income = Modified AGI + 50% of Social Security benefits.")
+    y -= 14
+    c.drawString(72, y, "Single thresholds: $25,000 (base) / $34,000 (upper).")
+    y -= 14
+    c.drawString(72, y, "MFJ thresholds: $32,000 (base) / $44,000 (upper).")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 def generate_retirement_summary(result: TaxResult) -> BytesIO:
     """Generate 1099-R / IRA summary PDF via ReportLab."""
     buf = BytesIO()
@@ -1636,6 +1687,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "k1_summary.pdf"
         p.write_bytes(buf.read())
         paths["k1_summary"] = str(p)
+
+    # Social Security Summary (if SS benefits)
+    if result.ss_gross_benefits > 0:
+        buf = generate_ss_summary(result)
+        p = out / "ss_summary.pdf"
+        p.write_bytes(buf.read())
+        paths["ss_summary"] = str(p)
 
     # Retirement Summary — 1099-R / IRA (if retirement distributions)
     if result.retirement_distributions_count > 0:

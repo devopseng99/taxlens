@@ -17,7 +17,7 @@ from tax_engine import (
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     EducationExpense, DependentCareExpense, RetirementContribution,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
-    DepreciableAsset, RetirementDistribution, IRAContribution,
+    DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -95,6 +95,7 @@ def _build_inputs(
     depreciable_assets: list[dict] | None = None,
     retirement_distributions: list[dict] | None = None,
     ira_contributions: list[dict] | None = None,
+    social_security_benefits: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -346,6 +347,18 @@ def _build_inputs(
             for i in ira_contributions
         ]
 
+    # Build Social Security benefits
+    ss_list = None
+    if social_security_benefits:
+        ss_list = [
+            SocialSecurityBenefit(
+                recipient=s.get("recipient", "filer"),
+                gross_benefits=s.get("gross_benefits", 0),
+                federal_withheld=s.get("federal_withheld", 0),
+            )
+            for s in social_security_benefits
+        ]
+
     return dict(
         filing_status=filing_status,
         filer=filer,
@@ -371,6 +384,7 @@ def _build_inputs(
         depreciable_assets=asset_list,
         retirement_distributions=ret_dist_list,
         ira_contributions=ira_list,
+        social_security_benefits=ss_list,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -424,6 +438,7 @@ def compute_tax_scenario(
     depreciable_assets: list[dict] | None = None,
     retirement_distributions: list[dict] | None = None,
     ira_contributions: list[dict] | None = None,
+    social_security_benefits: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -468,6 +483,7 @@ def compute_tax_scenario(
         depreciable_assets: Business/rental assets for depreciation (Form 4562). Each dict: {"description", "cost", "date_placed_in_service" (YYYY-MM-DD), "macrs_class" (3/5/7/15/27/39), "asset_use" ("business"/"rental"), "business_use_pct" (0-100), "section_179_elected", "bonus_depreciation" (bool), "recovery_year" (1-based)}. Section 179 limit: $1,250,000 (2025). Bonus: 40% (2025). Real property (27/39-year) not eligible for Section 179 or bonus.
         retirement_distributions: Form 1099-R retirement distributions. Each dict: {"payer_name", "gross_distribution", "taxable_amount", "taxable_amount_not_determined" (bool), "federal_withheld", "distribution_code" ("1"=early, "7"=normal, "G"=rollover), "is_roth" (bool), "is_early" (bool)}. Roth and rollover distributions are non-taxable. Early distributions (code "1") incur 10% penalty.
         ira_contributions: Traditional IRA contributions for above-the-line deduction. Each dict: {"contributor" ("filer"/"spouse"), "contribution_amount", "age_50_plus" (bool)}. Limit: $7,000 ($8,000 if 50+).
+        social_security_benefits: SSA-1099 Social Security benefits. Each dict: {"recipient" ("filer"/"spouse"), "gross_benefits", "federal_withheld"}. Taxable 0-85% based on provisional income (IRC §86). Single: base $25K/upper $34K. MFJ: base $32K/upper $44K.
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor).
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold).
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -500,6 +516,7 @@ def compute_tax_scenario(
         depreciable_assets=depreciable_assets,
         retirement_distributions=retirement_distributions,
         ira_contributions=ira_contributions,
+        social_security_benefits=social_security_benefits,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )
@@ -840,6 +857,11 @@ def get_tax_config(
             "ira_contribution_limit": c.IRA_CONTRIBUTION_LIMIT,
             "ira_catchup_50_plus": c.IRA_CATCHUP,
             "early_withdrawal_penalty_rate": c.EARLY_WITHDRAWAL_PENALTY_RATE,
+        },
+        "social_security": {
+            "base_threshold": c.SS_TAXABLE_BASE_THRESHOLD.get(filing_status),
+            "upper_threshold": c.SS_TAXABLE_UPPER_THRESHOLD.get(filing_status),
+            "max_taxable_pct": c.SS_TAXABLE_MAX_PCT,
         },
         "energy_credits": {
             "clean_energy_rate": c.ENERGY_CLEAN_CREDIT_RATE,

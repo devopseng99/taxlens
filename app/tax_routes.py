@@ -13,7 +13,7 @@ from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
-    DepreciableAsset, RetirementDistribution, IRAContribution,
+    DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -209,6 +209,13 @@ class IRAContributionInput(BaseModel):
     age_50_plus: bool = False
 
 
+class SocialSecurityBenefitInput(BaseModel):
+    """SSA-1099 — Social Security benefits."""
+    recipient: str = "filer"
+    gross_benefits: float = 0.0
+    federal_withheld: float = 0.0
+
+
 class DepreciableAssetInput(BaseModel):
     """Form 4562 — Depreciable business or rental asset."""
     description: str = ""
@@ -280,6 +287,9 @@ class TaxDraftRequest(BaseModel):
 
     # IRA contributions (deductible traditional IRA)
     ira_contributions: list[IRAContributionInput] = Field(default=[], description="Traditional IRA contributions for above-the-line deduction")
+
+    # Social Security benefits (SSA-1099)
+    social_security_benefits: list[SocialSecurityBenefitInput] = Field(default=[], description="SSA-1099 Social Security benefits (taxable 0-85% based on income)")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -613,6 +623,16 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for i in req.ira_contributions
     ] if req.ira_contributions else None
 
+    # --- Build Social Security benefits ---
+    ss_list = [
+        SocialSecurityBenefit(
+            recipient=s.recipient,
+            gross_benefits=s.gross_benefits,
+            federal_withheld=s.federal_withheld,
+        )
+        for s in req.social_security_benefits
+    ] if req.social_security_benefits else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -637,6 +657,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         depreciable_assets=asset_list,
         retirement_distributions=retirement_list,
         ira_contributions=ira_list,
+        social_security_benefits=ss_list,
         tax_year=req.tax_year,
     )
 
@@ -730,6 +751,7 @@ async def download_pdf(
         "form_8949": "form_8949.pdf",
         "form_4562": "form_4562.pdf",
         "retirement_summary": "retirement_summary.pdf",
+        "ss_summary": "ss_summary.pdf",
         "il_1040": "il_1040.pdf",
     }
 
