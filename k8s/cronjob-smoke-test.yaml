@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: taxlens-smoke-test
+  namespace: taxlens
+spec:
+  schedule: "*/30 * * * *"  # Every 30 minutes
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 60  # 1 min timeout
+      template:
+        spec:
+          restartPolicy: Never
+          dnsConfig:
+            options:
+              - name: ndots
+                value: "2"
+          containers:
+            - name: smoke
+              image: curlimages/curl:8.7.1
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "[$(date -Iseconds)] TaxLens smoke test starting"
+                  FAILURES=0
+
+                  # Health endpoint
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                    "http://taxlens-api:8000/health")
+                  if [ "$STATUS" != "200" ]; then
+                    echo "FAIL: /health returned $STATUS"
+                    FAILURES=$((FAILURES + 1))
+                  else
+                    echo "OK: /health (200)"
+                  fi
+
+                  # Readiness endpoint
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                    "http://taxlens-api:8000/ready")
+                  if [ "$STATUS" != "200" ]; then
+                    echo "FAIL: /ready returned $STATUS"
+                    FAILURES=$((FAILURES + 1))
+                  else
+                    echo "OK: /ready (200)"
+                  fi
+
+                  # Docs endpoint
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                    "http://taxlens-api:8000/docs")
+                  if [ "$STATUS" != "200" ]; then
+                    echo "FAIL: /docs returned $STATUS"
+                    FAILURES=$((FAILURES + 1))
+                  else
+                    echo "OK: /docs (200)"
+                  fi
+
+                  # Metrics endpoint
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                    "http://taxlens-api:8000/metrics")
+                  if [ "$STATUS" != "200" ]; then
+                    echo "FAIL: /metrics returned $STATUS"
+                    FAILURES=$((FAILURES + 1))
+                  else
+                    echo "OK: /metrics (200)"
+                  fi
+
+                  # Version check
+                  VERSION=$(curl -s "http://taxlens-api:8000/health" | \
+                    grep -o '"version":"[^"]*"' | head -1)
+                  echo "Version: $VERSION"
+
+                  echo "[$(date -Iseconds)] Smoke test complete: $FAILURES failures"
+                  exit $FAILURES

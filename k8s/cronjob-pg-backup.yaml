@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: taxlens-pg-backup
+  namespace: taxlens-db
+spec:
+  schedule: "0 2 * * *"  # Daily at 2:00 AM CT
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300  # 5 min timeout
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: mgplcb05
+          containers:
+            - name: backup
+              image: bitnami/postgresql:16-debian-12
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+                  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                  DUMP_FILE="/backups/taxlens-${TIMESTAMP}.sql.gz"
+                  echo "[$(date -Iseconds)] Starting PostgreSQL backup"
+                  pg_dump -h taxlens-pg.taxlens-db.svc.cluster.local \
+                    -U postgres -d taxlens \
+                    --no-owner --no-acl --clean --if-exists | \
+                    gzip > "${DUMP_FILE}"
+                  SIZE=$(du -sh "${DUMP_FILE}" | cut -f1)
+                  echo "[$(date -Iseconds)] Backup complete: ${DUMP_FILE} (${SIZE})"
+                  # Prune backups older than 7 days
+                  find /backups -name "taxlens-*.sql.gz" -mtime +7 -delete
+                  REMAINING=$(ls -1 /backups/taxlens-*.sql.gz 2>/dev/null | wc -l)
+                  echo "[$(date -Iseconds)] Retained ${REMAINING} backups"
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: taxlens-pg-secret
+                      key: postgres-password
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+          volumes:
+            - name: backup-storage
+              hostPath:
+                path: /opt/k8s-pers/vol1/backups/taxlens
+                type: DirectoryOrCreate

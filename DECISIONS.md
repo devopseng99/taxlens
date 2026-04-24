@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.18.1 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.18.2 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -399,6 +399,16 @@ Updated: 2026-04-24 (v3.18.1 API + v2.6.0 Portal)
 170. **Fire-and-forget email pattern** — Email calls in onboarding and billing webhook are wrapped in try/except with logging. Email failure never blocks tenant provisioning or plan upgrades. This follows the graceful feature degradation pattern.
 
 171. **Three email templates** — Welcome (with API key + MCP config), filing deadline reminder, plan upgrade confirmation. All include plain text fallback for email clients that don't render HTML.
+
+## Wave 39 — Operational Maturity (v3.18.2)
+
+172. **K8s CronJob for PG backups (not cron on host)** — Backup runs as a K8s CronJob (`taxlens-pg-backup`) in the `taxlens-db` namespace, not a host-level crontab. Uses `bitnami/postgresql:16-debian-12` image with `pg_dump | gzip` to hostPath on mgplcb05. K8s manages scheduling, retry, and history. 7-day retention via `find -mtime +7 -delete`.
+
+173. **Short DNS names + ndots:2 for Alpine containers** — Alpine-based images (like `curlimages/curl`) default ndots:5, causing DNS lookups for short names like `taxlens-api` to append search domains and fail. Setting `dnsConfig.options: [{name: ndots, value: "2"}]` forces direct resolution for names with 2+ dots, and short names resolve correctly via the cluster search domain.
+
+174. **Smoke test as CronJob, not external monitor** — In-cluster CronJob (`taxlens-smoke-test`) runs every 30 minutes checking `/health`, `/ready`, `/docs`, `/metrics`. Catches service degradation inside the cluster network without external monitoring infrastructure. Failed jobs retained (3) for debugging, successful jobs trimmed (1).
+
+175. **Backup secret from existing `taxlens-pg-secret`** — PG backup CronJob reads `PGPASSWORD` from the same `taxlens-pg-secret` used by the PostgreSQL StatefulSet. No new secrets to manage.
 
 ## PDF Template Provenance
 

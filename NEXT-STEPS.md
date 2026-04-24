@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.18.1)
+Updated: 2026-04-24 (v3.18.2)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -657,6 +657,19 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/onboarding.py` — Welcome email on signup
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
+
+### Wave 39 — Operational Maturity (v3.18.2) — 2026-04-24
+
+- [x] PG backup CronJob: daily at 2am, pg_dump | gzip, 7-day retention, hostPath on mgplcb05
+- [x] Smoke test CronJob: every 30 min, checks /health, /ready, /docs, /metrics
+- [x] Alpine DNS fix: short service names + ndots:2 dnsConfig (FQDN fails in curlimages/curl)
+- [x] Manual smoke test verified: 0 failures (all 4 endpoints returning 200)
+- [x] 590/590 unit tests (20 new), 65/65 E2E tests passing
+
+**New files:**
+- `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
+- `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
+- `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
 
 ## Future Enhancements
 
