@@ -502,6 +502,7 @@ class TaxResult:
     # Deductions
     deduction_type: str = "standard"     # "standard" or "itemized"
     standard_deduction: float = 0.0
+    additional_standard_deduction: float = 0.0  # Age 65+ / blind add-on
     itemized_total: float = 0.0
     line_13_deduction: float = 0.0       # The chosen deduction
     line_15_taxable_income: float = 0.0
@@ -1115,6 +1116,10 @@ def compute_tax(
     alimony_paid: float = 0.0,
     alimony_received: float = 0.0,
     capital_loss_carryover: float = 0.0,
+    filer_age_65_plus: bool = False,
+    filer_is_blind: bool = False,
+    spouse_age_65_plus: bool = False,
+    spouse_is_blind: bool = False,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1625,6 +1630,23 @@ def compute_tax(
     # =======================================================================
 
     result.standard_deduction = c.STANDARD_DEDUCTION[filing_status]
+
+    # Additional standard deduction for age 65+ and/or blind
+    additional_count = 0
+    if filer_age_65_plus:
+        additional_count += 1
+    if filer_is_blind:
+        additional_count += 1
+    if filing_status == "mfj" or filing_status == "mfs":
+        if spouse_age_65_plus:
+            additional_count += 1
+        if spouse_is_blind:
+            additional_count += 1
+        per_item = c.ADDITIONAL_STD_DED_MARRIED
+    else:
+        per_item = c.ADDITIONAL_STD_DED_SINGLE
+    result.additional_standard_deduction = additional_count * per_item
+    result.standard_deduction += result.additional_standard_deduction
 
     if result.itemized_total > result.standard_deduction:
         result.deduction_type = "itemized"

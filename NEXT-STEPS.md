@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.25.0)
+Updated: 2026-04-24 (v3.26.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -658,6 +658,29 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
 
+### Wave 47 — Additional Standard Deduction + REST API Credit Fields (v3.26.0) — 2026-04-24
+
+- [x] IRC §63(f) additional standard deduction for age 65+ and blind filers
+- [x] 2025 rates: $2,000 single/HoH, $1,600 MFJ/MFS per qualifying condition
+- [x] 2024 rates: $1,950 single/HoH, $1,550 MFJ/MFS (backward compat)
+- [x] Up to 4 conditions for MFJ (both 65+, both blind = $6,400)
+- [x] Spouse flags ignored for single/HoH filers
+- [x] REST API credit field gap closed: education, dependent care, retirement contributions
+- [x] EducationExpenseInput, DependentCareExpenseInput, RetirementContributionInput Pydantic models
+- [x] AOTC ($2,500), LLC, CDCC, Saver's Credit now reachable via REST API
+- [x] Full stack: engine + API + MCP server
+- [x] 781/781 unit tests (18 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave47_senior_credits.py` — 18 tests (14 additional deduction, 3 credit API, 1 backward compat)
+
+**Modified files:**
+- `app/tax_engine.py` — additional_standard_deduction field, age/blind params, deduction logic
+- `app/tax_config.py` — ADDITIONAL_STD_DED_SINGLE/MARRIED for 2024+2025
+- `app/tax_routes.py` — 3 new Pydantic input models, 4 age/blind fields on TaxDraftRequest
+- `app/mcp_server.py` — age/blind params on _build_inputs + compute_tax_scenario
+- `app/main.py` — version 3.26.0
+
 ### Wave 46 — Capital Loss Limitation (v3.25.0) — 2026-04-24
 
 - [x] IRC §1211(b) capital loss limitation: $3,000 single/MFJ/HoH, $1,500 MFS
@@ -834,4 +857,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** IRA income-based phaseout (active plan participants), Annualized installment method (Form 2210 Schedule AI), Form 8606 (nondeductible IRA basis tracking), gambling income/losses, foreign tax credit (Form 1116)
+- **Tax engine remaining:** Retirement line reclassification (4a/4b/5a/5b), IRA income-based phaseout, student loan interest MAGI phaseout, foreign tax credit (Form 1116), gambling income/losses, Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI)

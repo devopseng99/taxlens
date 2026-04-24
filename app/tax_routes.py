@@ -14,7 +14,7 @@ from tax_engine import (
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
-    UnemploymentCompensation,
+    UnemploymentCompensation, EducationExpense, DependentCareExpense, RetirementContribution,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -225,6 +225,25 @@ class UnemploymentCompensationInput(BaseModel):
     state_withheld: float = 0.0
 
 
+class EducationExpenseInput(BaseModel):
+    """Form 8863 — Per-student education expenses."""
+    student_name: str = ""
+    qualified_expenses: float = 0.0
+    credit_type: str = Field(default="aotc", description="'aotc' (American Opportunity) or 'llc' (Lifetime Learning)")
+
+
+class DependentCareExpenseInput(BaseModel):
+    """Form 2441 — Child/dependent care expenses."""
+    dependent_name: str = ""
+    care_expenses: float = 0.0
+
+
+class RetirementContributionInput(BaseModel):
+    """Form 8880 — Retirement savings contribution for Saver's Credit."""
+    contributor: str = Field(default="filer", description="'filer' or 'spouse'")
+    contribution_amount: float = 0.0
+
+
 class DepreciableAssetInput(BaseModel):
     """Form 4562 — Depreciable business or rental asset."""
     description: str = ""
@@ -308,6 +327,17 @@ class TaxDraftRequest(BaseModel):
     alimony_paid: float = Field(default=0, description="Alimony paid under pre-2019 divorce agreement (above-the-line deduction)")
     alimony_received: float = Field(default=0, description="Alimony received under pre-2019 divorce agreement (taxable income)")
     capital_loss_carryover: float = Field(default=0, description="Prior-year capital loss carryover from Schedule D (IRC §1211)")
+
+    # Education / care / retirement credits (Forms 8863, 2441, 8880)
+    education_expenses: list[EducationExpenseInput] = Field(default=[], description="Per-student education expenses (AOTC $2,500 max, LLC $2,000 max)")
+    dependent_care_expenses: list[DependentCareExpenseInput] = Field(default=[], description="Child/dependent care expenses (Form 2441)")
+    retirement_contributions: list[RetirementContributionInput] = Field(default=[], description="Retirement contributions for Saver's Credit (Form 8880)")
+
+    # Filer/spouse age and vision status (for additional standard deduction)
+    filer_age_65_plus: bool = Field(default=False, description="Filer is age 65 or older at end of tax year")
+    filer_is_blind: bool = Field(default=False, description="Filer is legally blind")
+    spouse_age_65_plus: bool = Field(default=False, description="Spouse is age 65 or older (MFJ/MFS only)")
+    spouse_is_blind: bool = Field(default=False, description="Spouse is legally blind (MFJ/MFS only)")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -660,6 +690,31 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for u in req.unemployment_benefits
     ] if req.unemployment_benefits else None
 
+    # --- Build education expenses ---
+    edu_list = [
+        EducationExpense(
+            student_name=e.student_name, qualified_expenses=e.qualified_expenses,
+            credit_type=e.credit_type,
+        )
+        for e in req.education_expenses
+    ] if req.education_expenses else None
+
+    # --- Build dependent care expenses ---
+    care_list = [
+        DependentCareExpense(
+            dependent_name=c.dependent_name, care_expenses=c.care_expenses,
+        )
+        for c in req.dependent_care_expenses
+    ] if req.dependent_care_expenses else None
+
+    # --- Build retirement contributions (Saver's Credit) ---
+    ret_contrib_list = [
+        RetirementContribution(
+            contributor=r.contributor, contribution_amount=r.contribution_amount,
+        )
+        for r in req.retirement_contributions
+    ] if req.retirement_contributions else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -686,10 +741,17 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         ira_contributions=ira_list,
         social_security_benefits=ss_list,
         unemployment_benefits=unemployment_list,
+        education_expenses=edu_list,
+        dependent_care_expenses=care_list,
+        retirement_contributions=ret_contrib_list,
         educator_expenses=req.educator_expenses,
         alimony_paid=req.alimony_paid,
         alimony_received=req.alimony_received,
         capital_loss_carryover=req.capital_loss_carryover,
+        filer_age_65_plus=req.filer_age_65_plus,
+        filer_is_blind=req.filer_is_blind,
+        spouse_age_65_plus=req.spouse_age_65_plus,
+        spouse_is_blind=req.spouse_is_blind,
         tax_year=req.tax_year,
     )
 

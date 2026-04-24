@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.25.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.26.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,16 @@ Updated: 2026-04-24 (v3.25.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 47 — Additional Standard Deduction + REST API Credit Fields (v3.26.0)
+
+205. **Additional standard deduction for age 65+ and blind** — IRC §63(f) provides an additional standard deduction for filers who are 65+ or blind. Single/HoH get $2,000 per qualifying condition (2025), MFJ/MFS get $1,600. Up to 4 qualifying conditions for MFJ (both spouses 65+ and both blind = $6,400). 2024 uses $1,950/$1,550 per IRS Rev. Proc. The additional amount is added to the base standard deduction before the standard-vs-itemized comparison.
+
+206. **Spouse flags ignored for non-joint filers** — `spouse_age_65_plus` and `spouse_is_blind` only increment the additional count for MFJ and MFS filing statuses. Single and HoH filers ignore spouse flags entirely — this prevents accidental extra deductions when a single filer passes spouse data.
+
+207. **REST API credit field gap closed** — `EducationExpense`, `DependentCareExpense`, and `RetirementContribution` were already in `compute_tax()` but unreachable from the REST API's `TaxDraftRequest` Pydantic model. Added `EducationExpenseInput`, `DependentCareExpenseInput`, and `RetirementContributionInput` Pydantic models with construction logic to bridge REST → engine. AOTC, LLC, CDCC, and Saver's Credit are now fully accessible via both REST API and MCP.
+
+208. **AOTC credit split: nonrefundable + refundable** — American Opportunity Tax Credit ($2,500 max) splits into $1,500 nonrefundable (`education_credit`) and $1,000 refundable (`education_credit_refundable` = 40% of total). The REST API and tests must check both fields, not just the total.
 
 ## Wave 46 — Capital Loss Limitation (v3.25.0)
 

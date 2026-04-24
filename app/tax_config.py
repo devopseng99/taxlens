@@ -160,6 +160,8 @@ _YEAR_2024 = {
         ],
     },
     "STANDARD_DEDUCTION": {SINGLE: 14_600, MFJ: 29_200, HOH: 21_900, MFS: 14_600},
+    "ADDITIONAL_STD_DED_SINGLE": 1_950,   # 2024: Single/HoH age 65+ or blind (each)
+    "ADDITIONAL_STD_DED_MARRIED": 1_550,  # 2024: MFJ/MFS age 65+ or blind (each)
     "LTCG_BRACKETS": {
         SINGLE: [(47_025, 0.00), (518_900, 0.15), (float("inf"), 0.20)],
         MFJ:    [(94_050, 0.00), (583_750, 0.15), (float("inf"), 0.20)],
@@ -239,6 +241,8 @@ _YEAR_2025 = {
         ],
     },
     "STANDARD_DEDUCTION": {SINGLE: 15_000, MFJ: 30_000, HOH: 22_500, MFS: 15_000},
+    "ADDITIONAL_STD_DED_SINGLE": 2_000,   # 2025: Single/HoH age 65+ or blind (each)
+    "ADDITIONAL_STD_DED_MARRIED": 1_600,  # 2025: MFJ/MFS age 65+ or blind (each)
     "LTCG_BRACKETS": {
         SINGLE: [(48_350, 0.00), (533_400, 0.15), (float("inf"), 0.20)],
         MFJ:    [(96_700, 0.00), (600_050, 0.15), (float("inf"), 0.20)],
