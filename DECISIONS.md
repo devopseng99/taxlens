@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.12.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.13.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -333,6 +333,16 @@ Updated: 2026-04-23 (v3.12.0 API + v2.6.0 Portal)
 143. **CTC doesn't waive age for disabled** — Unlike EITC and CDCC (which treat disabled dependents as qualifying regardless of age), CTC strictly requires under 17. Disabled adults 17+ qualify for the Other Dependents Credit (ODC, $500), not the full CTC ($2,000). ODC is not yet implemented; disabled dependents 17+ get no CTC until ODC is added.
 
 144. **No-DOB assumes qualifying** — If `date_of_birth` is empty or invalid, `age_at_year_end()` returns -1 and all qualification methods return True. This prevents data entry gaps from accidentally disqualifying dependents and maintains backward compat with tests that don't set DOB.
+
+## Wave 29 — Multi-Year Tax Config (v3.13.0)
+
+145. **TaxYearConfig via get_year_config(year)** — All inflation-adjusted constants (brackets, deductions, EITC, AMT, QBI, Saver's, SS wage base) are stored in per-year dicts (`_YEAR_2024`, `_YEAR_2025`). `get_year_config()` returns a SimpleNamespace. Statutory rates (NIIT 3.8%, SE 15.3%, AOTC max $2,500) are constant across years and defined once at module level.
+
+146. **compute_tax(tax_year=) parameter** — Engine accepts `tax_year` (default 2025) and loads year-specific config via `c = get_year_config(tax_year)`. All ~50 constant references in compute_tax() use `c.` prefix. Thread-safe — no module-level state mutation.
+
+147. **Backward-compatible module-level exports** — `from tax_config import *` still works and exports 2025 constants. Existing tests, MCP server, state engine, and PDF generator continue using module-level names unchanged. Only `compute_tax()` uses the year-specific config object.
+
+148. **2024 constants from Rev. Proc. 2023-34** — Full 2024 federal tax constants: brackets (single 10% at $11,600 vs 2025's $11,925), standard deduction ($14,600 vs $15,000), SS wage base ($168,600 vs $176,100), AMT exemption ($85,700 vs $88,100), QBI limit ($182,100 vs $191,950), EITC max 0-child ($632 vs $649), IL exemption ($2,625 vs $2,775).
 
 ## PDF Template Provenance
 

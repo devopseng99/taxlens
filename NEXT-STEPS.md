@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.12.0)
+Updated: 2026-04-23 (v3.13.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -460,6 +460,33 @@ Replaces integer `num_dependents` with structured `Dependent` records for accura
 - `app/tax_routes.py` — DependentInput model, TaxDraftRequest.dependents field
 - `app/pdf_generator.py` — Summary page shows dependent names
 - `app/main.py` — version bump to 3.12.0
+
+## Wave 29 — Multi-Year Tax Config (DEPLOYED — v3.13.0 API)
+
+Multi-year support: compute taxes for both 2024 and 2025 tax years with year-specific constants.
+
+**Delivered:**
+- [x] `TaxYearConfig` with `get_year_config(year)` returning SimpleNamespace of all constants
+- [x] `_YEAR_2024` dict: all IRS Rev. Proc. 2023-34 inflation-adjusted constants
+- [x] `_YEAR_2025` dict: all IRS Rev. Proc. 2024-40 inflation-adjusted constants
+- [x] Statutory rates (NIIT, SE, AOTC, etc.) defined once — shared across years
+- [x] `compute_tax(tax_year=)` parameter (default 2025) loads year-specific config
+- [x] All ~50 constant references in compute_tax() use `c.` prefix for year-specific config
+- [x] `TaxDraftRequest.tax_year` field in API (default 2025)
+- [x] MCP `compute_tax_scenario` accepts `tax_year` parameter
+- [x] MCP `_build_inputs()` passes through `tax_year`
+- [x] Full backward compat: module-level `from tax_config import *` exports 2025 values
+- [x] 415/415 unit tests (24 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave29_multiyear.py` — 24 tests (10 config, 7 compute, 2 backward compat, 3 credits, 2 summary)
+
+**Modified files:**
+- `app/tax_config.py` — Restructured: year-specific dicts + get_year_config() + backward compat exports
+- `app/tax_engine.py` — `tax_year` param, `c = get_year_config(tax_year)`, all constant refs use `c.`
+- `app/tax_routes.py` — `TaxDraftRequest.tax_year`, passed to compute_tax()
+- `app/mcp_server.py` — `tax_year` param on compute_tax_scenario and _build_inputs
+- `app/main.py` — version bump to 3.13.0
 
 ## Future Enhancements
 
