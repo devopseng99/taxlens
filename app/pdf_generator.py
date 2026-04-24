@@ -190,6 +190,30 @@ def generate_summary_page(result: TaxResult) -> BytesIO:
     if result.additional_medicare_tax > 0:
         y = draw_line(c, "", "  Additional Medicare Tax (0.9%)", result.additional_medicare_tax, y)
     y = draw_line(c, "", "Total federal tax", result.line_24_total_tax, y, bold=True)
+    # Credits
+    has_credits = (result.line_27_ctc > 0 or result.education_credit > 0 or
+                   result.education_credit_refundable > 0 or result.cdcc > 0 or
+                   result.savers_credit > 0 or result.eitc > 0)
+    if has_credits:
+        y = draw_section(c, "Credits", y)
+        if result.line_27_ctc > 0:
+            y = draw_line(c, "", "  Child Tax Credit", result.line_27_ctc, y)
+        if result.education_credit > 0:
+            y = draw_line(c, "", "  Education credits (nonrefundable)", result.education_credit, y)
+        if result.education_credit_refundable > 0:
+            y = draw_line(c, "", "  Education credits (refundable AOTC)", result.education_credit_refundable, y)
+        if result.cdcc > 0:
+            y = draw_line(c, "", "  Child & Dependent Care Credit", result.cdcc, y)
+        if result.savers_credit > 0:
+            y = draw_line(c, "", "  Saver's Credit", result.savers_credit, y)
+        if result.eitc > 0:
+            y = draw_line(c, "", "  Earned Income Tax Credit", result.eitc, y)
+
+    if result.estimated_tax_penalty > 0:
+        y = draw_line(c, "", "  Estimated tax penalty", result.estimated_tax_penalty, y)
+    if result.amt > 0:
+        y = draw_line(c, "", "  Alternative Minimum Tax", result.amt, y)
+
     y = draw_line(c, "", "Total withholding + payments", result.line_33_total_payments, y)
     if result.line_34_overpaid > 0:
         y = draw_line(c, "", "FEDERAL REFUND", result.line_34_overpaid, y, bold=True)
@@ -866,6 +890,266 @@ _STATE_TEMPLATE_MAP = {
 
 
 # ---------------------------------------------------------------------------
+# Form 6251 — Alternative Minimum Tax (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_form_6251(result: TaxResult) -> BytesIO:
+    """Generate Form 6251 (AMT) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Form 6251", "Alternative Minimum Tax — Individuals", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y -= 5
+
+    y = draw_section(c, "Part I — Alternative Minimum Taxable Income", y)
+    y = draw_line(c, "1", "Taxable income (Form 1040, line 15)", result.line_15_taxable_income, y)
+    salt_addback = result.sched_a_salt if result.deduction_type == "itemized" else 0
+    y = draw_line(c, "2a", "State/local tax deduction add-back (SALT)", salt_addback, y)
+    y = draw_line(c, "28", "Alternative minimum taxable income (AMTI)", result.amt_income, y, bold=True)
+    y -= 5
+
+    y = draw_section(c, "Part II — AMT Exemption & Tax", y)
+    y = draw_line(c, "29", "Exemption amount", result.amt_exemption, y)
+    amt_taxable = max(0, result.amt_income - result.amt_exemption)
+    y = draw_line(c, "30", "AMTI minus exemption", amt_taxable, y)
+    y = draw_line(c, "31", "Tentative minimum tax", result.amt_tentative, y)
+    regular_tax = result.line_16_tax + result.capital_gains_tax
+    y = draw_line(c, "32", "Regular tax (before credits)", regular_tax, y)
+    y = draw_line(c, "33", "AMT (excess of tentative over regular)", result.amt, y, bold=True)
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
+# Form 8863 — Education Credits (AOTC + LLC) (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_form_8863(result: TaxResult) -> BytesIO:
+    """Generate Form 8863 (Education Credits) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Form 8863", "Education Credits (AOTC and LLC)", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y -= 5
+
+    y = draw_section(c, "Part I — Refundable American Opportunity Credit", y)
+    y = draw_line(c, "1", "Tentative AOTC (refundable portion — 40%)", result.education_credit_refundable, y)
+    y = draw_line(c, "", "Refundable credit to Form 1040", result.education_credit_refundable, y, bold=True)
+    y -= 5
+
+    y = draw_section(c, "Part II — Nonrefundable Education Credits", y)
+    y = draw_line(c, "19", "Nonrefundable credit (AOTC 60% + LLC)", result.education_credit, y, bold=True)
+    y -= 5
+
+    total_ed = result.education_credit + result.education_credit_refundable
+    y = draw_section(c, "Total Education Credit Benefit", y)
+    y = draw_line(c, "", "Total education credits", total_ed, y, bold=True)
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
+# Schedule EIC — Earned Income Credit (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_schedule_eic(result: TaxResult) -> BytesIO:
+    """Generate Schedule EIC summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Schedule EIC", "Earned Income Credit", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y = draw_info_row(c, "Filing Status:", result.filing_status, y)
+    y -= 5
+
+    y = draw_section(c, "Earned Income Credit Computation", y)
+    y = draw_line(c, "", "Earned income (wages + SE)", result.eitc_earned_income, y)
+    y = draw_line(c, "", "Adjusted Gross Income", result.line_11_agi, y)
+    num_children = min(result.num_dependents, 3)
+    y = draw_line(c, "", "Number of qualifying children", float(num_children), y)
+    y = draw_line(c, "", "Earned Income Credit", result.eitc, y, bold=True)
+
+    y -= 10
+    c.setFont("Helvetica", 8)
+    c.drawString(58, y, "This credit is fully refundable and added to Form 1040 payments.")
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
+# Form 2441 — Child and Dependent Care Expenses (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_form_2441(result: TaxResult) -> BytesIO:
+    """Generate Form 2441 (CDCC) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Form 2441", "Child and Dependent Care Expenses", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y -= 5
+
+    y = draw_section(c, "Part III — Dependent Care Credit", y)
+    y = draw_line(c, "", "Adjusted Gross Income", result.line_11_agi, y)
+
+    from tax_config import CDCC_RATE_START_AGI, CDCC_MAX_RATE, CDCC_RATE_STEP_AGI, CDCC_MIN_RATE
+    if result.line_11_agi <= CDCC_RATE_START_AGI:
+        rate = CDCC_MAX_RATE
+    else:
+        steps = int((result.line_11_agi - CDCC_RATE_START_AGI) / CDCC_RATE_STEP_AGI)
+        rate = max(CDCC_MIN_RATE, CDCC_MAX_RATE - steps * 0.01)
+    c.setFont("Helvetica", 8)
+    y -= 2
+    c.drawString(80, y, f"Credit rate based on AGI: {rate:.0%}")
+    y -= 16
+
+    y = draw_line(c, "", "Child and Dependent Care Credit", result.cdcc, y, bold=True)
+
+    y -= 10
+    c.setFont("Helvetica", 8)
+    c.drawString(58, y, "This credit is nonrefundable — limited to tax liability after other credits.")
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
+# Form 8880 — Credit for Qualified Retirement Savings (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_form_8880(result: TaxResult) -> BytesIO:
+    """Generate Form 8880 (Saver's Credit) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Form 8880", "Credit for Qualified Retirement Savings Contributions", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y -= 5
+
+    y = draw_section(c, "Saver's Credit Computation", y)
+    y = draw_line(c, "", "Adjusted Gross Income", result.line_11_agi, y)
+
+    from tax_config import SAVERS_AGI_TIERS, SINGLE
+    tiers = SAVERS_AGI_TIERS.get(result.filing_status, SAVERS_AGI_TIERS[SINGLE])
+    if result.line_11_agi <= tiers[0]:
+        rate_str = "50%"
+    elif result.line_11_agi <= tiers[1]:
+        rate_str = "20%"
+    elif result.line_11_agi <= tiers[2]:
+        rate_str = "10%"
+    else:
+        rate_str = "0%"
+    c.setFont("Helvetica", 8)
+    y -= 2
+    c.drawString(80, y, f"Credit rate based on AGI: {rate_str}")
+    y -= 16
+
+    y = draw_line(c, "", "Retirement Savings Credit", result.savers_credit, y, bold=True)
+
+    y -= 10
+    c.setFont("Helvetica", 8)
+    c.drawString(58, y, "This credit is nonrefundable — limited to tax liability after other credits.")
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
+# Form 2210 — Underpayment of Estimated Tax (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_form_2210(result: TaxResult) -> BytesIO:
+    """Generate Form 2210 (Estimated Tax Penalty) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Form 2210", "Underpayment of Estimated Tax by Individuals", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y -= 5
+
+    y = draw_section(c, "Short Method — Penalty Computation", y)
+    y = draw_line(c, "1", "Required annual payment", result.estimated_tax_required, y)
+    total_paid = result.line_25_federal_withheld + result.estimated_payments
+    y = draw_line(c, "2", "Withholding + estimated payments", total_paid, y)
+    underpayment = max(0, result.estimated_tax_required - total_paid)
+    y = draw_line(c, "3", "Underpayment", underpayment, y)
+
+    from tax_config import ESTIMATED_TAX_PENALTY_RATE
+    c.setFont("Helvetica", 8)
+    y -= 2
+    c.drawString(80, y, f"Penalty rate: {ESTIMATED_TAX_PENALTY_RATE:.0%} per year")
+    y -= 16
+
+    y = draw_line(c, "15", "Estimated tax penalty", result.estimated_tax_penalty, y, bold=True)
+
+    y -= 10
+    c.setFont("Helvetica", 8)
+    c.drawString(58, y, "Penalty is added to amount owed on Form 1040, line 38.")
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
 def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
@@ -938,6 +1222,48 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "form_8960.pdf"
         p.write_bytes(buf.read())
         paths["form_8960"] = str(p)
+
+    # Form 6251 — AMT (if AMT applies)
+    if result.amt > 0:
+        buf = generate_form_6251(result)
+        p = out / "form_6251.pdf"
+        p.write_bytes(buf.read())
+        paths["form_6251"] = str(p)
+
+    # Form 8863 — Education Credits (if any education credit)
+    if result.education_credit > 0 or result.education_credit_refundable > 0:
+        buf = generate_form_8863(result)
+        p = out / "form_8863.pdf"
+        p.write_bytes(buf.read())
+        paths["form_8863"] = str(p)
+
+    # Schedule EIC — EITC (if earned income credit)
+    if result.eitc > 0:
+        buf = generate_schedule_eic(result)
+        p = out / "schedule_eic.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_eic"] = str(p)
+
+    # Form 2441 — CDCC (if dependent care credit)
+    if result.cdcc > 0:
+        buf = generate_form_2441(result)
+        p = out / "form_2441.pdf"
+        p.write_bytes(buf.read())
+        paths["form_2441"] = str(p)
+
+    # Form 8880 — Saver's Credit (if retirement savings credit)
+    if result.savers_credit > 0:
+        buf = generate_form_8880(result)
+        p = out / "form_8880.pdf"
+        p.write_bytes(buf.read())
+        paths["form_8880"] = str(p)
+
+    # Form 2210 — Estimated Tax Penalty (if penalty assessed)
+    if result.estimated_tax_penalty > 0:
+        buf = generate_form_2210(result)
+        p = out / "form_2210.pdf"
+        p.write_bytes(buf.read())
+        paths["form_2210"] = str(p)
 
     # State returns — dispatch by state
     for sr in getattr(result, 'state_returns', []):

@@ -438,6 +438,12 @@ async def download_pdf(
         "schedule_2": "schedule_2.pdf",
         "form_8959": "form_8959.pdf",
         "form_8960": "form_8960.pdf",
+        "form_6251": "form_6251.pdf",
+        "form_8863": "form_8863.pdf",
+        "schedule_eic": "schedule_eic.pdf",
+        "form_2441": "form_2441.pdf",
+        "form_8880": "form_8880.pdf",
+        "form_2210": "form_2210.pdf",
         "il_1040": "il_1040.pdf",
     }
 

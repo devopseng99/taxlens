@@ -1228,6 +1228,10 @@ def compute_tax(
         result.forms_generated.append("Form 8959")
     if result.niit > 0:
         result.forms_generated.append("Form 8960")
+    if result.amt > 0:
+        result.forms_generated.append("Form 6251")
+    if result.education_credit > 0 or result.education_credit_refundable > 0:
+        result.forms_generated.append("Form 8863")
     if result.eitc > 0:
         result.forms_generated.append("Schedule EIC")
     if result.cdcc > 0:
