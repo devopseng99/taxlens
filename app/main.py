@@ -63,13 +63,16 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
+    logger.info("TaxLens API starting (v3.16.0)")
 
     async with mcp.session_manager.run():
         yield
 
-    # Shutdown
+    # Graceful shutdown — flush pending metering events
+    logger.info("TaxLens API shutting down — flushing metering buffer")
     await metering.stop()
     await postgrest.close()
+    logger.info("TaxLens API shutdown complete")
 
 
 app = FastAPI(
@@ -286,30 +289,40 @@ def _detect_form_type(doc_type: str | None, model_id: str) -> str | None:
 
 # --- Endpoints ---
 
+import time as _time
+_STARTUP_TIME = _time.time()
+
+
 @app.get("/health")
-async def health():
+async def health(deep: bool = False):
     from plaid_routes import PLAID_ENABLED
     from billing import STRIPE_ENABLED, STRIPE_MODE
 
     db_ok = False
+    db_latency_ms = None
     if DB_ENABLED:
         try:
             import httpx
             from db.postgrest_client import POSTGREST_URL
+            t0 = _time.monotonic()
             async with httpx.AsyncClient(timeout=5.0) as client:
                 r = await client.get(f"{POSTGREST_URL}/")
                 db_ok = r.status_code == 200
+            db_latency_ms = round((_time.monotonic() - t0) * 1000, 1)
         except Exception:
             db_ok = False
     else:
         db_ok = True  # No DB to check
 
-    status = "ok" if db_ok else "degraded"
-    return {
+    storage_writable = STORAGE_ROOT.exists()
+    status = "ok" if (db_ok and storage_writable) else "degraded"
+
+    result = {
         "status": status,
         "version": "3.16.0",
+        "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
-        "writable": STORAGE_ROOT.exists(),
+        "writable": storage_writable,
         "auth_enabled": AUTH_ENABLED,
         "db_enabled": DB_ENABLED,
         "db_ok": db_ok,
@@ -319,6 +332,49 @@ async def health():
         "mcp_endpoint": "/api/mcp",
         "plaid_enabled": PLAID_ENABLED,
     }
+
+    if deep and db_latency_ms is not None:
+        result["db_latency_ms"] = db_latency_ms
+
+    if deep:
+        # Check storage write capability
+        try:
+            test_file = STORAGE_ROOT / ".health_check"
+            test_file.write_text("ok")
+            test_file.unlink()
+            result["storage_write_ok"] = True
+        except Exception:
+            result["storage_write_ok"] = False
+            status = "degraded"
+            result["status"] = status
+
+    return result
+
+
+@app.get("/ready")
+async def readiness():
+    """Readiness probe — returns 200 only when all dependencies are available."""
+    db_ok = True
+    if DB_ENABLED:
+        try:
+            import httpx
+            from db.postgrest_client import POSTGREST_URL
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                r = await client.get(f"{POSTGREST_URL}/")
+                db_ok = r.status_code == 200
+        except Exception:
+            db_ok = False
+
+    storage_ok = STORAGE_ROOT.exists()
+
+    if db_ok and storage_ok:
+        return {"ready": True}
+    else:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=503,
+            content={"ready": False, "db_ok": db_ok, "storage_ok": storage_ok},
+        )
 
 
 @app.get("/whoami")
