@@ -199,6 +199,7 @@ class RetirementDistributionInput(BaseModel):
     taxable_amount_not_determined: bool = False
     federal_withheld: float = 0.0
     distribution_code: str = "7"
+    is_ira: bool = Field(default=False, description="True=IRA (lines 4a/4b), False=pension/annuity (lines 5a/5b)")
     is_roth: bool = False
     is_early: bool = False
 
@@ -338,6 +339,10 @@ class TaxDraftRequest(BaseModel):
     filer_is_blind: bool = Field(default=False, description="Filer is legally blind")
     spouse_age_65_plus: bool = Field(default=False, description="Spouse is age 65 or older (MFJ/MFS only)")
     spouse_is_blind: bool = Field(default=False, description="Spouse is legally blind (MFJ/MFS only)")
+
+    # Retirement plan participation (for IRA deduction phaseout per IRC §219(g))
+    filer_active_plan_participant: bool = Field(default=False, description="Filer is covered by employer retirement plan (W-2 Box 13)")
+    spouse_active_plan_participant: bool = Field(default=False, description="Spouse is covered by employer retirement plan (MFJ only)")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -656,7 +661,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
             taxable_amount_not_determined=r.taxable_amount_not_determined,
             federal_withheld=r.federal_withheld,
             distribution_code=r.distribution_code,
-            is_roth=r.is_roth, is_early=r.is_early,
+            is_ira=r.is_ira, is_roth=r.is_roth, is_early=r.is_early,
         )
         for r in req.retirement_distributions
     ] if req.retirement_distributions else None
@@ -752,6 +757,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         filer_is_blind=req.filer_is_blind,
         spouse_age_65_plus=req.spouse_age_65_plus,
         spouse_is_blind=req.spouse_is_blind,
+        filer_active_plan_participant=req.filer_active_plan_participant,
+        spouse_active_plan_participant=req.spouse_active_plan_participant,
         tax_year=req.tax_year,
     )
 

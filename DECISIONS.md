@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.26.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.27.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,14 @@ Updated: 2026-04-24 (v3.26.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 48 — Retirement Line Reclassification + IRA Phaseout (v3.27.0)
+
+209. **IRA vs pension split on 1040 lines 4a/4b and 5a/5b** — Previously all retirement distributions went to `line_8_other_income`. Now `RetirementDistribution.is_ira` routes IRA distributions to lines 4a/4b (IRA gross/taxable) and pensions to lines 5a/5b (pension gross/taxable). This matches the official IRS 1040 layout. Default `is_ira=False` preserves backward compatibility — existing code routes to pension lines.
+
+210. **IRA deduction income-based phaseout per IRC §219(g)** — Active retirement plan participants (W-2 Box 13 checked) have their traditional IRA deduction phased out based on MAGI. 2025 ranges: single $79K-$89K, MFJ (filer active) $126K-$146K, MFJ (spouse active only) $236K-$246K, MFS $0-$10K. Phaseout is linear with IRS rounding (reduction rounded UP to nearest $10). MAGI = total income minus adjustments excluding IRA deduction (avoids circular dependency).
+
+211. **Spouse-active higher phaseout only for MFJ** — When the filer is NOT an active participant but their spouse IS, a higher phaseout range applies ($236K-$246K for 2025). This only applies to MFJ filers — for other filing statuses, spouse_active_plan_participant has no effect, ensuring no accidental phaseout for single filers.
 
 ## Wave 47 — Additional Standard Deduction + REST API Credit Fields (v3.26.0)
 

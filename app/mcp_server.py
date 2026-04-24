@@ -106,6 +106,8 @@ def _build_inputs(
     filer_is_blind: bool = False,
     spouse_age_65_plus: bool = False,
     spouse_is_blind: bool = False,
+    filer_active_plan_participant: bool = False,
+    spouse_active_plan_participant: bool = False,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -339,6 +341,7 @@ def _build_inputs(
                 taxable_amount_not_determined=r.get("taxable_amount_not_determined", False),
                 federal_withheld=r.get("federal_withheld", 0),
                 distribution_code=r.get("distribution_code", "7"),
+                is_ira=r.get("is_ira", False),
                 is_roth=r.get("is_roth", False),
                 is_early=r.get("is_early", False),
             )
@@ -417,6 +420,8 @@ def _build_inputs(
         filer_is_blind=filer_is_blind,
         spouse_age_65_plus=spouse_age_65_plus,
         spouse_is_blind=spouse_is_blind,
+        filer_active_plan_participant=filer_active_plan_participant,
+        spouse_active_plan_participant=spouse_active_plan_participant,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -480,6 +485,8 @@ def compute_tax_scenario(
     filer_is_blind: bool = False,
     spouse_age_65_plus: bool = False,
     spouse_is_blind: bool = False,
+    filer_active_plan_participant: bool = False,
+    spouse_active_plan_participant: bool = False,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -522,7 +529,7 @@ def compute_tax_scenario(
         k1_incomes: Schedule K-1 passthrough income from partnerships/S-corps/trusts.
         crypto_transactions: Digital asset transactions for Form 8949.
         depreciable_assets: Business/rental assets for depreciation (Form 4562). Each dict: {"description", "cost", "date_placed_in_service" (YYYY-MM-DD), "macrs_class" (3/5/7/15/27/39), "asset_use" ("business"/"rental"), "business_use_pct" (0-100), "section_179_elected", "bonus_depreciation" (bool), "recovery_year" (1-based)}. Section 179 limit: $1,250,000 (2025). Bonus: 40% (2025). Real property (27/39-year) not eligible for Section 179 or bonus.
-        retirement_distributions: Form 1099-R retirement distributions. Each dict: {"payer_name", "gross_distribution", "taxable_amount", "taxable_amount_not_determined" (bool), "federal_withheld", "distribution_code" ("1"=early, "7"=normal, "G"=rollover), "is_roth" (bool), "is_early" (bool)}. Roth and rollover distributions are non-taxable. Early distributions (code "1") incur 10% penalty.
+        retirement_distributions: Form 1099-R retirement distributions. Each dict: {"payer_name", "gross_distribution", "taxable_amount", "taxable_amount_not_determined" (bool), "federal_withheld", "distribution_code" ("1"=early, "7"=normal, "G"=rollover), "is_ira" (bool, True=IRA lines 4a/4b, False=pension lines 5a/5b), "is_roth" (bool), "is_early" (bool)}. Roth and rollover distributions are non-taxable. Early distributions (code "1") incur 10% penalty.
         ira_contributions: Traditional IRA contributions for above-the-line deduction. Each dict: {"contributor" ("filer"/"spouse"), "contribution_amount", "age_50_plus" (bool)}. Limit: $7,000 ($8,000 if 50+).
         social_security_benefits: SSA-1099 Social Security benefits. Each dict: {"recipient" ("filer"/"spouse"), "gross_benefits", "federal_withheld"}. Taxable 0-85% based on provisional income (IRC §86). Single: base $25K/upper $34K. MFJ: base $32K/upper $44K.
         unemployment_benefits: Form 1099-G unemployment compensation. Each dict: {"state", "compensation", "federal_withheld", "state_withheld"}. Fully taxable.
@@ -534,6 +541,8 @@ def compute_tax_scenario(
         filer_is_blind: True if filer is legally blind (additional standard deduction).
         spouse_age_65_plus: True if spouse is 65+ (MFJ/MFS only).
         spouse_is_blind: True if spouse is legally blind (MFJ/MFS only).
+        filer_active_plan_participant: True if filer is covered by employer retirement plan (W-2 Box 13). Triggers IRA deduction phaseout per IRC §219(g).
+        spouse_active_plan_participant: True if spouse is covered by employer plan (MFJ only). Different phaseout range than filer.
         prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor).
         prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold).
         tax_year: Tax year (2024 or 2025, default 2025)
@@ -576,6 +585,8 @@ def compute_tax_scenario(
         filer_is_blind=filer_is_blind,
         spouse_age_65_plus=spouse_age_65_plus,
         spouse_is_blind=spouse_is_blind,
+        filer_active_plan_participant=filer_active_plan_participant,
+        spouse_active_plan_participant=spouse_active_plan_participant,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )

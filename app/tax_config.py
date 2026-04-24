@@ -59,6 +59,19 @@ HSA_CATCHUP = 1_000                  # Age 55+ catch-up (statutory, not indexed)
 IRA_CATCHUP = 1_000                   # Age 50+ catch-up (statutory, not indexed)
 EARLY_WITHDRAWAL_PENALTY_RATE = 0.10  # 10% early withdrawal from retirement acct
 
+# --- IRA Deduction Phaseout (active plan participants) ---
+# Per IRC §219(g) — phase out IRA deduction when filer/spouse is covered by employer plan
+# Ranges are (start, end) — deduction phases out linearly between start and end
+# If neither spouse is an active participant, no phaseout applies (full deduction)
+IRA_PHASEOUT_ACTIVE = {  # Filer IS an active participant
+    2024: {SINGLE: (77_000, 87_000), MFJ: (123_000, 143_000), HOH: (77_000, 87_000), MFS: (0, 10_000)},
+    2025: {SINGLE: (79_000, 89_000), MFJ: (126_000, 146_000), HOH: (79_000, 89_000), MFS: (0, 10_000)},
+}
+IRA_PHASEOUT_SPOUSE_ACTIVE = {  # Filer NOT active, but SPOUSE is active (MFJ only)
+    2024: {MFJ: (230_000, 240_000)},
+    2025: {MFJ: (236_000, 246_000)},
+}
+
 # --- Social Security Benefits Taxability (IRC §86) ---
 # Thresholds are statutory (NOT inflation-indexed since 1983)
 SS_TAXABLE_BASE_THRESHOLD = {         # Below this: 0% taxable
@@ -365,6 +378,8 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     # Depreciation
     ns.IRA_CATCHUP = IRA_CATCHUP
     ns.EARLY_WITHDRAWAL_PENALTY_RATE = EARLY_WITHDRAWAL_PENALTY_RATE
+    ns.IRA_PHASEOUT_ACTIVE = IRA_PHASEOUT_ACTIVE.get(tax_year, IRA_PHASEOUT_ACTIVE[2025])
+    ns.IRA_PHASEOUT_SPOUSE_ACTIVE = IRA_PHASEOUT_SPOUSE_ACTIVE.get(tax_year, IRA_PHASEOUT_SPOUSE_ACTIVE[2025])
     # Social Security taxability
     ns.SS_TAXABLE_BASE_THRESHOLD = SS_TAXABLE_BASE_THRESHOLD
     ns.SS_TAXABLE_UPPER_THRESHOLD = SS_TAXABLE_UPPER_THRESHOLD

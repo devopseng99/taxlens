@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.26.0)
+Updated: 2026-04-24 (v3.27.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -658,6 +658,31 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
 
+### Wave 48 — Retirement Line Reclassification + IRA Phaseout (v3.27.0) — 2026-04-24
+
+- [x] IRA distributions route to 1040 lines 4a/4b (was lumped in line_8_other_income)
+- [x] Pension/annuity distributions route to 1040 lines 5a/5b
+- [x] `is_ira` field on RetirementDistribution (default False = backward compat)
+- [x] Roth IRA: gross on 4a, taxable 4b = $0; Rollover pension: gross on 5a, taxable 5b = $0
+- [x] Lines 4b + 5b included in total income calculation (line 9)
+- [x] Lines 4b + 5b included in SS provisional income calculation
+- [x] IRC §219(g) IRA deduction phaseout for active plan participants
+- [x] 2025 phaseout: single $79K-$89K, MFJ filer-active $126K-$146K, MFJ spouse-active $236K-$246K, MFS $0-$10K
+- [x] 2024 phaseout: single $77K-$87K, MFJ filer-active $123K-$143K, MFJ spouse-active $230K-$240K
+- [x] IRS rounding: reduction rounded UP to nearest $10
+- [x] Full stack: engine + REST API + MCP server
+- [x] 803/803 unit tests (22 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave48_retirement_lines.py` — 22 tests (8 line classification, 12 IRA phaseout, 2 backward compat)
+
+**Modified files:**
+- `app/tax_engine.py` — lines 4a/4b/5a/5b on TaxResult, is_ira field, IRA phaseout logic, active plan params
+- `app/tax_config.py` — IRA_PHASEOUT_ACTIVE + IRA_PHASEOUT_SPOUSE_ACTIVE constants (2024+2025)
+- `app/tax_routes.py` — is_ira on RetirementDistributionInput, active plan fields on TaxDraftRequest
+- `app/mcp_server.py` — is_ira + active plan params on _build_inputs + compute_tax_scenario
+- `app/main.py` — version 3.27.0
+
 ### Wave 47 — Additional Standard Deduction + REST API Credit Fields (v3.26.0) — 2026-04-24
 
 - [x] IRC §63(f) additional standard deduction for age 65+ and blind filers
@@ -857,4 +882,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Retirement line reclassification (4a/4b/5a/5b), IRA income-based phaseout, student loan interest MAGI phaseout, foreign tax credit (Form 1116), gambling income/losses, Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI)
+- **Tax engine remaining:** Student loan interest MAGI phaseout, foreign tax credit (Form 1116), gambling income/losses, Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI)

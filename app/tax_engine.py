@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import json
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -411,6 +412,7 @@ class RetirementDistribution:
     taxable_amount_not_determined: bool = False  # Box 2b checkbox
     federal_withheld: float = 0.0        # Box 4
     distribution_code: str = "7"         # Box 7: "1"=early, "7"=normal, "2"=Roth exception, "G"=rollover
+    is_ira: bool = False                 # True=IRA (lines 4a/4b), False=pension/annuity (lines 5a/5b)
     is_roth: bool = False                # Roth IRA/401k (qualified = tax-free)
     is_early: bool = False               # Under age 59½ (10% penalty unless exception)
 
@@ -603,12 +605,18 @@ class TaxResult:
     quarterly_schedule: list = field(default_factory=list)  # 4 quarterly amounts
 
     # --- Retirement Income / Form 1099-R ---
-    retirement_gross_distributions: float = 0.0   # Total 1099-R Box 1
-    retirement_taxable_amount: float = 0.0        # Taxable portion → Line 4b/5b
+    line_4a_ira_distributions: float = 0.0        # IRA gross distributions (1040 line 4a)
+    line_4b_ira_taxable: float = 0.0              # IRA taxable amount (1040 line 4b)
+    line_5a_pensions: float = 0.0                 # Pension/annuity gross (1040 line 5a)
+    line_5b_pensions_taxable: float = 0.0         # Pension/annuity taxable (1040 line 5b)
+    retirement_gross_distributions: float = 0.0   # Total 1099-R Box 1 (all types)
+    retirement_taxable_amount: float = 0.0        # Total taxable (all types)
     retirement_federal_withheld: float = 0.0      # 1099-R Box 4 withholding
     retirement_early_penalty: float = 0.0         # 10% early withdrawal penalty
     retirement_distributions_count: int = 0
     ira_deduction: float = 0.0                    # Traditional IRA above-the-line deduction
+    ira_deduction_before_phaseout: float = 0.0    # IRA deduction before phaseout reduction
+    ira_phaseout_applied: bool = False             # Whether AGI phaseout reduced IRA deduction
 
     # --- Unemployment Compensation (Form 1099-G) ---
     unemployment_compensation: float = 0.0   # Total unemployment received
@@ -737,12 +745,17 @@ class TaxResult:
                 "transactions": self.crypto_transactions_count,
             } if self.crypto_transactions_count > 0 else None,
             "retirement": {
+                "line_4a_ira_distributions": round(self.line_4a_ira_distributions, 2),
+                "line_4b_ira_taxable": round(self.line_4b_ira_taxable, 2),
+                "line_5a_pensions": round(self.line_5a_pensions, 2),
+                "line_5b_pensions_taxable": round(self.line_5b_pensions_taxable, 2),
                 "gross_distributions": round(self.retirement_gross_distributions, 2),
                 "taxable_amount": round(self.retirement_taxable_amount, 2),
                 "federal_withheld": round(self.retirement_federal_withheld, 2),
                 "early_penalty": round(self.retirement_early_penalty, 2),
                 "distributions_count": self.retirement_distributions_count,
                 "ira_deduction": round(self.ira_deduction, 2),
+                "ira_phaseout_applied": self.ira_phaseout_applied,
             } if self.retirement_distributions_count > 0 or self.ira_deduction > 0 else None,
             "social_security": {
                 "gross_benefits": round(self.ss_gross_benefits, 2),
@@ -1120,6 +1133,8 @@ def compute_tax(
     filer_is_blind: bool = False,
     spouse_age_65_plus: bool = False,
     spouse_is_blind: bool = False,
+    filer_active_plan_participant: bool = False,
+    spouse_active_plan_participant: bool = False,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1278,7 +1293,7 @@ def compute_tax(
         result.line_7_capital_gain_loss = result.sched_d_net_gain
 
     # =======================================================================
-    # FORM 1099-R — Retirement Distributions
+    # FORM 1099-R — Retirement Distributions (Lines 4a/4b IRA, 5a/5b Pension)
     # =======================================================================
     retirement_distributions = retirement_distributions or []
     if retirement_distributions:
@@ -1288,8 +1303,13 @@ def compute_tax(
             result.retirement_taxable_amount += dist.taxable
             result.retirement_federal_withheld += dist.federal_withheld
             result.retirement_early_penalty += dist.early_withdrawal_penalty
-        # Taxable distributions → Line 4b/5b (treated as other income)
-        result.line_8_other_income += result.retirement_taxable_amount
+            # Route to correct 1040 lines based on is_ira flag
+            if dist.is_ira:
+                result.line_4a_ira_distributions += dist.gross_distribution
+                result.line_4b_ira_taxable += dist.taxable
+            else:
+                result.line_5a_pensions += dist.gross_distribution
+                result.line_5b_pensions_taxable += dist.taxable
         # Withholding is added in the PAYMENTS section below
 
     # IRA contributions — above-the-line deduction
@@ -1458,6 +1478,8 @@ def compute_tax(
             result.line_1a_wages
             + result.line_2b_taxable_interest
             + result.line_3b_ordinary_dividends
+            + result.line_4b_ira_taxable
+            + result.line_5b_pensions_taxable
             + result.line_7_capital_gain_loss
             + result.line_8_other_income
             + result.line_8a_business_income
@@ -1487,11 +1509,13 @@ def compute_tax(
         result.ss_taxable_amount = round(taxable_ss, 2)
         result.ss_taxable_pct = round(taxable_ss / total_ss, 4) if total_ss > 0 else 0.0
 
-    # Line 9: Total income (includes taxable SS on line 6b)
+    # Line 9: Total income (includes lines 4b, 5b, 6b per 1040)
     result.line_9_total_income = (
         result.line_1a_wages
         + result.line_2b_taxable_interest
         + result.line_3b_ordinary_dividends
+        + result.line_4b_ira_taxable
+        + result.line_5b_pensions_taxable
         + result.line_7_capital_gain_loss
         + result.line_8_other_income
         + result.line_8a_business_income
@@ -1577,8 +1601,32 @@ def compute_tax(
         result.form_8889_excess = total_excess
         adjustments += result.hsa_deduction
 
-    # IRA above-the-line deduction
+    # IRA above-the-line deduction (with income-based phaseout for active plan participants)
     if result.ira_deduction > 0:
+        result.ira_deduction_before_phaseout = result.ira_deduction
+        # IRC §219(g): phaseout based on MAGI = total income - adjustments (excluding IRA deduction)
+        if filer_active_plan_participant or spouse_active_plan_participant:
+            magi_for_ira = result.line_9_total_income - adjustments  # excludes IRA
+            if filer_active_plan_participant:
+                phaseout_range = c.IRA_PHASEOUT_ACTIVE.get(filing_status, (0, 0))
+            else:
+                # Filer NOT active but spouse IS — only applies to MFJ
+                phaseout_range = c.IRA_PHASEOUT_SPOUSE_ACTIVE.get(filing_status, None)
+                if phaseout_range is None:
+                    phaseout_range = (float("inf"), float("inf"))  # No phaseout for non-MFJ
+            start, end = phaseout_range
+            if magi_for_ira >= end:
+                result.ira_deduction = 0.0
+                result.ira_phaseout_applied = True
+            elif magi_for_ira > start:
+                # Linear phaseout: reduce by (MAGI - start) / (end - start) * full deduction
+                # Round UP to nearest $10 per IRS instructions
+                reduction_frac = (magi_for_ira - start) / (end - start)
+                reduction = result.ira_deduction * reduction_frac
+                # IRS rounds reduction UP to nearest $10
+                reduction = math.ceil(reduction / 10) * 10
+                result.ira_deduction = max(0, result.ira_deduction - reduction)
+                result.ira_phaseout_applied = True
         adjustments += result.ira_deduction
 
     # Educator expense deduction — K-12 teachers, max $300 per educator
