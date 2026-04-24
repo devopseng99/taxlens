@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.31.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.32.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,16 @@ Updated: 2026-04-24 (v3.31.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 53 — Form 2210 Schedule AI Annualized Installment Method (v3.32.0)
+
+225. **Annualized installment method as optional penalty reducer** — Schedule AI is computed only when `quarterly_income` is provided AND produces a lower penalty than the regular method. The engine always computes the regular (short method) penalty first, then checks if AI yields savings. `sched_ai_used=True` only when AI penalty < regular penalty.
+
+226. **Cumulative period income with IRS annualization factors** — Each of the 4 periods is cumulative from Jan 1 (not per-quarter). Annualization factors (4.0, 2.4, 1.5, 1.0) are IRS-prescribed. Tax is computed on the annualized amount using the same brackets and standard deduction as the full-year computation.
+
+227. **QuarterlyIncome as a separate dataclass** — Rather than adding 20 individual float parameters to compute_tax, a single `QuarterlyIncome` dataclass holds 5 tuples of 4 floats (wages, business_income, other_income, deductions, withholding). JSON API accepts it as a dict with 4-element arrays.
+
+228. **Penalty comparison: lower of two methods always wins** — Per IRS Form 2210 instructions, the filer may use whichever method produces the lower penalty. The engine enforces this automatically — `sched_ai_penalty_reduction` tracks the savings.
 
 ## Wave 52 — Form 8606 Nondeductible IRA Basis Tracking (v3.31.0)
 

@@ -1154,6 +1154,104 @@ def generate_form_2210(result: TaxResult) -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Form 2210 Schedule AI — Annualized Installment Method (ReportLab)
+# ---------------------------------------------------------------------------
+def generate_schedule_ai(result: TaxResult) -> BytesIO:
+    """Generate Schedule AI (Annualized Installment Method) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    y = HEIGHT - 40
+    y = draw_header(c, "Schedule AI", "Annualized Installment Method (Form 2210)", result.tax_year, y)
+
+    filer = result.filer
+    y = draw_info_row(c, "Name:", f"{filer.first_name} {filer.last_name}", y)
+    y = draw_info_row(c, "SSN:", filer.ssn, y)
+    y -= 5
+
+    periods = ["Jan 1–Mar 31", "Jan 1–May 31", "Jan 1–Aug 31", "Jan 1–Dec 31"]
+    factors = [4.0, 2.4, 1.5, 1.0]
+
+    y = draw_section(c, "Part I — Annualized Income Installments", y)
+
+    # Column headers
+    c.setFont("Helvetica-Bold", 7)
+    col_x = [220, 310, 400, 490]
+    for i, period in enumerate(periods):
+        c.drawString(col_x[i], y, f"Period {i + 1}")
+    y -= 12
+    c.setFont("Helvetica", 7)
+    for i, period in enumerate(periods):
+        c.drawString(col_x[i], y, period)
+    y -= 16
+
+    # Row: Annualization factors
+    c.setFont("Helvetica", 8)
+    c.drawString(58, y, "Annualization factors")
+    for i in range(4):
+        c.drawRightString(col_x[i] + 60, y, f"{factors[i]:.1f}")
+    y -= 14
+
+    # Row: Annualized income
+    c.drawString(58, y, "Annualized income")
+    for i in range(4):
+        val = result.sched_ai_annualized_income[i] if i < len(result.sched_ai_annualized_income) else 0
+        c.drawRightString(col_x[i] + 60, y, f"${val:,.0f}")
+    y -= 14
+
+    # Row: Annualized tax
+    c.drawString(58, y, "Tax on annualized income")
+    for i in range(4):
+        val = result.sched_ai_annualized_tax[i] if i < len(result.sched_ai_annualized_tax) else 0
+        c.drawRightString(col_x[i] + 60, y, f"${val:,.0f}")
+    y -= 14
+
+    y -= 8
+    y = draw_section(c, "Part II — Required Installment Comparison", y)
+
+    # Row: AI required installments
+    c.setFont("Helvetica", 8)
+    c.drawString(58, y, "AI required installment")
+    for i in range(4):
+        val = result.sched_ai_required_installments[i] if i < len(result.sched_ai_required_installments) else 0
+        c.drawRightString(col_x[i] + 60, y, f"${val:,.0f}")
+    y -= 14
+
+    # Row: Regular required installments
+    c.drawString(58, y, "Regular required installment")
+    for i in range(4):
+        val = result.sched_ai_regular_installments[i] if i < len(result.sched_ai_regular_installments) else 0
+        c.drawRightString(col_x[i] + 60, y, f"${val:,.0f}")
+    y -= 14
+
+    # Row: Effective (lower of two)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(58, y, "Effective installment (lower)")
+    for i in range(4):
+        ai = result.sched_ai_required_installments[i] if i < len(result.sched_ai_required_installments) else 0
+        reg = result.sched_ai_regular_installments[i] if i < len(result.sched_ai_regular_installments) else 0
+        c.drawRightString(col_x[i] + 60, y, f"${min(ai, reg):,.0f}")
+    y -= 20
+
+    y = draw_section(c, "Penalty Comparison", y)
+    from tax_config import ESTIMATED_TAX_PENALTY_RATE
+    y = draw_line(c, "", "Regular method penalty",
+                  result.estimated_tax_penalty + result.sched_ai_penalty_reduction, y)
+    y = draw_line(c, "", "Annualized method penalty", result.estimated_tax_penalty, y)
+    y = draw_line(c, "", "Penalty reduction from Schedule AI",
+                  result.sched_ai_penalty_reduction, y, bold=True)
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(colors.HexColor("#c62828"))
+    c.drawString(58, y, "DRAFT — FOR REVIEW ONLY — NOT FOR FILING")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # Form 8889 — Health Savings Accounts (ReportLab)
 # ---------------------------------------------------------------------------
 def generate_form_8889(result: TaxResult) -> BytesIO:
@@ -2049,6 +2147,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "form_2210.pdf"
         p.write_bytes(buf.read())
         paths["form_2210"] = str(p)
+
+    # Schedule AI — Annualized Installment Method (if used)
+    if result.sched_ai_used:
+        buf = generate_schedule_ai(result)
+        p = out / "schedule_ai.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_ai"] = str(p)
 
     # State returns — dispatch by state
     for sr in getattr(result, 'state_returns', []):

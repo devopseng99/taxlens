@@ -18,7 +18,7 @@ from tax_engine import (
     EducationExpense, DependentCareExpense, RetirementContribution,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
-    UnemploymentCompensation, GamblingIncome, ForeignTaxCredit,
+    UnemploymentCompensation, GamblingIncome, ForeignTaxCredit, QuarterlyIncome,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -116,6 +116,7 @@ def _build_inputs(
     roth_conversion_amount: float = 0,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
+    quarterly_income: dict | None = None,
     tax_year: int = 2025,
 ) -> dict:
     """Convert simplified params to engine-ready inputs."""
@@ -461,6 +462,13 @@ def _build_inputs(
         roth_conversion_amount=roth_conversion_amount,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
+        quarterly_income=QuarterlyIncome(
+            wages=tuple(quarterly_income.get("wages", [0, 0, 0, 0])),
+            business_income=tuple(quarterly_income.get("business_income", [0, 0, 0, 0])),
+            other_income=tuple(quarterly_income.get("other_income", [0, 0, 0, 0])),
+            deductions=tuple(quarterly_income.get("deductions", [0, 0, 0, 0])),
+            withholding=tuple(quarterly_income.get("withholding", [0, 0, 0, 0])),
+        ) if quarterly_income else None,
         tax_year=tax_year,
     )
 
@@ -532,6 +540,7 @@ def compute_tax_scenario(
     roth_conversion_amount: float = 0,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
+    quarterly_income: dict | None = None,
     tax_year: int = 2025,
 ) -> str:
     """Compute federal + state taxes for a given scenario.
@@ -640,6 +649,7 @@ def compute_tax_scenario(
         total_ira_value_year_end=total_ira_value_year_end,
         roth_conversion_amount=roth_conversion_amount,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
+        quarterly_income=quarterly_income,
         tax_year=tax_year,
     )
     result = compute_tax(**inputs)

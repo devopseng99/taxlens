@@ -478,6 +478,29 @@ class UnemploymentCompensation:
 
 
 @dataclass
+class QuarterlyIncome:
+    """Per-period income for Form 2210 Schedule AI annualized installment method.
+
+    Each period is cumulative from Jan 1:
+      period_1: Jan 1 – Mar 31
+      period_2: Jan 1 – May 31
+      period_3: Jan 1 – Aug 31
+      period_4: Jan 1 – Dec 31 (full year)
+    """
+    wages: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    business_income: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    other_income: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    deductions: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    withholding: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+
+
+# Annualization factors per IRS Form 2210 Schedule AI
+ANNUALIZATION_FACTORS = (4.0, 2.4, 1.5, 1.0)
+# Required installment cumulative percentages (25% per quarter)
+INSTALLMENT_PCTS = (0.25, 0.50, 0.75, 1.00)
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -554,6 +577,14 @@ class TaxResult:
     # Estimated tax penalty
     estimated_tax_penalty: float = 0.0    # Form 2210 penalty
     estimated_tax_required: float = 0.0   # Required annual payment
+
+    # Form 2210 Schedule AI (annualized installment method)
+    sched_ai_used: bool = False                         # Whether AI method was beneficial
+    sched_ai_annualized_income: list = field(default_factory=list)   # 4 periods
+    sched_ai_annualized_tax: list = field(default_factory=list)      # 4 periods
+    sched_ai_required_installments: list = field(default_factory=list)  # 4 quarters
+    sched_ai_regular_installments: list = field(default_factory=list)   # 4 quarters (regular method)
+    sched_ai_penalty_reduction: float = 0.0             # Penalty saved by using AI method
 
     # Bottom line
     line_34_overpaid: float = 0.0        # Refund
@@ -859,6 +890,14 @@ class TaxResult:
             "quarterly_estimated_tax": round(self.quarterly_estimated_tax, 2),
             "quarterly_schedule": self.quarterly_schedule if self.quarterly_schedule else None,
             "estimated_tax_penalty": round(self.estimated_tax_penalty, 2),
+            "schedule_ai": {
+                "used": self.sched_ai_used,
+                "annualized_income": self.sched_ai_annualized_income,
+                "annualized_tax": self.sched_ai_annualized_tax,
+                "required_installments": self.sched_ai_required_installments,
+                "regular_installments": self.sched_ai_regular_installments,
+                "penalty_reduction": round(self.sched_ai_penalty_reduction, 2),
+            } if self.sched_ai_used else None,
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
             "federal_refund": round(self.line_34_overpaid, 2),
@@ -1210,6 +1249,7 @@ def compute_tax(
     roth_conversion_amount: float = 0.0,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
+    quarterly_income: QuarterlyIncome | None = None,
     tax_year: int = TAX_YEAR,
 ) -> TaxResult:
     """Compute full federal + state tax return.
@@ -2258,7 +2298,79 @@ def compute_tax(
             # Underpayment = required - paid. Penalty = underpayment * rate * (time fraction)
             # Simplified: assume full year underpayment (4 quarters)
             underpayment = result.estimated_tax_required - total_timely_payments
-            result.estimated_tax_penalty = underpayment * c.ESTIMATED_TAX_PENALTY_RATE
+            regular_penalty = underpayment * c.ESTIMATED_TAX_PENALTY_RATE
+
+            # ---------------------------------------------------------------
+            # Schedule AI — Annualized Installment Method
+            # ---------------------------------------------------------------
+            # If quarterly income is provided, compute per-period annualized
+            # required installments. If any quarter's AI installment is lower
+            # than the regular 25% method, the filer benefits.
+            ai_penalty = regular_penalty  # default: no improvement
+            if quarterly_income is not None:
+                regular_quarter = result.estimated_tax_required / 4.0
+                regular_installments = [round(regular_quarter, 2)] * 4
+                result.sched_ai_regular_installments = regular_installments
+
+                ai_annualized_income = []
+                ai_annualized_tax = []
+                ai_required = []
+
+                cumulative_required = 0.0
+                cumulative_paid_prior = 0.0
+
+                for i in range(4):
+                    # Period income = wages + business + other - deductions
+                    period_income = (quarterly_income.wages[i]
+                                     + quarterly_income.business_income[i]
+                                     + quarterly_income.other_income[i]
+                                     - quarterly_income.deductions[i])
+                    # Annualize: multiply by factor
+                    annualized = max(0, period_income * ANNUALIZATION_FACTORS[i])
+                    ai_annualized_income.append(round(annualized, 2))
+
+                    # Compute tax on annualized income (simplified: use brackets + standard deduction)
+                    ann_taxable = max(0, annualized - result.line_13_deduction)
+                    ann_tax = compute_bracket_tax(ann_taxable, c.FEDERAL_BRACKETS[filing_status])
+                    # Add SE tax if business income present
+                    if quarterly_income.business_income[i] > 0:
+                        ann_se = quarterly_income.business_income[i] * ANNUALIZATION_FACTORS[i]
+                        ann_se_net = ann_se * 0.9235
+                        ann_se_tax = ann_se_net * 0.153 if ann_se_net <= c.SS_WAGE_BASE else (
+                            c.SS_WAGE_BASE * 0.124 + ann_se_net * 0.029)
+                        ann_tax += ann_se_tax
+                    ai_annualized_tax.append(round(ann_tax, 2))
+
+                    # Required installment for this quarter
+                    # = (annualized tax × cumulative %) - prior quarters' required
+                    cumulative_target = ann_tax * INSTALLMENT_PCTS[i]
+                    quarter_required = max(0, cumulative_target - cumulative_required)
+                    ai_required.append(round(quarter_required, 2))
+                    cumulative_required += quarter_required
+
+                result.sched_ai_annualized_income = ai_annualized_income
+                result.sched_ai_annualized_tax = ai_annualized_tax
+                result.sched_ai_required_installments = ai_required
+
+                # Compare AI installments vs regular — use the lower for each quarter
+                ai_total_underpayment = 0.0
+                for i in range(4):
+                    effective_required = min(ai_required[i], regular_installments[i])
+                    quarter_withholding = quarterly_income.withholding[i] - (
+                        quarterly_income.withholding[i - 1] if i > 0 else 0)
+                    quarter_paid = max(0, quarter_withholding)
+                    quarter_underpaid = max(0, effective_required - quarter_paid)
+                    ai_total_underpayment += quarter_underpaid
+
+                ai_penalty = ai_total_underpayment * c.ESTIMATED_TAX_PENALTY_RATE
+
+                # Use AI method only if it reduces penalty
+                if ai_penalty < regular_penalty:
+                    result.sched_ai_used = True
+                    result.sched_ai_penalty_reduction = round(regular_penalty - ai_penalty, 2)
+
+            # Apply the lower penalty
+            result.estimated_tax_penalty = round(min(regular_penalty, ai_penalty), 2)
             result.line_37_owed += result.estimated_tax_penalty
 
     # =======================================================================
@@ -2414,6 +2526,8 @@ def compute_tax(
         result.forms_generated.append("Form 8880")
     if result.estimated_tax_penalty > 0:
         result.forms_generated.append("Form 2210")
+    if result.sched_ai_used:
+        result.forms_generated.append("Schedule AI")
     if result.hsa_deduction > 0 or result.form_8889_contributions > 0:
         result.forms_generated.append("Form 8889")
     if result.form_8606_nondeductible_contribution > 0 or result.form_8606_prior_year_basis > 0:

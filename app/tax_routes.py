@@ -15,7 +15,7 @@ from tax_engine import (
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
     UnemploymentCompensation, EducationExpense, DependentCareExpense, RetirementContribution,
-    GamblingIncome, ForeignTaxCredit,
+    GamblingIncome, ForeignTaxCredit, QuarterlyIncome,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -369,6 +369,9 @@ class TaxDraftRequest(BaseModel):
     prior_year_ira_basis: float = Field(default=0, description="Cumulative nondeductible IRA basis from prior year Form 8606 Line 14")
     total_ira_value_year_end: float = Field(default=0, description="Total value of ALL traditional IRAs as of Dec 31 (for pro-rata rule)")
     roth_conversion_amount: float = Field(default=0, description="Amount converted from traditional IRA to Roth IRA this year")
+
+    # Form 2210 Schedule AI — Annualized installment method
+    quarterly_income: Optional[dict] = Field(default=None, description="Per-period cumulative income for annualized installment method. Keys: wages, business_income, other_income, deductions, withholding — each a 4-element list (periods 1-4)")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -809,6 +812,13 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         prior_year_ira_basis=req.prior_year_ira_basis,
         total_ira_value_year_end=req.total_ira_value_year_end,
         roth_conversion_amount=req.roth_conversion_amount,
+        quarterly_income=QuarterlyIncome(
+            wages=tuple(req.quarterly_income.get("wages", [0, 0, 0, 0])),
+            business_income=tuple(req.quarterly_income.get("business_income", [0, 0, 0, 0])),
+            other_income=tuple(req.quarterly_income.get("other_income", [0, 0, 0, 0])),
+            deductions=tuple(req.quarterly_income.get("deductions", [0, 0, 0, 0])),
+            withholding=tuple(req.quarterly_income.get("withholding", [0, 0, 0, 0])),
+        ) if req.quarterly_income else None,
         tax_year=req.tax_year,
     )
 
@@ -899,6 +909,7 @@ async def download_pdf(
         "form_2441": "form_2441.pdf",
         "form_8880": "form_8880.pdf",
         "form_2210": "form_2210.pdf",
+        "schedule_ai": "schedule_ai.pdf",
         "form_8889": "form_8889.pdf",
         "form_8606": "form_8606.pdf",
         "form_5695": "form_5695.pdf",

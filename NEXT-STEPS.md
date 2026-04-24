@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.31.0)
+Updated: 2026-04-24 (v3.32.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -896,6 +896,30 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
 
+### Wave 53 — Form 2210 Schedule AI Annualized Installment Method (v3.32.0) — 2026-04-24
+
+- [x] QuarterlyIncome dataclass: 5 tuples of 4 floats (wages, business, other, deductions, withholding)
+- [x] IRS annualization factors: 4.0 (Q1), 2.4 (Q2), 1.5 (Q3), 1.0 (Q4)
+- [x] Per-period annualized income and tax computation
+- [x] Required installment comparison: AI vs regular (25% per quarter)
+- [x] Penalty reduction: uses lower of two methods automatically
+- [x] `sched_ai_used`, `sched_ai_penalty_reduction` on TaxResult
+- [x] Schedule AI PDF via ReportLab (Parts I + II + penalty comparison)
+- [x] Summary includes schedule_ai section when AI method is beneficial
+- [x] Full stack: engine + API (quarterly_income dict) + MCP + PDF
+- [x] Full backward compatibility: no quarterly_income = no Schedule AI
+- [x] 896/896 unit tests (16 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave53_schedule_ai.py` — 16 tests (4 basic, 3 factors, 1 business, 2 comparison, 4 summary/PDF, 2 backward compat)
+
+**Modified files:**
+- `app/tax_engine.py` — QuarterlyIncome dataclass, TaxResult Schedule AI fields, annualized computation
+- `app/pdf_generator.py` — generate_schedule_ai(), generate_all_pdfs() hook
+- `app/tax_routes.py` — quarterly_income in TaxDraftRequest, schedule_ai in file_map
+- `app/mcp_server.py` — quarterly_income param in _build_inputs() and compute_tax_scenario()
+- `app/main.py` — version 3.32.0
+
 ### Wave 52 — Form 8606 Nondeductible IRA Basis Tracking (v3.31.0) — 2026-04-24
 
 - [x] Nondeductible contribution auto-computed from phaseout (total contributions - IRA deduction)
@@ -975,4 +999,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Annualized installment method (Form 2210 Schedule AI)
+- **Tax engine:** All planned features complete (53 waves shipped)
