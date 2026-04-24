@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from auth import require_auth, require_admin, get_tenant_id
 from billing import (
-    STRIPE_ENABLED, PLAN_TIERS, STRIPE_PRICES,
+    STRIPE_ENABLED, STRIPE_MODE, PLAN_TIERS, STRIPE_PRICES,
     create_checkout_session, create_billing_portal_session,
     verify_webhook_signature, save_billing_customer,
     get_billing_customer, update_subscription_status,
@@ -243,6 +243,19 @@ async def get_usage(request: Request, _auth: str = Depends(require_auth)):
 async def list_plans():
     """List available billing plans (public endpoint)."""
     return {"plans": PLAN_TIERS}
+
+
+@router.get("/status")
+async def billing_status(_admin: str = Depends(require_admin)):
+    """Billing system status (admin only). Shows Stripe mode and product configuration."""
+    configured_prices = {k: bool(v) for k, v in STRIPE_PRICES.items()}
+    return {
+        "stripe_enabled": STRIPE_ENABLED,
+        "stripe_mode": STRIPE_MODE,
+        "prices_configured": configured_prices,
+        "all_prices_set": all(configured_prices.values()),
+        "plans": list(PLAN_TIERS.keys()),
+    }
 
 
 # --- Free tier self-service signup ---

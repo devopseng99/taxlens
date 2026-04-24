@@ -9,8 +9,17 @@ logger = logging.getLogger(__name__)
 # Stripe config from env
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_ENABLED = bool(STRIPE_SECRET_KEY)
-STRIPE_MODE = "test" if STRIPE_SECRET_KEY.startswith(("sk_test_", "rk_test_")) else "live" if STRIPE_SECRET_KEY else "disabled"
+STRIPE_LIVE_MODE_CONFIRMED = os.getenv("STRIPE_LIVE_MODE_CONFIRMED", "").lower() == "true"
+_is_live_key = STRIPE_SECRET_KEY.startswith(("sk_live_", "rk_live_"))
+# Live mode requires explicit confirmation to prevent accidental charges
+STRIPE_ENABLED = bool(STRIPE_SECRET_KEY) and (not _is_live_key or STRIPE_LIVE_MODE_CONFIRMED)
+STRIPE_MODE = (
+    "disabled" if not STRIPE_ENABLED
+    else "live" if _is_live_key
+    else "test"
+)
+if _is_live_key and not STRIPE_LIVE_MODE_CONFIRMED:
+    logger.warning("Live Stripe key detected but STRIPE_LIVE_MODE_CONFIRMED not set — Stripe DISABLED as safety guard")
 
 # Price IDs (configured per environment)
 STRIPE_PRICES = {
