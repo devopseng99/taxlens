@@ -1201,6 +1201,130 @@ def generate_form_8889(result: TaxResult) -> BytesIO:
     return buf
 
 
+def generate_form_5695(result: TaxResult) -> BytesIO:
+    """Generate Form 5695 (Residential Energy Credits) summary via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Form 5695 — Residential Energy Credits")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Part I — Residential Clean Energy Credit (§25D)")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    lines_25d = [
+        ("Solar electric property", result.energy_clean_credit / 0.30 if result.energy_clean_credit else 0),
+        ("Credit rate", "30%"),
+        ("Residential clean energy credit", result.energy_clean_credit),
+    ]
+    for label, val in lines_25d:
+        if isinstance(val, str):
+            c.drawString(90, y, f"{label}: {val}")
+        else:
+            c.drawString(90, y, f"{label}: ${val:,.2f}")
+        y -= 16
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Part II — Energy Efficient Home Improvement (§25C)")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    lines_25c = [
+        ("Home improvement credit", result.energy_improvement_credit),
+        ("Annual limit ($3,200)", "$3,200"),
+        ("Envelope subcap ($1,200)", "$1,200"),
+        ("Heat pump subcap ($2,000)", "$2,000"),
+    ]
+    for label, val in lines_25c:
+        if isinstance(val, str):
+            c.drawString(90, y, f"{label}: {val}")
+        else:
+            c.drawString(90, y, f"{label}: ${val:,.2f}")
+        y -= 16
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Total Credit")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    c.drawString(90, y, f"Total residential energy credit: ${result.energy_total_credit:,.2f}")
+    y -= 16
+    c.drawString(90, y, "(Nonrefundable — limited to tax liability)")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def generate_k1_summary(result: TaxResult) -> BytesIO:
+    """Generate Schedule K-1 summary page via ReportLab."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Schedule K-1 — Passthrough Income Summary")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica", 10)
+
+    items = [
+        ("Ordinary income (business)", result.k1_ordinary_income),
+        ("Guaranteed payments (SE taxable)", result.k1_guaranteed_payments),
+        ("Rental income", result.k1_rental_income),
+        ("Interest income", result.k1_interest_income),
+        ("Dividend income", result.k1_dividend_income),
+        ("Capital gains (ST+LT+§1231)", result.k1_capital_gains),
+        ("§199A qualified business income", result.k1_section_199a_income),
+    ]
+
+    for label, val in items:
+        c.drawString(90, y, f"{label}: ${val:,.2f}")
+        y -= 16
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 10)
+    total = (result.k1_ordinary_income + result.k1_guaranteed_payments +
+             result.k1_rental_income + result.k1_interest_income +
+             result.k1_dividend_income + result.k1_capital_gains)
+    c.drawString(90, y, f"Total K-1 taxable income: ${total:,.2f}")
+
+    y -= 30
+    c.setFont("Helvetica", 9)
+    c.drawString(72, y, "Income flows to: Line 2b (interest), Line 3 (dividends),")
+    y -= 14
+    c.drawString(72, y, "Line 7 (capital gains), Line 8 (ordinary/guaranteed),")
+    y -= 14
+    c.drawString(72, y, "Schedule E (rental), Schedule SE (guaranteed payments)")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 # ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
@@ -1316,6 +1440,20 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "form_8889.pdf"
         p.write_bytes(buf.read())
         paths["form_8889"] = str(p)
+
+    # Form 5695 — Residential Energy Credits (if energy credit claimed)
+    if result.energy_total_credit > 0:
+        buf = generate_form_5695(result)
+        p = out / "form_5695.pdf"
+        p.write_bytes(buf.read())
+        paths["form_5695"] = str(p)
+
+    # K-1 Summary (if passthrough income)
+    if result.k1_ordinary_income > 0 or result.k1_guaranteed_payments > 0 or result.k1_capital_gains != 0:
+        buf = generate_k1_summary(result)
+        p = out / "k1_summary.pdf"
+        p.write_bytes(buf.read())
+        paths["k1_summary"] = str(p)
 
     # Form 2210 — Estimated Tax Penalty (if penalty assessed)
     if result.estimated_tax_penalty > 0:

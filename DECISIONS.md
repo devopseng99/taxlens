@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.18.2 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.19.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -399,6 +399,18 @@ Updated: 2026-04-24 (v3.18.2 API + v2.6.0 Portal)
 170. **Fire-and-forget email pattern** — Email calls in onboarding and billing webhook are wrapped in try/except with logging. Email failure never blocks tenant provisioning or plan upgrades. This follows the graceful feature degradation pattern.
 
 171. **Three email templates** — Welcome (with API key + MCP config), filing deadline reminder, plan upgrade confirmation. All include plain text fallback for email clients that don't render HTML.
+
+## Wave 40 — Advanced Tax Features (v3.19.0)
+
+176. **Form 5695 split: §25D (clean energy) + §25C (home improvement)** — §25D covers solar, wind, geothermal, battery storage at 30% with NO annual cap (IRA 2022 through 2032). §25C covers insulation, windows, doors, heat pumps at 30% with annual cap ($3,200) split into two subcaps: envelope ($1,200) and heat pump ($2,000). Both are nonrefundable credits.
+
+177. **K-1 income flows to multiple 1040 lines** — Passthrough income doesn't land on a single line. Ordinary income → Line 8, interest → Line 2b, dividends → Lines 3a/3b, capital gains → Schedule D, rental → Schedule E, guaranteed payments → Line 8 + Schedule SE. The engine aggregates across multiple K-1s.
+
+178. **Partnership guaranteed payments subject to SE tax** — Per IRC §1402(a), guaranteed payments to partners for services are subject to self-employment tax (same as Schedule C income). S-corp distributions are NOT subject to SE tax (wage/distribution split handled by the S-corp). The engine adds guaranteed payments to SE income alongside Schedule C profit.
+
+179. **K-1 §199A income eligible for QBI deduction** — Passthrough entities report §199A qualified business income on Box 20 Code Z. This flows into the QBI deduction calculation (20% of QBI, same as Schedule C). The engine combines Schedule C profit and K-1 §199A income for the total QBI base.
+
+180. **Quarterly estimated tax planner is proactive** — Computed automatically when tax liability exceeds withholding. Uses 100% of current year net tax (110% for high-AGI filers) divided by 4. Provides due dates for the following year's quarters (Apr 15, Jun 15, Sep 15, Jan 15). Helps self-employed and K-1 recipients plan cash flow.
 
 ## Wave 39 — Operational Maturity (v3.18.2)
 

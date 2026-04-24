@@ -60,6 +60,15 @@ RENTAL_LOSS_LIMIT = 25_000           # Passive activity loss limit (statutory)
 RENTAL_LOSS_PHASEOUT_START = 100_000 # AGI where $25K allowance starts phasing out
 RENTAL_LOSS_PHASEOUT_END = 150_000   # AGI where allowance is fully phased out
 
+# --- Form 5695 — Residential Energy Credits (IRA 2022 / IRC §25D / §25C) ---
+# §25D: Residential Clean Energy Credit (solar, wind, geothermal, battery) — 30% through 2032
+ENERGY_CLEAN_CREDIT_RATE = 0.30
+# §25C: Energy Efficient Home Improvement Credit — 30% with per-item caps
+ENERGY_IMPROVEMENT_CREDIT_RATE = 0.30
+ENERGY_IMPROVEMENT_ANNUAL_LIMIT = 3_200     # Total annual cap
+ENERGY_IMPROVEMENT_ENVELOPE_LIMIT = 1_200   # Subcap: insulation, windows, doors, audits
+ENERGY_IMPROVEMENT_HP_LIMIT = 2_000         # Subcap: heat pumps, biomass, HP water heaters
+
 # These thresholds are statutory (set by ACA/law), not inflation-adjusted
 ADDITIONAL_MEDICARE_THRESHOLD = {
     SINGLE: 200_000, MFJ: 250_000, HOH: 200_000, MFS: 125_000,
@@ -291,6 +300,12 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.RENTAL_LOSS_LIMIT = RENTAL_LOSS_LIMIT
     ns.RENTAL_LOSS_PHASEOUT_START = RENTAL_LOSS_PHASEOUT_START
     ns.RENTAL_LOSS_PHASEOUT_END = RENTAL_LOSS_PHASEOUT_END
+    # Energy credits (same rates 2024-2032 per IRA 2022)
+    ns.ENERGY_CLEAN_CREDIT_RATE = ENERGY_CLEAN_CREDIT_RATE
+    ns.ENERGY_IMPROVEMENT_CREDIT_RATE = ENERGY_IMPROVEMENT_CREDIT_RATE
+    ns.ENERGY_IMPROVEMENT_ANNUAL_LIMIT = ENERGY_IMPROVEMENT_ANNUAL_LIMIT
+    ns.ENERGY_IMPROVEMENT_ENVELOPE_LIMIT = ENERGY_IMPROVEMENT_ENVELOPE_LIMIT
+    ns.ENERGY_IMPROVEMENT_HP_LIMIT = ENERGY_IMPROVEMENT_HP_LIMIT
 
     return ns
 

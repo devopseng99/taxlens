@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.18.2)
+Updated: 2026-04-24 (v3.19.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -657,6 +657,27 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/onboarding.py` — Welcome email on signup
 - `app/billing_routes.py` — Upgrade email on plan change
 - `app/main.py` — email_enabled in health endpoint
+
+### Wave 40 — Advanced Tax Features (v3.19.0) — 2026-04-24
+
+- [x] Form 5695: Residential Energy Credits (§25D clean energy 30% no cap + §25C home improvement 30% $3,200 cap)
+- [x] Schedule K-1: Passthrough income from partnerships/S-corps/trusts (ordinary, rental, interest, dividends, gains, guaranteed payments, §199A)
+- [x] K-1 guaranteed payments → SE tax (alongside Schedule C)
+- [x] K-1 §199A income → QBI deduction (combined with Schedule C)
+- [x] Quarterly estimated tax planner: auto-calculated when tax > withholding, 4 quarters with IRS due dates
+- [x] Full stack: engine + API (Pydantic) + MCP (compute_tax_scenario + get_tax_config) + PDF (Form 5695 + K-1 Summary)
+- [x] 626/626 unit tests (36 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave40_advanced.py` — 36 tests (14 energy, 12 K-1, 6 quarterly, 4 integration)
+
+**Modified files:**
+- `app/tax_engine.py` — EnergyImprovement + K1Income dataclasses, TaxResult fields, compute_tax() energy/K-1/quarterly logic
+- `app/tax_config.py` — Energy credit constants (§25D/§25C rates and limits)
+- `app/tax_routes.py` — EnergyImprovementInput + K1IncomeInput models, TaxDraftRequest fields, file_map
+- `app/mcp_server.py` — energy_improvements + k1_incomes params, get_tax_config energy section
+- `app/pdf_generator.py` — generate_form_5695() + generate_k1_summary(), generate_all_pdfs() hooks
+- `app/main.py` — version 3.19.0
 
 ### Wave 39 — Operational Maturity (v3.18.2) — 2026-04-24
 

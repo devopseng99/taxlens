@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
-    RentalProperty, HSAContribution,
+    RentalProperty, HSAContribution, EnergyImprovement, K1Income,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured,
@@ -140,6 +140,41 @@ class HSAContributionInput(BaseModel):
     age_55_plus: bool = False
 
 
+class EnergyImprovementInput(BaseModel):
+    """Form 5695 — Residential energy credits."""
+    solar_electric: float = 0.0
+    solar_water_heating: float = 0.0
+    small_wind: float = 0.0
+    geothermal_heat_pump: float = 0.0
+    battery_storage: float = 0.0
+    fuel_cell: float = 0.0
+    insulation: float = 0.0
+    windows_skylights: float = 0.0
+    exterior_doors: float = 0.0
+    heat_pump: float = 0.0
+    biomass_stove: float = 0.0
+    energy_audit: float = 0.0
+
+
+class K1IncomeInput(BaseModel):
+    """Schedule K-1 passthrough income."""
+    entity_name: str = ""
+    entity_ein: str = ""
+    entity_type: str = "partnership"
+    ordinary_income: float = 0.0
+    rental_income: float = 0.0
+    interest_income: float = 0.0
+    dividend_income: float = 0.0
+    qualified_dividends: float = 0.0
+    short_term_gain: float = 0.0
+    long_term_gain: float = 0.0
+    section_1231_gain: float = 0.0
+    guaranteed_payments: float = 0.0
+    section_199a_income: float = 0.0
+    distributions: float = 0.0
+    tax_exempt_income: float = 0.0
+
+
 class PaymentsInput(BaseModel):
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -180,6 +215,12 @@ class TaxDraftRequest(BaseModel):
 
     # HSA contributions
     hsa_contributions: list[HSAContributionInput] = Field(default=[], description="HSA contributions for above-the-line deduction")
+
+    # Energy improvements (Form 5695)
+    energy_improvements: list[EnergyImprovementInput] = Field(default=[], description="Residential energy credits (solar, heat pump, etc.)")
+
+    # K-1 passthrough income
+    k1_incomes: list[K1IncomeInput] = Field(default=[], description="Schedule K-1 income from partnerships/S-corps/trusts")
 
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
@@ -437,6 +478,34 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for h in req.hsa_contributions
     ] if req.hsa_contributions else None
 
+    # --- Build energy improvements ---
+    energy_list = [
+        EnergyImprovement(
+            solar_electric=e.solar_electric, solar_water_heating=e.solar_water_heating,
+            small_wind=e.small_wind, geothermal_heat_pump=e.geothermal_heat_pump,
+            battery_storage=e.battery_storage, fuel_cell=e.fuel_cell,
+            insulation=e.insulation, windows_skylights=e.windows_skylights,
+            exterior_doors=e.exterior_doors, heat_pump=e.heat_pump,
+            biomass_stove=e.biomass_stove, energy_audit=e.energy_audit,
+        )
+        for e in req.energy_improvements
+    ] if req.energy_improvements else None
+
+    # --- Build K-1 incomes ---
+    k1_list = [
+        K1Income(
+            entity_name=k.entity_name, entity_ein=k.entity_ein,
+            entity_type=k.entity_type, ordinary_income=k.ordinary_income,
+            rental_income=k.rental_income, interest_income=k.interest_income,
+            dividend_income=k.dividend_income, qualified_dividends=k.qualified_dividends,
+            short_term_gain=k.short_term_gain, long_term_gain=k.long_term_gain,
+            section_1231_gain=k.section_1231_gain, guaranteed_payments=k.guaranteed_payments,
+            section_199a_income=k.section_199a_income, distributions=k.distributions,
+            tax_exempt_income=k.tax_exempt_income,
+        )
+        for k in req.k1_incomes
+    ] if req.k1_incomes else None
+
     # --- Compute taxes ---
     result = compute_tax(
         filing_status=req.filing_status,
@@ -455,6 +524,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         additional_withholding=ocr_div_withheld + nec_withheld,
         rental_properties=rental_list,
         hsa_contributions=hsa_list,
+        energy_improvements=energy_list,
+        k1_incomes=k1_list,
         tax_year=req.tax_year,
     )
 
@@ -543,6 +614,8 @@ async def download_pdf(
         "form_8880": "form_8880.pdf",
         "form_2210": "form_2210.pdf",
         "form_8889": "form_8889.pdf",
+        "form_5695": "form_5695.pdf",
+        "k1_summary": "k1_summary.pdf",
         "il_1040": "il_1040.pdf",
     }
 

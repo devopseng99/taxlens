@@ -16,7 +16,7 @@ from tax_engine import (
     PersonInfo, W2Income, CapitalTransaction, BusinessIncome, Deductions,
     AdditionalIncome, DividendIncome, Payments, TaxResult, Dependent,
     EducationExpense, DependentCareExpense, RetirementContribution,
-    RentalProperty, HSAContribution,
+    RentalProperty, HSAContribution, EnergyImprovement, K1Income,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -88,6 +88,8 @@ def _build_inputs(
     retirement_contributions: list[dict] | None = None,
     rental_properties: list[dict] | None = None,
     hsa_contributions: list[dict] | None = None,
+    energy_improvements: list[dict] | None = None,
+    k1_incomes: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -237,6 +239,43 @@ def _build_inputs(
             for h in hsa_contributions
         ]
 
+    # Build energy improvements
+    energy_list = None
+    if energy_improvements:
+        energy_list = [
+            EnergyImprovement(**{k: e.get(k, 0) for k in [
+                "solar_electric", "solar_water_heating", "small_wind",
+                "geothermal_heat_pump", "battery_storage", "fuel_cell",
+                "insulation", "windows_skylights", "exterior_doors",
+                "heat_pump", "biomass_stove", "energy_audit",
+            ]})
+            for e in energy_improvements
+        ]
+
+    # Build K-1 incomes
+    k1_list = None
+    if k1_incomes:
+        k1_list = [
+            K1Income(
+                entity_name=k.get("entity_name", ""),
+                entity_ein=k.get("entity_ein", ""),
+                entity_type=k.get("entity_type", "partnership"),
+                ordinary_income=k.get("ordinary_income", 0),
+                rental_income=k.get("rental_income", 0),
+                interest_income=k.get("interest_income", 0),
+                dividend_income=k.get("dividend_income", 0),
+                qualified_dividends=k.get("qualified_dividends", 0),
+                short_term_gain=k.get("short_term_gain", 0),
+                long_term_gain=k.get("long_term_gain", 0),
+                section_1231_gain=k.get("section_1231_gain", 0),
+                guaranteed_payments=k.get("guaranteed_payments", 0),
+                section_199a_income=k.get("section_199a_income", 0),
+                distributions=k.get("distributions", 0),
+                tax_exempt_income=k.get("tax_exempt_income", 0),
+            )
+            for k in k1_incomes
+        ]
+
     return dict(
         filing_status=filing_status,
         filer=filer,
@@ -256,6 +295,8 @@ def _build_inputs(
         retirement_contributions=ret_list,
         rental_properties=rental_list,
         hsa_contributions=hsa_list,
+        energy_improvements=energy_list,
+        k1_incomes=k1_list,
         prior_year_tax=prior_year_tax,
         prior_year_agi=prior_year_agi,
         tax_year=tax_year,
@@ -303,6 +344,8 @@ def compute_tax_scenario(
     retirement_contributions: list[dict] | None = None,
     rental_properties: list[dict] | None = None,
     hsa_contributions: list[dict] | None = None,
+    energy_improvements: list[dict] | None = None,
+    k1_incomes: list[dict] | None = None,
     prior_year_tax: float = 0,
     prior_year_agi: float = 0,
     tax_year: int = 2025,
@@ -329,20 +372,22 @@ def compute_tax_scenario(
         student_loan_interest: Student loan interest paid (above-the-line deduction, max $2,500)
         other_income: Other taxable income (prizes, gambling, etc.)
         num_dependents: Number of qualifying children (backward compat — prefer 'dependents' list)
-        dependents: Structured dependent records for accurate credit eligibility. Each dict: {"first_name", "last_name", "date_of_birth" (YYYY-MM-DD), "relationship", "is_disabled", "is_student", "months_lived_with"}. DOB determines CTC (under 17), EITC (under 19/24-student/disabled), CDCC (under 13/disabled) eligibility.
+        dependents: Structured dependent records for accurate credit eligibility.
         residence_state: Two-letter state code where filer lives (e.g., "CA", "TX", "IL")
-        work_states: Additional states where income was earned (triggers multi-state returns)
-        days_worked_by_state: Manual allocation of work days per state (e.g., {"NY": 200, "NJ": 40})
+        work_states: Additional states where income was earned
+        days_worked_by_state: Manual allocation of work days per state
         estimated_federal: Estimated federal tax payments already made
         estimated_state: Estimated state tax payments already made
-        additional_withholding: Additional federal withholding from 1099s or other sources
-        education_expenses: Per-student education expenses for AOTC/LLC credits. Each dict: {"student_name", "qualified_expenses", "credit_type" ("aotc" or "llc")}. AOTC: $2,500 max (40% refundable). LLC: $2,000 max (nonrefundable).
-        dependent_care_expenses: Child/dependent care expenses for CDCC (Form 2441). Each dict: {"dependent_name", "care_expenses"}. $3K limit (1 dependent) or $6K (2+).
-        retirement_contributions: Retirement savings for Saver's Credit (Form 8880). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount"}. $2K max per person. 50%/20%/10% credit rate based on AGI.
-        rental_properties: Rental real estate (Schedule E). Each dict: {"property_address", "gross_rents", "mortgage_interest", "taxes", "insurance", "repairs", "depreciation", ...}. Passive activity loss limited to $25K (phaseout $100K-$150K AGI).
-        hsa_contributions: Health Savings Account contributions (Form 8889, above-the-line deduction). Each dict: {"contributor" ("filer" or "spouse"), "contribution_amount", "employer_contributions" (pre-tax/cafeteria), "coverage_type" ("self" or "family"), "age_55_plus" (bool)}. 2025 limits: $4,300 self / $8,550 family + $1,000 catch-up if 55+. Employer contributions reduce deductible room.
-        prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor). If >$0, engine checks 100%/110% prior year safe harbor.
-        prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold). High AGI = $150K/$75K MFS.
+        additional_withholding: Additional federal withholding from 1099s
+        education_expenses: Per-student education expenses for AOTC/LLC credits.
+        dependent_care_expenses: Child/dependent care expenses for CDCC (Form 2441).
+        retirement_contributions: Retirement savings for Saver's Credit (Form 8880).
+        rental_properties: Rental real estate (Schedule E).
+        hsa_contributions: HSA contributions (Form 8889, above-the-line deduction).
+        energy_improvements: Residential energy credits (Form 5695). Each dict: {"solar_electric", "heat_pump", "insulation", "windows_skylights", "exterior_doors", "battery_storage", "energy_audit", ...}. §25D (solar/wind/geo): 30% no cap. §25C (improvements): 30% up to $3,200/yr ($1,200 envelope + $2,000 heat pump).
+        k1_incomes: Schedule K-1 passthrough income from partnerships/S-corps/trusts. Each dict: {"entity_name", "entity_type" ("partnership"/"s_corp"/"trust"), "ordinary_income", "guaranteed_payments", "interest_income", "dividend_income", "short_term_gain", "long_term_gain", "section_199a_income", ...}. Guaranteed payments subject to SE tax (partnerships only). §199A income eligible for QBI deduction.
+        prior_year_tax: Prior year total tax (for Form 2210 penalty safe harbor).
+        prior_year_agi: Prior year AGI (for Form 2210 high-income 110% threshold).
         tax_year: Tax year (2024 or 2025, default 2025)
 
     Returns:
@@ -367,6 +412,8 @@ def compute_tax_scenario(
         retirement_contributions=retirement_contributions,
         rental_properties=rental_properties,
         hsa_contributions=hsa_contributions,
+        energy_improvements=energy_improvements,
+        k1_incomes=k1_incomes,
         prior_year_tax=prior_year_tax, prior_year_agi=prior_year_agi,
         tax_year=tax_year,
     )
@@ -695,6 +742,13 @@ def get_tax_config(
             "rate": c.ESTIMATED_TAX_PENALTY_RATE,
             "safe_harbor_pct": c.ESTIMATED_TAX_SAFE_HARBOR_PCT,
             "high_agi_prior_year_pct": c.ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI,
+        },
+        "energy_credits": {
+            "clean_energy_rate": c.ENERGY_CLEAN_CREDIT_RATE,
+            "improvement_rate": c.ENERGY_IMPROVEMENT_CREDIT_RATE,
+            "improvement_annual_limit": c.ENERGY_IMPROVEMENT_ANNUAL_LIMIT,
+            "improvement_envelope_limit": c.ENERGY_IMPROVEMENT_ENVELOPE_LIMIT,
+            "improvement_hp_limit": c.ENERGY_IMPROVEMENT_HP_LIMIT,
         },
     }, indent=2)
 

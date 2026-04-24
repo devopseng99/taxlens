@@ -266,6 +266,45 @@ class HSAContribution:
 
 
 @dataclass
+class EnergyImprovement:
+    """Form 5695 — Residential energy credits."""
+    # §25D: Residential Clean Energy (solar, wind, geothermal, battery storage)
+    solar_electric: float = 0.0       # Solar panels cost
+    solar_water_heating: float = 0.0  # Solar water heater cost
+    small_wind: float = 0.0           # Small wind turbine cost
+    geothermal_heat_pump: float = 0.0 # Geothermal heat pump cost
+    battery_storage: float = 0.0      # Battery storage ≥3 kWh
+    fuel_cell: float = 0.0            # Fuel cell property
+    # §25C: Energy Efficient Home Improvement
+    insulation: float = 0.0           # Insulation materials
+    windows_skylights: float = 0.0    # ENERGY STAR windows/skylights
+    exterior_doors: float = 0.0       # ENERGY STAR exterior doors
+    heat_pump: float = 0.0            # Heat pump (HVAC or water heater)
+    biomass_stove: float = 0.0        # Biomass stove/boiler
+    energy_audit: float = 0.0         # Home energy audit (max $150)
+
+
+@dataclass
+class K1Income:
+    """Schedule K-1 passthrough income from partnerships, S-corps, or trusts."""
+    entity_name: str = ""
+    entity_ein: str = ""
+    entity_type: str = "partnership"  # "partnership" (1065), "s_corp" (1120S), "trust" (1041)
+    ordinary_income: float = 0.0      # Box 1 (1065/1120S) or Box 1 (1041)
+    rental_income: float = 0.0        # Box 2 (1065) — net rental real estate
+    interest_income: float = 0.0      # Box 5 (1065) / Box 4a (1120S)
+    dividend_income: float = 0.0      # Box 6a (1065) / Box 4b (1120S)
+    qualified_dividends: float = 0.0  # Box 6b (1065)
+    short_term_gain: float = 0.0      # Box 8 (1065) / Box 7 (1120S)
+    long_term_gain: float = 0.0       # Box 9a (1065) / Box 8a (1120S)
+    section_1231_gain: float = 0.0    # Box 10 (1065) / Box 9 (1120S)
+    guaranteed_payments: float = 0.0  # Box 4 (1065) — subject to SE tax for partnerships
+    section_199a_income: float = 0.0  # Box 20 Code Z (1065) — QBI for §199A deduction
+    distributions: float = 0.0        # Box 19 (1065) — not taxable, reduces basis
+    tax_exempt_income: float = 0.0    # Box 18 (1065) — not taxable
+
+
+@dataclass
 class Payments:
     estimated_federal: float = 0.0
     estimated_state: float = 0.0
@@ -379,6 +418,24 @@ class TaxResult:
     sched_e_total_expenses: float = 0.0
     sched_e_net_income: float = 0.0
 
+    # --- Form 5695 (Energy Credits) ---
+    energy_clean_credit: float = 0.0         # §25D residential clean energy
+    energy_improvement_credit: float = 0.0   # §25C home improvement
+    energy_total_credit: float = 0.0         # Total Form 5695 credit (nonrefundable)
+
+    # --- Schedule K-1 (Passthrough Income) ---
+    k1_ordinary_income: float = 0.0
+    k1_rental_income: float = 0.0
+    k1_interest_income: float = 0.0
+    k1_dividend_income: float = 0.0
+    k1_capital_gains: float = 0.0
+    k1_guaranteed_payments: float = 0.0
+    k1_section_199a_income: float = 0.0
+
+    # --- Quarterly Estimated Tax Planner ---
+    quarterly_estimated_tax: float = 0.0     # Per-quarter estimated payment
+    quarterly_schedule: list = field(default_factory=list)  # 4 quarterly amounts
+
     # --- HSA / Form 8889 ---
     hsa_deduction: float = 0.0
     form_8889_contributions: float = 0.0     # Line 2: total personal contributions
@@ -471,6 +528,15 @@ class TaxResult:
             "eitc": round(self.eitc, 2),
             "cdcc": round(self.cdcc, 2),
             "savers_credit": round(self.savers_credit, 2),
+            "energy_credit": round(self.energy_total_credit, 2),
+            "energy_clean_credit": round(self.energy_clean_credit, 2),
+            "energy_improvement_credit": round(self.energy_improvement_credit, 2),
+            "k1_ordinary_income": round(self.k1_ordinary_income, 2),
+            "k1_rental_income": round(self.k1_rental_income, 2),
+            "k1_capital_gains": round(self.k1_capital_gains, 2),
+            "k1_guaranteed_payments": round(self.k1_guaranteed_payments, 2),
+            "quarterly_estimated_tax": round(self.quarterly_estimated_tax, 2),
+            "quarterly_schedule": self.quarterly_schedule if self.quarterly_schedule else None,
             "estimated_tax_penalty": round(self.estimated_tax_penalty, 2),
             "federal_tax": round(self.line_24_total_tax, 2),
             "federal_withholding": round(self.line_25_federal_withheld, 2),
@@ -797,6 +863,8 @@ def compute_tax(
     retirement_contributions: list[RetirementContribution] | None = None,
     rental_properties: list[RentalProperty] | None = None,
     hsa_contributions: list[HSAContribution] | None = None,
+    energy_improvements: list[EnergyImprovement] | None = None,
+    k1_incomes: list[K1Income] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -925,6 +993,40 @@ def compute_tax(
                 allowed_loss = max(0, min(abs(raw_net), c.RENTAL_LOSS_LIMIT - reduction))
             result.sched_e_net_income = -allowed_loss
 
+    # =======================================================================
+    # SCHEDULE K-1 — Passthrough Income
+    # =======================================================================
+    k1_incomes = k1_incomes or []
+    if k1_incomes:
+        for k1 in k1_incomes:
+            result.k1_ordinary_income += k1.ordinary_income
+            result.k1_rental_income += k1.rental_income
+            result.k1_interest_income += k1.interest_income
+            result.k1_dividend_income += k1.dividend_income
+            result.k1_capital_gains += (k1.short_term_gain + k1.long_term_gain
+                                        + k1.section_1231_gain)
+            result.k1_guaranteed_payments += k1.guaranteed_payments
+            result.k1_section_199a_income += k1.section_199a_income
+
+        # K-1 income flows to various 1040 lines:
+        # Ordinary income + guaranteed payments → Line 8 (other income / business)
+        result.line_8_other_income += result.k1_ordinary_income + result.k1_guaranteed_payments
+        # Interest → Line 2b
+        result.line_2b_taxable_interest += result.k1_interest_income
+        # Dividends → Line 3a/3b
+        k1_qual_div = sum(k1.qualified_dividends for k1 in k1_incomes)
+        result.line_3a_qualified_dividends += k1_qual_div
+        result.line_3b_ordinary_dividends += result.k1_dividend_income
+        # Capital gains → Schedule D
+        k1_st = sum(k1.short_term_gain for k1 in k1_incomes)
+        k1_lt = sum(k1.long_term_gain + k1.section_1231_gain for k1 in k1_incomes)
+        result.sched_d_short_term_gain += k1_st
+        result.sched_d_long_term_gain += k1_lt
+        result.sched_d_net_gain += k1_st + k1_lt
+        result.line_7_capital_gain_loss = result.sched_d_net_gain
+        # Rental income → Schedule E
+        result.sched_e_net_income += result.k1_rental_income
+
     # Line 9: Total income
     result.line_9_total_income = (
         result.line_1a_wages
@@ -940,9 +1042,11 @@ def compute_tax(
     # SCHEDULE SE — Self-Employment Tax
     # =======================================================================
 
-    if result.sched_c_total_profit > 0:
+    # SE income includes Schedule C profit + K-1 partnership guaranteed payments
+    se_income = result.sched_c_total_profit + result.k1_guaranteed_payments
+    if se_income > 0:
         # Net SE earnings = 92.35% of net profit
-        result.sched_se_net_earnings = result.sched_c_total_profit
+        result.sched_se_net_earnings = se_income
         result.sched_se_taxable = result.sched_se_net_earnings * c.SE_INCOME_FACTOR
 
         # SS portion: 12.4% on earnings up to wage base (minus W-2 SS wages)
@@ -1062,12 +1166,13 @@ def compute_tax(
     # =======================================================================
 
     # QBI deduction (Section 199A) — 20% of qualified business income
-    # With W-2 wage limitation phase-out above income threshold
-    if result.sched_c_total_profit > 0:
+    # Includes Schedule C profit + K-1 §199A income
+    total_qbi = result.sched_c_total_profit + result.k1_section_199a_income
+    if total_qbi > 0:
         qbi_limit = c.QBI_TAXABLE_INCOME_LIMIT[filing_status]
         qbi_range = c.QBI_PHASEOUT_RANGE[filing_status]
         tentative_taxable = result.line_11_agi - result.line_13_deduction
-        full_qbi = result.sched_c_total_profit * c.QBI_DEDUCTION_RATE
+        full_qbi = total_qbi * c.QBI_DEDUCTION_RATE
 
         if tentative_taxable <= qbi_limit:
             # Below threshold: full 20% deduction
@@ -1300,6 +1405,44 @@ def compute_tax(
             result.line_24_total_tax -= result.savers_credit
 
     # =======================================================================
+    # RESIDENTIAL ENERGY CREDITS — Form 5695
+    # =======================================================================
+
+    energy_improvements = energy_improvements or []
+    if energy_improvements and result.line_24_total_tax > 0:
+        total_clean = 0.0    # §25D: solar, wind, geothermal, battery
+        total_envelope = 0.0 # §25C envelope: insulation, windows, doors, audit
+        total_hp = 0.0       # §25C heat pump: heat pumps, biomass
+
+        for ei in energy_improvements:
+            # §25D: Residential Clean Energy (no annual cap, 30%)
+            total_clean += (ei.solar_electric + ei.solar_water_heating +
+                           ei.small_wind + ei.geothermal_heat_pump +
+                           ei.battery_storage + ei.fuel_cell)
+            # §25C: Energy Efficient Home Improvement
+            total_envelope += (ei.insulation + ei.windows_skylights +
+                              ei.exterior_doors + min(ei.energy_audit, 150))
+            total_hp += ei.heat_pump + ei.biomass_stove
+
+        # §25D credit: 30% of all clean energy costs (no annual limit)
+        result.energy_clean_credit = total_clean * c.ENERGY_CLEAN_CREDIT_RATE
+
+        # §25C credit: 30% with subcaps
+        envelope_credit = min(total_envelope * c.ENERGY_IMPROVEMENT_CREDIT_RATE,
+                             c.ENERGY_IMPROVEMENT_ENVELOPE_LIMIT)
+        hp_credit = min(total_hp * c.ENERGY_IMPROVEMENT_CREDIT_RATE,
+                       c.ENERGY_IMPROVEMENT_HP_LIMIT)
+        result.energy_improvement_credit = min(envelope_credit + hp_credit,
+                                               c.ENERGY_IMPROVEMENT_ANNUAL_LIMIT)
+
+        # Total energy credit (nonrefundable — capped at tax liability)
+        result.energy_total_credit = min(
+            result.energy_clean_credit + result.energy_improvement_credit,
+            result.line_24_total_tax
+        )
+        result.line_24_total_tax -= result.energy_total_credit
+
+    # =======================================================================
     # EARNED INCOME TAX CREDIT (EITC) — Schedule EIC
     # =======================================================================
 
@@ -1387,6 +1530,34 @@ def compute_tax(
             underpayment = result.estimated_tax_required - total_timely_payments
             result.estimated_tax_penalty = underpayment * c.ESTIMATED_TAX_PENALTY_RATE
             result.line_37_owed += result.estimated_tax_penalty
+
+    # =======================================================================
+    # QUARTERLY ESTIMATED TAX PLANNER
+    # =======================================================================
+
+    # Calculate recommended quarterly payments for next year
+    # Based on 100% of current year tax (110% if AGI > threshold)
+    total_tax_liability = result.line_24_total_tax + result.estimated_tax_penalty
+    total_withholding = result.line_25_federal_withheld
+
+    if total_tax_liability > total_withholding:
+        # Net tax after withholding
+        net_tax = total_tax_liability - total_withholding
+        high_agi_threshold = c.ESTIMATED_TAX_HIGH_AGI_THRESHOLD[filing_status]
+        if result.line_11_agi > high_agi_threshold:
+            safe_harbor_factor = c.ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI  # 110%
+        else:
+            safe_harbor_factor = c.ESTIMATED_TAX_PRIOR_YEAR_PCT  # 100%
+
+        annual_required = net_tax * safe_harbor_factor
+        quarterly = round(annual_required / 4, 2)
+        result.quarterly_estimated_tax = quarterly
+        result.quarterly_schedule = [
+            {"quarter": "Q1", "due_date": f"{tax_year + 1}-04-15", "amount": quarterly},
+            {"quarter": "Q2", "due_date": f"{tax_year + 1}-06-15", "amount": quarterly},
+            {"quarter": "Q3", "due_date": f"{tax_year + 1}-09-15", "amount": quarterly},
+            {"quarter": "Q4", "due_date": f"{tax_year + 2}-01-15", "amount": quarterly},
+        ]
 
     # =======================================================================
     # SCHEDULE B
@@ -1499,6 +1670,10 @@ def compute_tax(
         result.forms_generated.append("Form 2210")
     if result.hsa_deduction > 0 or result.form_8889_contributions > 0:
         result.forms_generated.append("Form 8889")
+    if result.energy_total_credit > 0:
+        result.forms_generated.append("Form 5695")
+    if k1_incomes:
+        result.forms_generated.append("Schedule K-1 Summary")
     # State forms
     for sr in state_returns:
         if sr.form_name:
