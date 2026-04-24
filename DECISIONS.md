@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.15.0 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.16.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -353,6 +353,18 @@ Updated: 2026-04-23 (v3.15.0 API + v2.6.0 Portal)
 152. **STRIPE_LIVE_MODE_CONFIRMED safety guard** — Live Stripe keys (`sk_live_`/`rk_live_`) are automatically disabled unless `STRIPE_LIVE_MODE_CONFIRMED=true` is set. Prevents accidental real charges when a live key is provisioned but the system isn't ready for production billing. Test keys (`sk_test_`/`rk_test_`) don't need confirmation.
 
 153. **Separate cutover script (not helm values)** — Stripe live mode cutover uses a dedicated script (`scripts/setup-stripe-live.sh`) that updates K8s secrets + sets the confirmation env var + verifies health. Keeps the Helm chart agnostic to Stripe mode — the same chart works for test and live.
+
+## Wave 32-33 — Schedule E Rental Income + HSA Deduction (v3.16.0)
+
+154. **Passive activity loss rules (IRC §469)** — Rental losses are limited to $25K for active participants, phased out at AGI $100K-$150K (50% reduction per dollar over $100K). Net rental income is always fully included. Preliminary AGI (before rental) used for phaseout calculation to avoid circular dependency.
+
+155. **RentalProperty 14-expense dataclass** — Mirrors IRS Schedule E line items (advertising, auto/travel, cleaning, commissions, insurance, legal, management fees, mortgage interest, repairs, supplies, taxes, utilities, depreciation, other). `total_expenses` and `net_income` computed properties, same pattern as BusinessIncome.
+
+156. **HSA above-the-line deduction** — Year-specific limits (2025: $4,300 self / $8,550 family; 2024: $4,150 / $8,300) with $1,000 statutory catch-up for age 55+. Each contribution independently capped at its applicable limit. Multiple contributions (filer + spouse) accumulate. Deduction applied in adjustments section before AGI.
+
+157. **Rental income flows to Line 9 total_income** — Schedule E net income (or allowed loss after passive activity rules) added to total income alongside wages, interest, dividends, capital gains, business income, and other income. This affects AGI and all downstream calculations (deduction phaseouts, credit eligibility).
+
+158. **HSA limits in get_year_config()** — HSA_LIMIT_SELF and HSA_LIMIT_FAMILY are year-specific (inflation-adjusted), while HSA_CATCHUP is statutory ($1,000 fixed). Rental loss limits (RENTAL_LOSS_LIMIT, phaseout start/end) are also statutory but stored alongside year config for consistent access pattern.
 
 ## PDF Template Provenance
 

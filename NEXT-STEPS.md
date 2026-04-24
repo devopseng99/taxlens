@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.15.0)
+Updated: 2026-04-23 (v3.16.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -540,6 +540,32 @@ Safety guard and cutover infrastructure for switching from Stripe test to live m
 2. Create restricted live API key with billing permissions
 3. Create live webhook at `https://dropit.istayintek.com/api/billing/webhook`
 4. Run: `./scripts/setup-stripe-live.sh <live_key> <webhook_secret> <price_ids...>`
+
+## Wave 32-33 — Schedule E Rental Income + HSA Deduction (DEPLOYED — v3.16.0 API)
+
+Coverage expansion: two new income/deduction types that are common for small landlords and HSA holders.
+
+**Delivered:**
+- [x] `RentalProperty` dataclass: 14 expense fields (mirrors IRS Schedule E line items) + total_expenses/net_income properties
+- [x] Passive activity loss rules (IRC §469): $25K loss limit, AGI phaseout $100K-$150K (50% reduction), fully disallowed at $150K+
+- [x] Net rental income/loss flows to Line 9 total income; Schedule E in forms_generated
+- [x] `HSAContribution` dataclass: contributor, amount, coverage type, age 55+ catch-up
+- [x] Above-the-line HSA deduction with year-specific limits: 2025 ($4,300 self / $8,550 family), 2024 ($4,150 / $8,300), $1,000 catch-up
+- [x] API: `RentalPropertyInput` + `HSAContributionInput` Pydantic models in TaxDraftRequest
+- [x] MCP: `_build_inputs()` + `compute_tax_scenario()` + `get_tax_config()` updated with HSA/rental constants
+- [x] `to_summary()` includes `rental_income` + `hsa_deduction`
+- [x] `tax_config.py`: HSA_CATCHUP, RENTAL_LOSS_LIMIT, RENTAL_LOSS_PHASEOUT_START/END constants
+- [x] 491/491 unit tests (26 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave32_33_rental_hsa.py` — 26 tests (9 rental, 9 HSA, 2 combined, 6 MCP)
+
+**Modified files:**
+- `app/tax_engine.py` — RentalProperty, HSAContribution dataclasses + computation logic + summary
+- `app/tax_config.py` — HSA limits (year-specific) + rental loss constants (statutory)
+- `app/mcp_server.py` — rental/HSA in _build_inputs, compute_tax_scenario, get_tax_config
+- `app/tax_routes.py` — RentalPropertyInput, HSAContributionInput, TaxDraftRequest fields
+- `app/main.py` — version bump to 3.16.0
 
 ## Future Enhancements
 
