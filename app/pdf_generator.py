@@ -1782,6 +1782,71 @@ def generate_schedule_e(result: TaxResult) -> BytesIO:
     return buf
 
 
+def generate_form_8606(result: TaxResult) -> BytesIO:
+    """Generate Form 8606 — Nondeductible IRAs (basis tracking + pro-rata rule)."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Form 8606 — Nondeductible IRAs")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Part I — Nondeductible Contributions & Basis")
+    y -= 20
+    c.setFont("Helvetica", 10)
+
+    items = [
+        ("1   Nondeductible contributions this year", result.form_8606_nondeductible_contribution),
+        ("2   Basis from prior years (Line 14 of prior year 8606)", result.form_8606_prior_year_basis),
+        ("3   Total basis (Line 1 + Line 2)", result.form_8606_total_basis),
+        ("6   Year-end value of ALL traditional IRAs", result.form_8606_total_ira_value),
+        ("10  Nontaxable percentage (basis / total value)", None),
+        ("13  Nontaxable portion of distributions", result.form_8606_nontaxable_amount),
+        ("14  Basis carried forward to next year", result.form_8606_remaining_basis),
+    ]
+
+    for label, val in items:
+        if val is None:
+            c.drawString(90, y, f"{label}: {result.form_8606_nontaxable_pct * 100:.1f}%")
+        else:
+            c.drawString(90, y, f"{label}: ${val:,.2f}")
+        y -= 16
+
+    if result.form_8606_roth_conversion > 0:
+        y -= 14
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(72, y, "Part III — Roth IRA Conversions")
+        y -= 20
+        c.setFont("Helvetica", 10)
+        c.drawString(90, y, f"Conversion amount: ${result.form_8606_roth_conversion:,.2f}")
+        y -= 16
+        c.drawString(90, y, f"Taxable portion: ${result.form_8606_roth_taxable:,.2f}")
+        y -= 16
+        nontaxable = result.form_8606_roth_conversion - result.form_8606_roth_taxable
+        c.drawString(90, y, f"Nontaxable portion (basis recovery): ${nontaxable:,.2f}")
+
+    y -= 30
+    c.setFont("Helvetica", 9)
+    c.drawString(72, y, "Pro-rata rule: Nontaxable % applies to ALL distributions and conversions.")
+    y -= 14
+    c.drawString(72, y, "Cannot cherry-pick which dollars are basis vs. earnings.")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 # ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
@@ -1928,6 +1993,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "form_8889.pdf"
         p.write_bytes(buf.read())
         paths["form_8889"] = str(p)
+
+    # Form 8606 — Nondeductible IRAs (if basis tracking)
+    if result.form_8606_nondeductible_contribution > 0 or result.form_8606_prior_year_basis > 0:
+        buf = generate_form_8606(result)
+        p = out / "form_8606.pdf"
+        p.write_bytes(buf.read())
+        paths["form_8606"] = str(p)
 
     # Form 8949 — Digital Asset Transactions (if crypto trades)
     if result.crypto_transactions_count > 0:

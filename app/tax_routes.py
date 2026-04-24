@@ -365,6 +365,11 @@ class TaxDraftRequest(BaseModel):
     filer_active_plan_participant: bool = Field(default=False, description="Filer is covered by employer retirement plan (W-2 Box 13)")
     spouse_active_plan_participant: bool = Field(default=False, description="Spouse is covered by employer retirement plan (MFJ only)")
 
+    # Form 8606 — Nondeductible IRA basis tracking
+    prior_year_ira_basis: float = Field(default=0, description="Cumulative nondeductible IRA basis from prior year Form 8606 Line 14")
+    total_ira_value_year_end: float = Field(default=0, description="Total value of ALL traditional IRAs as of Dec 31 (for pro-rata rule)")
+    roth_conversion_amount: float = Field(default=0, description="Amount converted from traditional IRA to Roth IRA this year")
+
     # Manual income entries (in addition to OCR-extracted data)
     additional_income: AdditionalIncomeInput = AdditionalIncomeInput()
     deductions: DeductionsInput = DeductionsInput()
@@ -801,6 +806,9 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         spouse_is_blind=req.spouse_is_blind,
         filer_active_plan_participant=req.filer_active_plan_participant,
         spouse_active_plan_participant=req.spouse_active_plan_participant,
+        prior_year_ira_basis=req.prior_year_ira_basis,
+        total_ira_value_year_end=req.total_ira_value_year_end,
+        roth_conversion_amount=req.roth_conversion_amount,
         tax_year=req.tax_year,
     )
 
@@ -892,6 +900,7 @@ async def download_pdf(
         "form_8880": "form_8880.pdf",
         "form_2210": "form_2210.pdf",
         "form_8889": "form_8889.pdf",
+        "form_8606": "form_8606.pdf",
         "form_5695": "form_5695.pdf",
         "k1_summary": "k1_summary.pdf",
         "form_8949": "form_8949.pdf",

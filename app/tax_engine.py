@@ -638,6 +638,17 @@ class TaxResult:
     ira_deduction_before_phaseout: float = 0.0    # IRA deduction before phaseout reduction
     ira_phaseout_applied: bool = False             # Whether AGI phaseout reduced IRA deduction
 
+    # --- Form 8606 (Nondeductible IRA Basis) ---
+    form_8606_nondeductible_contribution: float = 0.0  # Line 1: This year's nondeductible amount
+    form_8606_prior_year_basis: float = 0.0            # Line 2: Prior year cumulative basis
+    form_8606_total_basis: float = 0.0                 # Line 3 (= Line 1 + Line 2)
+    form_8606_total_ira_value: float = 0.0             # Line 6: All IRA values at year end
+    form_8606_nontaxable_pct: float = 0.0              # Line 10: Basis / total value (pro-rata)
+    form_8606_nontaxable_amount: float = 0.0           # Line 13: Nontaxable portion of distributions
+    form_8606_remaining_basis: float = 0.0             # Line 14: Carryforward basis to next year
+    form_8606_roth_conversion: float = 0.0             # Part III: Roth conversion amount
+    form_8606_roth_taxable: float = 0.0                # Part III: Taxable portion of conversion
+
     # --- Unemployment Compensation (Form 1099-G) ---
     unemployment_compensation: float = 0.0   # Total unemployment received
     unemployment_federal_withheld: float = 0.0
@@ -792,6 +803,17 @@ class TaxResult:
                 "ira_deduction": round(self.ira_deduction, 2),
                 "ira_phaseout_applied": self.ira_phaseout_applied,
             } if self.retirement_distributions_count > 0 or self.ira_deduction > 0 else None,
+            "form_8606": {
+                "nondeductible_contribution": round(self.form_8606_nondeductible_contribution, 2),
+                "prior_year_basis": round(self.form_8606_prior_year_basis, 2),
+                "total_basis": round(self.form_8606_total_basis, 2),
+                "total_ira_value": round(self.form_8606_total_ira_value, 2),
+                "nontaxable_pct": round(self.form_8606_nontaxable_pct * 100, 1),
+                "nontaxable_amount": round(self.form_8606_nontaxable_amount, 2),
+                "remaining_basis": round(self.form_8606_remaining_basis, 2),
+                "roth_conversion": round(self.form_8606_roth_conversion, 2),
+                "roth_taxable": round(self.form_8606_roth_taxable, 2),
+            } if self.form_8606_nondeductible_contribution > 0 or self.form_8606_prior_year_basis > 0 else None,
             "social_security": {
                 "gross_benefits": round(self.ss_gross_benefits, 2),
                 "taxable_amount": round(self.ss_taxable_amount, 2),
@@ -1183,6 +1205,9 @@ def compute_tax(
     spouse_is_blind: bool = False,
     filer_active_plan_participant: bool = False,
     spouse_active_plan_participant: bool = False,
+    prior_year_ira_basis: float = 0.0,
+    total_ira_value_year_end: float = 0.0,
+    roth_conversion_amount: float = 0.0,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     tax_year: int = TAX_YEAR,
@@ -1692,6 +1717,51 @@ def compute_tax(
                 result.ira_deduction = max(0, result.ira_deduction - reduction)
                 result.ira_phaseout_applied = True
         adjustments += result.ira_deduction
+
+    # ===================================================================
+    # FORM 8606 — Nondeductible IRA Basis Tracking
+    # ===================================================================
+    # Compute after IRA phaseout is known (nondeductible = total contrib - deductible)
+    total_ira_contributions = result.ira_deduction_before_phaseout if result.ira_deduction_before_phaseout > 0 else result.ira_deduction
+    nondeductible = max(0, total_ira_contributions - result.ira_deduction)
+
+    if nondeductible > 0 or prior_year_ira_basis > 0:
+        result.form_8606_nondeductible_contribution = nondeductible
+        result.form_8606_prior_year_basis = prior_year_ira_basis
+        result.form_8606_total_basis = nondeductible + prior_year_ira_basis
+
+        # Pro-rata rule: determines nontaxable % of distributions
+        ira_distributions = result.line_4a_ira_distributions
+        result.form_8606_roth_conversion = roth_conversion_amount
+        total_value = total_ira_value_year_end + ira_distributions + roth_conversion_amount
+        result.form_8606_total_ira_value = total_ira_value_year_end
+
+        if total_value > 0 and result.form_8606_total_basis > 0:
+            nontaxable_pct = min(1.0, result.form_8606_total_basis / total_value)
+            result.form_8606_nontaxable_pct = nontaxable_pct
+
+            # Nontaxable portion of distributions
+            nontaxable_amount = round(ira_distributions * nontaxable_pct, 2)
+            result.form_8606_nontaxable_amount = nontaxable_amount
+
+            # Adjust line 4b (taxable IRA) — reduce by nontaxable portion
+            taxable_ira = max(0, ira_distributions - nontaxable_amount)
+            result.line_4b_ira_taxable = taxable_ira
+
+            # Roth conversion taxable portion
+            if roth_conversion_amount > 0:
+                roth_nontaxable = round(roth_conversion_amount * nontaxable_pct, 2)
+                result.form_8606_roth_taxable = max(0, roth_conversion_amount - roth_nontaxable)
+                # Roth conversion adds to gross distributions (line 4a) and taxable (line 4b)
+                result.line_4a_ira_distributions += roth_conversion_amount
+                result.line_4b_ira_taxable += result.form_8606_roth_taxable
+
+            # Remaining basis carried forward
+            basis_used = round((ira_distributions + roth_conversion_amount) * nontaxable_pct, 2)
+            result.form_8606_remaining_basis = max(0, round(result.form_8606_total_basis - basis_used, 2))
+        else:
+            # No distributions or conversions — basis carries forward entirely
+            result.form_8606_remaining_basis = result.form_8606_total_basis
 
     # Educator expense deduction — K-12 teachers, max $300 per educator
     if educator_expenses > 0:
@@ -2346,6 +2416,8 @@ def compute_tax(
         result.forms_generated.append("Form 2210")
     if result.hsa_deduction > 0 or result.form_8889_contributions > 0:
         result.forms_generated.append("Form 8889")
+    if result.form_8606_nondeductible_contribution > 0 or result.form_8606_prior_year_basis > 0:
+        result.forms_generated.append("Form 8606")
     if result.energy_total_credit > 0:
         result.forms_generated.append("Form 5695")
     if result.crypto_transactions_count > 0:

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.30.0)
+Updated: 2026-04-24 (v3.31.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -896,6 +896,30 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
 
+### Wave 52 — Form 8606 Nondeductible IRA Basis Tracking (v3.31.0) — 2026-04-24
+
+- [x] Nondeductible contribution auto-computed from phaseout (total contributions - IRA deduction)
+- [x] Prior-year basis carryforward input (`prior_year_ira_basis`)
+- [x] Pro-rata rule: nontaxable % = total_basis / (year_end_value + distributions + conversions)
+- [x] IRA distribution taxable amount adjusted via pro-rata (line 4b reduced)
+- [x] Roth conversion Part III: basis portion nontaxable, remainder taxable
+- [x] Backdoor Roth pattern: nondeductible + immediate conversion with $0 remaining = 100% nontaxable
+- [x] Remaining basis carryforward after distributions/conversions
+- [x] Form 8606 PDF via ReportLab (Parts I + III)
+- [x] Summary includes form_8606 section when basis > 0
+- [x] Full backward compatibility: no new params = no Form 8606
+- [x] 880/880 unit tests (16 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave52_form8606.py` — 16 tests (4 nondeductible, 4 pro-rata, 3 Roth conversion, 4 summary/PDF, 1 backward compat)
+
+**Modified files:**
+- `app/tax_engine.py` — TaxResult Form 8606 fields, compute_tax new params, pro-rata computation
+- `app/pdf_generator.py` — generate_form_8606(), generate_all_pdfs() hook
+- `app/tax_routes.py` — 3 new TaxDraftRequest fields, form_8606 in file_map
+- `app/mcp_server.py` — 3 new params in _build_inputs() and compute_tax_scenario()
+- `app/main.py` — version 3.31.0
+
 ### Wave 51 — Schedule 1/3/E PDF Generation (v3.30.0) — 2026-04-24
 
 - [x] Schedule 1 (Form 1040) — Additional Income and Adjustments to Income
@@ -951,4 +975,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI)
+- **Tax engine remaining:** Annualized installment method (Form 2210 Schedule AI)

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.30.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.31.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,16 @@ Updated: 2026-04-24 (v3.30.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 52 — Form 8606 Nondeductible IRA Basis Tracking (v3.31.0)
+
+221. **Nondeductible IRA contributions computed automatically from phaseout** — When the IRA deduction is phased out (partially or fully per IRC §219(g)), the difference between total contributions and the allowed deduction becomes the nondeductible amount. No separate user input needed — the engine derives it from `ira_contributions - ira_deduction`.
+
+222. **Pro-rata rule for distribution taxability** — The IRS requires ALL traditional IRA assets be treated as a single pool for taxability. The nontaxable percentage = `total_basis / (year_end_value + distributions + conversions)`. This percentage applies uniformly to ALL distributions and Roth conversions — you cannot cherry-pick basis dollars. Three new inputs: `prior_year_ira_basis`, `total_ira_value_year_end`, `roth_conversion_amount`.
+
+223. **Backdoor Roth pattern emerges naturally** — When a high-income filer makes a nondeductible IRA contribution ($7K) and immediately converts to Roth with $0 remaining IRA value, the pro-rata rule yields 100% nontaxable → $0 tax on conversion. No special-case code needed — the general Form 8606 logic handles it.
+
+224. **Basis carries forward automatically** — `form_8606_remaining_basis` tracks the carryforward for next year's Form 8606 Line 2. Without distributions/conversions, the entire basis carries forward. With distributions, basis is reduced proportionally to the nontaxable amount consumed.
 
 ## Wave 51 — Schedule 1/3/E PDF Generation (v3.30.0)
 
