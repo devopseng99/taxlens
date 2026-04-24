@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.29.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.30.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,14 @@ Updated: 2026-04-24 (v3.29.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 51 — Schedule 1/3/E PDF Generation (v3.30.0)
+
+218. **Schedule 1 generated conditionally on any additional income or adjustments** — Simple W-2-only returns don't need Schedule 1. It's generated when any of: business income, rental income, unemployment, alimony, gambling, SE deduction, HSA, IRA, student loan, or educator expenses are present. This avoids cluttering simple returns with an empty form.
+
+219. **Schedule 3 generated conditionally on any additional credits** — Generated when foreign tax credit, CDCC, education credits, Saver's credit, energy credits, or EITC are present. Mirrors the IRS requirement: Schedule 3 only filed when claiming credits beyond CTC.
+
+220. **ReportLab summary PDFs (not official fillable)** — Schedule 1, 3, and E are generated as ReportLab-drawn summary pages with DRAFT watermark, not official IRS fillable PDF templates. This is consistent with how other supplemental schedules (K-1 Summary, Form 8949, Form 5695, etc.) are already handled. Official fillable templates can be added later if needed.
 
 ## Wave 50 — Charitable Contribution AGI Limits (v3.29.0)
 

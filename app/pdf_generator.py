@@ -1551,6 +1551,237 @@ def generate_retirement_summary(result: TaxResult) -> BytesIO:
     return buf
 
 
+def generate_schedule_1(result: TaxResult) -> BytesIO:
+    """Generate Schedule 1 — Additional Income and Adjustments to Income."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Schedule 1 (Form 1040) — Additional Income")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Part I — Additional Income")
+    y -= 20
+    c.setFont("Helvetica", 10)
+
+    income_items = [
+        ("1  Taxable refunds (state/local)", 0),
+        ("2a Alimony received (pre-2019 divorce)", result.alimony_received),
+        ("3  Business income (Schedule C)", result.sched_c_total_profit),
+        ("4  Other gains or losses", 0),
+        ("5  Rental real estate (Schedule E)", result.sched_e_net_income),
+        ("6  Farm income", 0),
+        ("7  Unemployment compensation", result.unemployment_compensation),
+        ("8a Net operating loss", 0),
+        ("8b Gambling income (net)", result.gambling_winnings - result.gambling_losses if result.gambling_winnings > 0 else 0),
+        ("8d K-1 ordinary income", result.k1_ordinary_income),
+        ("8z Other income", result.line_8_other_income),
+    ]
+
+    part1_total = 0
+    for label, val in income_items:
+        line = f"{label}: "
+        if val != 0:
+            line += f"${val:,.2f}"
+            part1_total += val
+        c.drawString(90, y, line)
+        y -= 16
+
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(90, y, f"10  Total additional income: ${part1_total:,.2f}")
+    y -= 30
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Part II — Adjustments to Income")
+    y -= 20
+    c.setFont("Helvetica", 10)
+
+    adj_items = [
+        ("11  Educator expenses", result.educator_expense_deduction),
+        ("13  HSA deduction", result.hsa_deduction),
+        ("14  Moving expenses (military)", 0),
+        ("15  Deductible SE tax (50%)", result.se_tax_deduction),
+        ("17  IRA deduction", result.ira_deduction),
+        ("18  Student loan interest deduction", result.student_loan_deduction),
+        ("19a Alimony paid (pre-2019 divorce)", result.alimony_paid),
+    ]
+
+    part2_total = 0
+    for label, val in adj_items:
+        line = f"{label}: "
+        if val != 0:
+            line += f"${val:,.2f}"
+            part2_total += val
+        c.drawString(90, y, line)
+        y -= 16
+
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(90, y, f"26  Total adjustments: ${part2_total:,.2f}")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def generate_schedule_3(result: TaxResult) -> BytesIO:
+    """Generate Schedule 3 — Additional Credits and Payments."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Schedule 3 (Form 1040) — Additional Credits")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Part I — Nonrefundable Credits")
+    y -= 20
+    c.setFont("Helvetica", 10)
+
+    credit_items = [
+        ("1  Foreign tax credit (Form 1116)", result.foreign_tax_credit),
+        ("2  Child and dependent care (Form 2441)", result.cdcc),
+        ("3  Education credits (Form 8863)", result.education_credit),
+        ("4  Retirement savings (Form 8880)", result.savers_credit),
+        ("5a Residential energy (Form 5695)", result.energy_total_credit),
+    ]
+
+    part1_total = 0
+    for label, val in credit_items:
+        line = f"{label}: "
+        if val > 0:
+            line += f"${val:,.2f}"
+            part1_total += val
+        c.drawString(90, y, line)
+        y -= 16
+
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(90, y, f"8  Total nonrefundable credits: ${part1_total:,.2f}")
+    y -= 30
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Part II — Other Payments and Refundable Credits")
+    y -= 20
+    c.setFont("Helvetica", 10)
+
+    payment_items = [
+        ("9  Net premium tax credit", 0),
+        ("10 Amount paid with extension request", 0),
+        ("13a Education credit refundable (AOTC)", result.education_credit_refundable),
+        ("14 Earned income credit (Schedule EIC)", result.eitc),
+    ]
+
+    part2_total = 0
+    for label, val in payment_items:
+        line = f"{label}: "
+        if val > 0:
+            line += f"${val:,.2f}"
+            part2_total += val
+        c.drawString(90, y, line)
+        y -= 16
+
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(90, y, f"15  Total other payments: ${part2_total:,.2f}")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def generate_schedule_e(result: TaxResult) -> BytesIO:
+    """Generate Schedule E — Supplemental Income and Loss (Rental Real Estate)."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, 740, "Schedule E (Form 1040) — Rental Real Estate")
+    c.setFont("Helvetica", 8)
+    c.drawString(72, 726, "DRAFT — TaxLens Summary (not for filing)")
+
+    y = 700
+
+    if not result.sched_e_properties:
+        c.setFont("Helvetica", 10)
+        c.drawString(90, y, "No rental properties reported.")
+    else:
+        for i, prop in enumerate(result.sched_e_properties, 1):
+            if y < 120:
+                c.showPage()
+                y = 740
+            c.setFont("Helvetica-Bold", 10)
+            name = prop.get("address", f"Property {i}")
+            c.drawString(72, y, f"Property {i}: {name}")
+            y -= 18
+            c.setFont("Helvetica", 10)
+
+            fields = [
+                ("  Rents received", prop.get("gross_rents", 0)),
+                ("  Total expenses", prop.get("total_expenses", 0)),
+                ("  Net income (loss)", prop.get("net_income", 0)),
+            ]
+            for label, val in fields:
+                c.drawString(90, y, f"{label}: ${val:,.2f}")
+                y -= 14
+            y -= 8
+
+    # Totals
+    y -= 10
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Schedule E Totals")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    c.drawString(90, y, f"Total rental income: ${result.sched_e_total_income:,.2f}")
+    y -= 16
+    c.drawString(90, y, f"Total rental expenses: ${result.sched_e_total_expenses:,.2f}")
+    y -= 16
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(90, y, f"Net rental income (loss): ${result.sched_e_net_income:,.2f}")
+
+    # Check if passive loss was limited (raw loss > allowed loss)
+    raw_net = result.sched_e_total_income - result.sched_e_total_expenses
+    if raw_net < result.sched_e_net_income < 0:
+        disallowed = abs(raw_net) - abs(result.sched_e_net_income)
+        y -= 20
+        c.setFont("Helvetica", 9)
+        c.drawString(90, y, f"Passive activity loss limited (IRC §469): ${disallowed:,.2f} disallowed")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 # ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
@@ -1605,6 +1836,37 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "schedule_d.pdf"
         p.write_bytes(buf.read())
         paths["schedule_d"] = str(p)
+
+    # Schedule 1 (if any additional income or adjustments)
+    has_sched1_income = (result.sched_c_total_profit != 0 or result.sched_e_net_income != 0
+                         or result.unemployment_compensation > 0 or result.alimony_received > 0
+                         or result.gambling_winnings > 0 or result.k1_ordinary_income > 0)
+    has_sched1_adj = (result.se_tax_deduction > 0 or result.hsa_deduction > 0
+                      or result.ira_deduction > 0 or result.student_loan_deduction > 0
+                      or result.educator_expense_deduction > 0 or result.alimony_paid > 0)
+    if has_sched1_income or has_sched1_adj:
+        buf = generate_schedule_1(result)
+        p = out / "schedule_1.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_1"] = str(p)
+
+    # Schedule 3 (if any additional credits)
+    has_sched3 = (result.foreign_tax_credit > 0 or result.cdcc > 0
+                  or result.education_credit > 0 or result.education_credit_refundable > 0
+                  or result.savers_credit > 0 or result.energy_total_credit > 0
+                  or result.eitc > 0)
+    if has_sched3:
+        buf = generate_schedule_3(result)
+        p = out / "schedule_3.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_3"] = str(p)
+
+    # Schedule E (if rental properties)
+    if result.sched_e_properties:
+        buf = generate_schedule_e(result)
+        p = out / "schedule_e.pdf"
+        p.write_bytes(buf.read())
+        paths["schedule_e"] = str(p)
 
     # Schedule 2 + Form 8959 + Form 8960 (if surtaxes apply)
     if result.niit > 0 or result.additional_medicare_tax > 0 or result.se_tax > 0:

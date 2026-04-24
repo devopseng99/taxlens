@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.29.0)
+Updated: 2026-04-24 (v3.30.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -896,6 +896,31 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
 
+### Wave 51 — Schedule 1/3/E PDF Generation (v3.30.0) — 2026-04-24
+
+- [x] Schedule 1 (Form 1040) — Additional Income and Adjustments to Income
+- [x] Part I: business income, rental, unemployment, alimony, gambling, K-1 ordinary
+- [x] Part II: SE deduction, HSA, IRA, student loan, educator expenses, alimony paid
+- [x] Schedule 3 (Form 1040) — Additional Credits and Payments
+- [x] Part I: foreign tax credit, CDCC, education credits, Saver's, energy credits
+- [x] Part II: refundable AOTC, EITC
+- [x] Schedule E — Supplemental Income and Loss (Rental Real Estate)
+- [x] Per-property breakdown (address, rents, expenses, net income)
+- [x] Totals + passive activity loss notation
+- [x] Conditional generation: simple W-2 returns skip all three schedules
+- [x] Added to forms_generated and file_map for PDF download
+- [x] ReportLab-drawn with DRAFT watermark (consistent with K-1 summary pattern)
+- [x] 864/864 unit tests (20 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave51_schedule_pdfs.py` — 20 tests (7 Schedule 1, 6 Schedule 3, 5 Schedule E, 2 backward compat)
+
+**Modified files:**
+- `app/pdf_generator.py` — generate_schedule_1(), generate_schedule_3(), generate_schedule_e(), generate_all_pdfs() hooks
+- `app/tax_engine.py` — Schedule 1/3 in forms_generated (conditional)
+- `app/tax_routes.py` — schedule_1, schedule_3, schedule_e in file_map
+- `app/main.py` — version 3.30.0
+
 ### Wave 50 — Charitable Contribution AGI Limits (v3.29.0) — 2026-04-24
 
 - [x] IRC §170 cash contribution limit: 60% of AGI
@@ -926,4 +951,4 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - **API reference docs:** OpenAPI spec + MCP integration guide
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
-- **Tax engine remaining:** Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI), Schedule 1/3/E PDF generation
+- **Tax engine remaining:** Form 8606 (nondeductible IRA basis tracking), Annualized installment method (Form 2210 Schedule AI)

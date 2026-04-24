@@ -2299,6 +2299,15 @@ def compute_tax(
     # =======================================================================
 
     result.forms_generated = ["1040"]
+    # Schedule 1: any additional income or adjustments to income
+    has_sched1 = (result.sched_c_total_profit != 0 or result.sched_e_net_income != 0
+                  or result.unemployment_compensation > 0 or result.alimony_received > 0
+                  or result.gambling_winnings > 0 or result.k1_ordinary_income > 0
+                  or result.se_tax_deduction > 0 or result.hsa_deduction > 0
+                  or result.ira_deduction > 0 or result.student_loan_deduction > 0
+                  or result.educator_expense_deduction > 0 or result.alimony_paid > 0)
+    if has_sched1:
+        result.forms_generated.append("Schedule 1")
     if businesses:
         result.forms_generated.append("Schedule C")
         result.forms_generated.append("Schedule SE")
@@ -2312,6 +2321,13 @@ def compute_tax(
         result.forms_generated.append("Schedule D")
     if result.niit > 0 or result.additional_medicare_tax > 0 or result.se_tax > 0:
         result.forms_generated.append("Schedule 2")
+    # Schedule 3: any additional credits or payments
+    has_sched3 = (result.foreign_tax_credit > 0 or result.cdcc > 0
+                  or result.education_credit > 0 or result.education_credit_refundable > 0
+                  or result.savers_credit > 0 or result.energy_total_credit > 0
+                  or result.eitc > 0)
+    if has_sched3:
+        result.forms_generated.append("Schedule 3")
     if result.additional_medicare_tax > 0:
         result.forms_generated.append("Form 8959")
     if result.niit > 0:
