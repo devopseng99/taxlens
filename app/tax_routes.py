@@ -114,6 +114,7 @@ class PaymentsInput(BaseModel):
 class TaxDraftRequest(BaseModel):
     filing_status: str = Field(..., description="single, mfj, hoh, or mfs")
     username: str = Field(..., description="TaxLens username (for document lookup)")
+    tax_year: int = Field(default=2025, description="Tax year (2024 or 2025)")
     filer: PersonInput = PersonInput()
     spouse: Optional[PersonInput] = None
     num_dependents: int = Field(default=0, description="Number of dependents (backward compat — prefer 'dependents' list)")
@@ -386,6 +387,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         work_states=req.work_states,
         days_worked_by_state=req.days_worked_by_state or None,
         additional_withholding=ocr_div_withheld + nec_withheld,
+        tax_year=req.tax_year,
     )
 
     # --- Generate PDFs ---

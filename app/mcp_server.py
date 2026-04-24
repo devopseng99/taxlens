@@ -25,9 +25,10 @@ STORAGE_ROOT = Path(os.getenv("TAXLENS_STORAGE_ROOT", "/data/documents"))
 mcp = FastMCP(
     name="TaxLens",
     instructions=(
-        "TaxLens is a tax computation engine for US federal + state taxes (tax year 2025). "
+        "TaxLens is a tax computation engine for US federal + state taxes (tax years 2024 and 2025). "
         "Use compute_tax to calculate taxes for any scenario. Use compare_scenarios to "
-        "compare filing strategies side-by-side. Use list_states to see supported states."
+        "compare filing strategies side-by-side. Use list_states to see supported states. "
+        "Set tax_year=2024 for prior year returns."
     ),
     stateless_http=True,
     streamable_http_path="/",
@@ -68,6 +69,7 @@ def _build_inputs(
     residence_state: str = "IL",
     estimated_federal: float = 0,
     estimated_state: float = 0,
+    tax_year: int = 2025,
 ) -> dict:
     """Convert simplified params to engine-ready inputs."""
     filer = PersonInfo(first_name="MCP", last_name="User")
@@ -130,6 +132,7 @@ def _build_inputs(
         num_dependents=num_dependents,
         businesses=businesses,
         residence_state=residence_state,
+        tax_year=tax_year,
     )
 
 
@@ -162,6 +165,7 @@ def compute_tax_scenario(
     residence_state: str = "IL",
     estimated_federal: float = 0,
     estimated_state: float = 0,
+    tax_year: int = 2025,
 ) -> str:
     """Compute federal + state taxes for a given scenario.
 
@@ -185,6 +189,7 @@ def compute_tax_scenario(
         residence_state: Two-letter state code (e.g., "CA", "TX", "IL")
         estimated_federal: Estimated federal tax payments made
         estimated_state: Estimated state tax payments made
+        tax_year: Tax year (2024 or 2025, default 2025)
 
     Returns:
         JSON with full tax computation: income, AGI, deductions, federal tax, state tax, refund/owed
@@ -199,6 +204,7 @@ def compute_tax_scenario(
         charitable=charitable, student_loan_interest=student_loan_interest,
         num_dependents=num_dependents, residence_state=residence_state,
         estimated_federal=estimated_federal, estimated_state=estimated_state,
+        tax_year=tax_year,
     )
     result = compute_tax(**inputs)
     return json.dumps(_result_to_dict(result), indent=2, default=str)

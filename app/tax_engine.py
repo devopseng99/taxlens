@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from tax_config import *
+from tax_config import get_year_config, SUPPORTED_TAX_YEARS
 from state_tax_engine import compute_state_tax, compute_all_state_returns
 from state_configs import StateTaxResult, NO_TAX_STATES
 
@@ -727,11 +728,22 @@ def compute_tax(
     retirement_contributions: list[RetirementContribution] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
+    tax_year: int = TAX_YEAR,
 ) -> TaxResult:
-    """Compute full federal + state tax return."""
+    """Compute full federal + state tax return.
+
+    Args:
+        tax_year: Tax year for computation (2024 or 2025). Determines which
+                  inflation-adjusted constants (brackets, deductions, etc.) are used.
+    """
 
     if filing_status not in FILING_STATUSES:
         raise ValueError(f"Invalid filing status: {filing_status}")
+    if tax_year not in SUPPORTED_TAX_YEARS:
+        raise ValueError(f"Unsupported tax year: {tax_year}. Supported: {sorted(SUPPORTED_TAX_YEARS)}")
+
+    # Load year-specific constants
+    c = get_year_config(tax_year)
 
     businesses = businesses or []
     dependents = dependents or []
@@ -739,9 +751,9 @@ def compute_tax(
     # Derive dependent counts from structured records (or fall back to integer)
     if dependents:
         num_dependents = len(dependents)
-        num_ctc_children = sum(1 for d in dependents if d.qualifies_ctc(TAX_YEAR))
-        num_eitc_children = sum(1 for d in dependents if d.qualifies_eitc(TAX_YEAR))
-        num_cdcc_dependents = sum(1 for d in dependents if d.qualifies_cdcc(TAX_YEAR))
+        num_ctc_children = sum(1 for d in dependents if d.qualifies_ctc(tax_year))
+        num_eitc_children = sum(1 for d in dependents if d.qualifies_eitc(tax_year))
+        num_cdcc_dependents = sum(1 for d in dependents if d.qualifies_cdcc(tax_year))
     else:
         # Backward compat: no structured dependents, use num_dependents for all
         num_ctc_children = num_dependents
@@ -751,7 +763,7 @@ def compute_tax(
     result = TaxResult(
         draft_id=uuid.uuid4().hex[:12],
         filing_status=filing_status,
-        tax_year=TAX_YEAR,
+        tax_year=tax_year,
         filer=filer,
         spouse=spouse,
         num_dependents=num_dependents,
@@ -821,16 +833,16 @@ def compute_tax(
     if result.sched_c_total_profit > 0:
         # Net SE earnings = 92.35% of net profit
         result.sched_se_net_earnings = result.sched_c_total_profit
-        result.sched_se_taxable = result.sched_se_net_earnings * SE_INCOME_FACTOR
+        result.sched_se_taxable = result.sched_se_net_earnings * c.SE_INCOME_FACTOR
 
         # SS portion: 12.4% on earnings up to wage base (minus W-2 SS wages)
         w2_ss_wages = sum(w.ss_wages for w in w2s)
-        ss_room = max(0, SS_WAGE_BASE - w2_ss_wages)
+        ss_room = max(0, c.SS_WAGE_BASE - w2_ss_wages)
         ss_taxable = min(result.sched_se_taxable, ss_room)
-        result.sched_se_ss_tax = ss_taxable * SE_SS_RATE
+        result.sched_se_ss_tax = ss_taxable * c.SE_SS_RATE
 
         # Medicare portion: 2.9% on all SE earnings (no cap)
-        result.sched_se_medicare_tax = result.sched_se_taxable * SE_MEDICARE_RATE
+        result.sched_se_medicare_tax = result.sched_se_taxable * c.SE_MEDICARE_RATE
 
         result.sched_se_total = result.sched_se_ss_tax + result.sched_se_medicare_tax
         result.se_tax = result.sched_se_total
@@ -841,7 +853,7 @@ def compute_tax(
 
     adjustments = 0.0
     # Student loan interest deduction (above-the-line, max $2,500)
-    adjustments += min(deductions.student_loan_interest, STUDENT_LOAN_INTEREST_MAX)
+    adjustments += min(deductions.student_loan_interest, c.STUDENT_LOAN_INTEREST_MAX)
     # 50% of SE tax is deductible above-the-line
     result.se_tax_deduction = result.se_tax * 0.5
     adjustments += result.se_tax_deduction
@@ -855,11 +867,11 @@ def compute_tax(
     # =======================================================================
 
     # Medical (exceeding 7.5% of AGI)
-    medical_floor = result.line_11_agi * MEDICAL_AGI_THRESHOLD
+    medical_floor = result.line_11_agi * c.MEDICAL_AGI_THRESHOLD
     result.sched_a_medical = max(0, deductions.medical_expenses - medical_floor)
 
     # SALT (capped at $10k or $5k MFS)
-    salt_cap = SALT_CAP_MFS if filing_status == MFS else SALT_CAP
+    salt_cap = c.SALT_CAP_MFS if filing_status == MFS else c.SALT_CAP
     raw_salt = deductions.property_tax + deductions.state_income_tax_paid
     result.sched_a_salt = min(raw_salt, salt_cap)
 
@@ -881,7 +893,7 @@ def compute_tax(
     # DEDUCTION CHOICE (Line 12-14)
     # =======================================================================
 
-    result.standard_deduction = STANDARD_DEDUCTION[filing_status]
+    result.standard_deduction = c.STANDARD_DEDUCTION[filing_status]
 
     if result.itemized_total > result.standard_deduction:
         result.deduction_type = "itemized"
@@ -897,10 +909,10 @@ def compute_tax(
     # QBI deduction (Section 199A) — 20% of qualified business income
     # With W-2 wage limitation phase-out above income threshold
     if result.sched_c_total_profit > 0:
-        qbi_limit = QBI_TAXABLE_INCOME_LIMIT[filing_status]
-        qbi_range = QBI_PHASEOUT_RANGE[filing_status]
+        qbi_limit = c.QBI_TAXABLE_INCOME_LIMIT[filing_status]
+        qbi_range = c.QBI_PHASEOUT_RANGE[filing_status]
         tentative_taxable = result.line_11_agi - result.line_13_deduction
-        full_qbi = result.sched_c_total_profit * QBI_DEDUCTION_RATE
+        full_qbi = result.sched_c_total_profit * c.QBI_DEDUCTION_RATE
 
         if tentative_taxable <= qbi_limit:
             # Below threshold: full 20% deduction
@@ -935,13 +947,13 @@ def compute_tax(
     if preferential_income > 0 and result.line_15_taxable_income > 0:
         # Split: ordinary income taxed at brackets, preferential at LTCG rates
         ordinary_taxable = max(0, result.line_15_taxable_income - preferential_income)
-        ordinary_tax = compute_bracket_tax(ordinary_taxable, FEDERAL_BRACKETS[filing_status])
+        ordinary_tax = compute_bracket_tax(ordinary_taxable, c.FEDERAL_BRACKETS[filing_status])
 
         # LTCG tax on the preferential portion
         cap_gains_tax = compute_ltcg_tax(
             result.line_15_taxable_income,
             min(preferential_income, result.line_15_taxable_income),
-            LTCG_BRACKETS[filing_status],
+            c.LTCG_BRACKETS[filing_status],
         )
 
         result.line_16_tax = ordinary_tax
@@ -949,7 +961,7 @@ def compute_tax(
     else:
         # All ordinary income
         result.line_16_tax = compute_bracket_tax(
-            result.line_15_taxable_income, FEDERAL_BRACKETS[filing_status]
+            result.line_15_taxable_income, c.FEDERAL_BRACKETS[filing_status]
         )
         result.capital_gains_tax = 0.0
 
@@ -960,7 +972,7 @@ def compute_tax(
     # NET INVESTMENT INCOME TAX (NIIT) — 3.8% surtax
     # =======================================================================
 
-    niit_threshold = NIIT_THRESHOLD[filing_status]
+    niit_threshold = c.NIIT_THRESHOLD[filing_status]
     if result.line_11_agi > niit_threshold:
         # Net investment income = interest + dividends + capital gains + other investment income
         net_investment_income = (
@@ -970,17 +982,17 @@ def compute_tax(
         )
         # NIIT is 3.8% on the LESSER of net investment income OR AGI exceeding threshold
         niit_base = min(net_investment_income, result.line_11_agi - niit_threshold)
-        result.niit = max(0, niit_base * NIIT_RATE)
+        result.niit = max(0, niit_base * c.NIIT_RATE)
 
     # =======================================================================
     # ADDITIONAL MEDICARE TAX — 0.9% on earnings above threshold
     # =======================================================================
 
-    amt_threshold = ADDITIONAL_MEDICARE_THRESHOLD[filing_status]
+    amt_threshold = c.ADDITIONAL_MEDICARE_THRESHOLD[filing_status]
     total_medicare_wages = sum(w.medicare_wages for w in w2s) + result.sched_se_taxable
     if total_medicare_wages > amt_threshold:
         # 0.9% on the excess — W-2 withholding already covers base Medicare
-        result.additional_medicare_tax = (total_medicare_wages - amt_threshold) * ADDITIONAL_MEDICARE_RATE
+        result.additional_medicare_tax = (total_medicare_wages - amt_threshold) * c.ADDITIONAL_MEDICARE_RATE
 
     # =======================================================================
     # ALTERNATIVE MINIMUM TAX — Form 6251
@@ -992,8 +1004,8 @@ def compute_tax(
     result.amt_income = amt_income
 
     # AMT exemption with phase-out (25% of excess over phaseout start)
-    exemption_base = AMT_EXEMPTION[filing_status]
-    phaseout_start = AMT_PHASEOUT_START[filing_status]
+    exemption_base = c.AMT_EXEMPTION[filing_status]
+    phaseout_start = c.AMT_PHASEOUT_START[filing_status]
     if amt_income > phaseout_start:
         exemption_reduction = (amt_income - phaseout_start) * 0.25
         exemption = max(0, exemption_base - exemption_reduction)
@@ -1002,11 +1014,11 @@ def compute_tax(
     result.amt_exemption = exemption
 
     amt_taxable = max(0, amt_income - exemption)
-    rate_break = AMT_RATE_BREAK[filing_status]
+    rate_break = c.AMT_RATE_BREAK[filing_status]
     if amt_taxable <= rate_break:
-        tentative_min_tax = amt_taxable * AMT_RATE_LOW
+        tentative_min_tax = amt_taxable * c.AMT_RATE_LOW
     else:
-        tentative_min_tax = rate_break * AMT_RATE_LOW + (amt_taxable - rate_break) * AMT_RATE_HIGH
+        tentative_min_tax = rate_break * c.AMT_RATE_LOW + (amt_taxable - rate_break) * c.AMT_RATE_HIGH
     result.amt_tentative = tentative_min_tax
 
     # AMT = excess of tentative minimum tax over regular tax (before credits)
@@ -1032,10 +1044,10 @@ def compute_tax(
 
     # Child Tax Credit (uses num_ctc_children — under 17 or disabled)
     if num_ctc_children > 0:
-        ctc_base = num_ctc_children * CTC_PER_CHILD
-        phaseout_start = CTC_PHASEOUT_START[filing_status]
+        ctc_base = num_ctc_children * c.CTC_PER_CHILD
+        phaseout_start = c.CTC_PHASEOUT_START[filing_status]
         if result.line_11_agi > phaseout_start:
-            reduction = ((result.line_11_agi - phaseout_start) // 1000) * CTC_PHASEOUT_RATE
+            reduction = ((result.line_11_agi - phaseout_start) // 1000) * c.CTC_PHASEOUT_RATE
             ctc_base = max(0, ctc_base - reduction)
         result.line_27_ctc = min(ctc_base, result.line_24_total_tax)
         result.line_24_total_tax -= result.line_27_ctc
@@ -1043,7 +1055,7 @@ def compute_tax(
     # Education Credits — Form 8863 (AOTC + LLC)
     education_expenses = education_expenses or []
     if education_expenses and filing_status != MFS:
-        phaseout_range = EDUCATION_CREDIT_PHASEOUT[filing_status]
+        phaseout_range = c.EDUCATION_CREDIT_PHASEOUT[filing_status]
         phaseout_start_ed = phaseout_range[0]
         phaseout_end = phaseout_range[1]
 
@@ -1061,16 +1073,16 @@ def compute_tax(
             if exp.credit_type == "aotc":
                 # AOTC: 100% of first $2,000 + 25% of next $2,000
                 raw = min(exp.qualified_expenses, 2000) + max(0, min(exp.qualified_expenses - 2000, 2000)) * 0.25
-                total_aotc += min(raw, AOTC_MAX)
+                total_aotc += min(raw, c.AOTC_MAX)
             else:
                 # LLC: 20% of up to $10,000 expenses
-                total_llc += min(exp.qualified_expenses * LLC_EXPENSE_RATE, LLC_MAX)
+                total_llc += min(exp.qualified_expenses * c.LLC_EXPENSE_RATE, c.LLC_MAX)
 
         total_aotc *= ed_phaseout_frac
         total_llc *= ed_phaseout_frac
 
         # AOTC refundable portion (40%)
-        result.education_credit_refundable = total_aotc * AOTC_REFUNDABLE_RATE
+        result.education_credit_refundable = total_aotc * c.AOTC_REFUNDABLE_RATE
         nonrefundable_aotc = total_aotc - result.education_credit_refundable
 
         # Nonrefundable credits capped at tax liability
@@ -1085,7 +1097,7 @@ def compute_tax(
     dependent_care_expenses = dependent_care_expenses or []
     if dependent_care_expenses and result.line_24_total_tax > 0:
         num_care_dependents = len(dependent_care_expenses)
-        expense_limit = CDCC_MAX_EXPENSES_TWO if num_care_dependents >= 2 else CDCC_MAX_EXPENSES_ONE
+        expense_limit = c.CDCC_MAX_EXPENSES_TWO if num_care_dependents >= 2 else c.CDCC_MAX_EXPENSES_ONE
         total_care_expenses = sum(e.care_expenses for e in dependent_care_expenses)
         qualifying_expenses = min(total_care_expenses, expense_limit)
 
@@ -1094,11 +1106,11 @@ def compute_tax(
         qualifying_expenses = min(qualifying_expenses, cdcc_earned)
 
         # AGI-based credit rate: 35% at $15K AGI, decreasing 1% per $2K, floor 20%
-        if result.line_11_agi <= CDCC_RATE_START_AGI:
-            cdcc_rate = CDCC_MAX_RATE
+        if result.line_11_agi <= c.CDCC_RATE_START_AGI:
+            cdcc_rate = c.CDCC_MAX_RATE
         else:
-            steps = int((result.line_11_agi - CDCC_RATE_START_AGI) / CDCC_RATE_STEP_AGI)
-            cdcc_rate = max(CDCC_MIN_RATE, CDCC_MAX_RATE - steps * 0.01)
+            steps = int((result.line_11_agi - c.CDCC_RATE_START_AGI) / c.CDCC_RATE_STEP_AGI)
+            cdcc_rate = max(c.CDCC_MIN_RATE, c.CDCC_MAX_RATE - steps * 0.01)
 
         cdcc_credit = qualifying_expenses * cdcc_rate
         # Nonrefundable: capped at remaining tax liability
@@ -1111,7 +1123,7 @@ def compute_tax(
 
     retirement_contributions = retirement_contributions or []
     if retirement_contributions and result.line_24_total_tax > 0:
-        tiers = SAVERS_AGI_TIERS.get(filing_status, SAVERS_AGI_TIERS[SINGLE])
+        tiers = c.SAVERS_AGI_TIERS.get(filing_status, c.SAVERS_AGI_TIERS[SINGLE])
         agi = result.line_11_agi
 
         if agi <= tiers[0]:
@@ -1125,8 +1137,8 @@ def compute_tax(
 
         if savers_rate > 0:
             total_eligible = sum(
-                min(c.contribution_amount, SAVERS_MAX_CONTRIBUTION)
-                for c in retirement_contributions
+                min(rc.contribution_amount, c.SAVERS_MAX_CONTRIBUTION)
+                for rc in retirement_contributions
             )
             savers_credit = total_eligible * savers_rate
             result.savers_credit = min(savers_credit, result.line_24_total_tax)
@@ -1149,12 +1161,12 @@ def compute_tax(
         + max(0, result.sched_d_net_gain)
     )
 
-    if filing_status != MFS and investment_income <= EITC_INVESTMENT_INCOME_LIMIT:
-        phase_in_rate = EITC_PHASE_IN_RATE[num_eitc_children]
-        phase_out_rate = EITC_PHASE_OUT_RATE[num_eitc_children]
-        max_credit = EITC_MAX_CREDIT[num_eitc_children]
-        earned_amount = EITC_EARNED_INCOME_AMOUNT[num_eitc_children]
-        phaseout_start = EITC_PHASEOUT_START.get(filing_status, EITC_PHASEOUT_START[SINGLE])[num_eitc_children]
+    if filing_status != MFS and investment_income <= c.EITC_INVESTMENT_INCOME_LIMIT:
+        phase_in_rate = c.EITC_PHASE_IN_RATE[num_eitc_children]
+        phase_out_rate = c.EITC_PHASE_OUT_RATE[num_eitc_children]
+        max_credit = c.EITC_MAX_CREDIT[num_eitc_children]
+        earned_amount = c.EITC_EARNED_INCOME_AMOUNT[num_eitc_children]
+        phaseout_start = c.EITC_PHASEOUT_START.get(filing_status, c.EITC_PHASEOUT_START[SINGLE])[num_eitc_children]
 
         # Phase-in: credit grows at phase_in_rate up to earned_amount
         credit_from_earned = min(earned_income * phase_in_rate, max_credit)
@@ -1201,14 +1213,14 @@ def compute_tax(
 
     # Penalty applies if: (1) owed >= $1,000 AND (2) withholding/credits < required payment
     # Required payment = lesser of 90% current year tax or 100% prior year tax (110% if high AGI)
-    if result.line_37_owed >= ESTIMATED_TAX_PENALTY_THRESHOLD and prior_year_tax > 0:
-        current_year_required = result.line_24_total_tax * ESTIMATED_TAX_SAFE_HARBOR_PCT
+    if result.line_37_owed >= c.ESTIMATED_TAX_PENALTY_THRESHOLD and prior_year_tax > 0:
+        current_year_required = result.line_24_total_tax * c.ESTIMATED_TAX_SAFE_HARBOR_PCT
 
-        high_agi_threshold = ESTIMATED_TAX_HIGH_AGI_THRESHOLD[filing_status]
+        high_agi_threshold = c.ESTIMATED_TAX_HIGH_AGI_THRESHOLD[filing_status]
         if prior_year_agi > high_agi_threshold:
-            prior_year_required = prior_year_tax * ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI
+            prior_year_required = prior_year_tax * c.ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI
         else:
-            prior_year_required = prior_year_tax * ESTIMATED_TAX_PRIOR_YEAR_PCT
+            prior_year_required = prior_year_tax * c.ESTIMATED_TAX_PRIOR_YEAR_PCT
 
         result.estimated_tax_required = min(current_year_required, prior_year_required)
 
@@ -1218,7 +1230,7 @@ def compute_tax(
             # Underpayment = required - paid. Penalty = underpayment * rate * (time fraction)
             # Simplified: assume full year underpayment (4 quarters)
             underpayment = result.estimated_tax_required - total_timely_payments
-            result.estimated_tax_penalty = underpayment * ESTIMATED_TAX_PENALTY_RATE
+            result.estimated_tax_penalty = underpayment * c.ESTIMATED_TAX_PENALTY_RATE
             result.line_37_owed += result.estimated_tax_penalty
 
     # =======================================================================
