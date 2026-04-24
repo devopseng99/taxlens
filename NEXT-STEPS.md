@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-23 (v3.16.1)
+Updated: 2026-04-23 (v3.17.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -586,6 +586,31 @@ Pre-scaling infrastructure improvements for reliability and operability.
 **Modified files:**
 - `app/main.py` — Deep health, readiness endpoint, uptime tracking, graceful shutdown
 
+## Wave 35-36 — Audit Risk + Prior-Year Import (DEPLOYED — v3.17.0 API)
+
+Differentiation features that set TaxLens apart from basic tax calculators.
+
+**Delivered:**
+- [x] Audit risk scoring module (`audit_risk.py`): IRS SOI-based statistical comparison by AGI bracket
+- [x] 8 risk indicators: charitable, Schedule C expenses/losses, home office, rental loss, EITC+SE, income level, itemized
+- [x] Risk score 0-100 with low/medium/high overall rating, auto-included in tax draft response
+- [x] MCP tool `assess_audit_risk_tool` for agent-driven risk analysis
+- [x] Prior-year import module (`prior_year_import.py`): fillable 1040 PDF field extraction via pypdf
+- [x] Extracts wages, AGI, total tax, filing status, deductions, refund/owed with confidence rating
+- [x] `penalty_inputs` output for Form 2210 safe harbor (prior_year_tax, prior_year_agi)
+- [x] API endpoint `POST /tax-draft/import-prior-year` with file upload
+- [x] 536/536 unit tests (30 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/audit_risk.py` — Audit risk engine with SOI norms and 8 risk categories
+- `app/prior_year_import.py` — 1040 PDF extraction with field mappings
+- `tests/test_wave35_36_audit_import.py` — 30 tests (15 audit, 2 MCP, 9 money, 4 data model)
+
+**Modified files:**
+- `app/mcp_server.py` — `assess_audit_risk_tool` MCP tool
+- `app/tax_routes.py` — `audit_risk` in draft response + `/import-prior-year` endpoint
+- `app/main.py` — version bump to 3.17.0
+
 ## Future Enhancements
 
 - **MCP OAuth 2.0 implementation** (deferred — API key auth working)
@@ -596,5 +621,3 @@ Pre-scaling infrastructure improvements for reliability and operability.
 - **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
 - **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
 - **Tax engine remaining:** Depreciation (Form 4562), annualized installment method
-- **Audit risk scoring:** Statistical comparison to IRS norms by income bracket
-- **Prior-year import:** Upload previous 1040 PDF → OCR extract → pre-populate current year

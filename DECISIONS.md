@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-23 (v3.16.1 API + v2.6.0 Portal)
+Updated: 2026-04-23 (v3.17.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -373,6 +373,16 @@ Updated: 2026-04-23 (v3.16.1 API + v2.6.0 Portal)
 160. **Separate readiness from liveness** — `/health` is the liveness probe (always 200 unless process is dead). `/ready` is the readiness probe (503 when DB or storage unavailable). Kubernetes should use readiness to stop routing traffic during DB maintenance without killing the pod.
 
 161. **PostgreSQL backup via pg_dump in pod** — Backup runs `pg_dump` inside the PG pod (avoids needing pg_dump binaries on the host), streams through gzip, and copies to node storage via SSH. 7-day retention with automatic pruning. Restore instructions are printed after each backup.
+
+## Wave 35-36 — Audit Risk + Prior-Year Import (v3.17.0)
+
+162. **SOI-based audit risk, not prediction** — Uses IRS Statistics of Income public data to compare charitable giving ratios, expense ratios, and loss patterns against averages for the filer's AGI bracket. Explicitly disclaimed as educational — the IRS DIF score is secret and cannot be replicated. Risk score is additive (0-100) from independent flags.
+
+163. **Audit risk auto-included in tax draft** — Every `POST /tax-draft` response includes `audit_risk` in the JSON alongside the tax computation. No separate API call needed. MCP tool `assess_audit_risk_tool` also available for agents to assess risk on arbitrary scenarios.
+
+164. **Prior-year import via pypdf (not OCR)** — Reads fillable PDF form fields directly using pypdf. Much faster and more accurate than OCR for PDFs output by tax software. Falls back to confidence="low" if no form fields found (scanned PDFs need OCR via the existing pipeline). Outputs `penalty_inputs` for Form 2210 safe harbor.
+
+165. **Field name mapping with fallbacks** — IRS fillable PDFs use field names like `f1_7`, `f1_21`, etc. Some PDFs use full XFA paths like `topmostSubform[0].Page1[0].f1_7[0]`. The parser tries direct match, then alt mappings, then base name extraction.
 
 ## PDF Template Provenance
 
