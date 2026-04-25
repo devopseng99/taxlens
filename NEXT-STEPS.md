@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.44.0)
+Updated: 2026-04-24 (v3.45.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,22 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 66 — Intelligent Tax Optimization Engine (v3.45.0) — 2026-04-24
+
+- [x] app/tax_optimizer.py: 15-strategy optimization engine
+- [x] Strategies: HSA, IRA, 401(k), charitable bunching, loss harvesting, QBI, Roth conversion, SALT workaround, filing status, mega backdoor Roth, dependent care FSA, energy credits, estimated tax timing, student loan, standard vs itemized
+- [x] Each recommendation: strategy, category, estimated_savings, difficulty, irs_risk, description, action_items
+- [x] Sorted by estimated savings, conditional applicability
+- [x] POST /optimize endpoint with full parameter set
+- [x] 1134/1134 unit tests (18 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/tax_optimizer.py` — 15-strategy optimizer with Recommendation/OptimizationPlan dataclasses
+- `tests/test_wave66_tax_optimizer.py` — 18 tests (4 basic, 8 strategies, 2 fields, 2 edge, 2 endpoint)
+
+**Modified files:**
+- `app/main.py` — POST /optimize endpoint, version 3.45.0
 
 ### Wave 65 — Tax Projection + Multi-Year Planning (v3.44.0) — 2026-04-24
 

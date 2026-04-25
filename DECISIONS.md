@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.44.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.45.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -619,6 +619,10 @@ Updated: 2026-04-24 (v3.44.0 API + v2.6.0 Portal)
 189. **Roth conversion optimizer uses binary search** — 50 iterations of binary search gives sub-dollar precision. Checks marginal bracket rate (computed from brackets), not effective rate. If already above target bracket, returns 0 conversion immediately.
 
 190. **Marginal rate computed from brackets, not TaxResult** — TaxResult doesn't store marginal_rate. `_marginal_rate()` helper walks the bracket table to find the rate at the taxpayer's taxable income level. This is used for both projection display and Roth optimizer targeting.
+
+191. **Optimizer uses approximate marginal rate for savings** — Estimated savings use 22% as a common middle-bracket approximation rather than computing exact savings for each strategy. This is intentional: the optimizer is advisory, not a precise calculator. Exact numbers come from rerunning compute_tax with the strategy applied.
+
+192. **15 strategies with conditional applicability** — Strategies are only shown when applicable (e.g., 401k suggestions only if has_401k=True). The `applicable` flag excludes informational-only items from the savings total. Sorted by estimated_savings descending.
 
 ## PDF Template Provenance
 

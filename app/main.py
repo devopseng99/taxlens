@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.44.0)")
+    logger.info("TaxLens API starting (v3.45.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.44.0",
+    version="3.45.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.44.0",
+        "version": "3.45.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -470,7 +470,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.44.0",
+        "version": "3.45.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -913,6 +913,64 @@ async def roth_optimizer(
         "target_bracket_top": result.target_bracket_top,
         "total_tax_without_conversion": result.total_tax_without_conversion,
         "total_tax_with_conversion": result.total_tax_with_conversion,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tax Optimization
+# ---------------------------------------------------------------------------
+@app.post("/optimize", tags=["Planning"])
+async def optimize_taxes(
+    wages: float = Query(...),
+    federal_withheld: float = Query(default=0),
+    filing_status: str = Query(default="single"),
+    mortgage_interest: float = Query(default=0),
+    property_tax: float = Query(default=0),
+    state_income_tax: float = Query(default=0),
+    charitable_cash: float = Query(default=0),
+    interest_income: float = Query(default=0),
+    business_income: float = Query(default=0),
+    has_hsa: bool = Query(default=False),
+    hsa_contribution: float = Query(default=0),
+    age: int = Query(default=35),
+    num_dependents: int = Query(default=0),
+    ira_contribution: float = Query(default=0),
+    has_401k: bool = Query(default=False),
+    contribution_401k: float = Query(default=0),
+    capital_gains_long: float = Query(default=0),
+    capital_losses: float = Query(default=0),
+    _auth: str = Depends(require_auth),
+):
+    """Get personalized tax optimization recommendations with estimated savings."""
+    from tax_optimizer import get_optimization_plan
+    plan = get_optimization_plan(
+        wages=wages, federal_withheld=federal_withheld,
+        filing_status=filing_status, mortgage_interest=mortgage_interest,
+        property_tax=property_tax, state_income_tax=state_income_tax,
+        charitable_cash=charitable_cash, interest_income=interest_income,
+        business_income=business_income, has_hsa=has_hsa,
+        hsa_contribution=hsa_contribution, age=age,
+        num_dependents=num_dependents, ira_contribution=ira_contribution,
+        has_401k=has_401k, contribution_401k=contribution_401k,
+        capital_gains_long=capital_gains_long, capital_losses=capital_losses,
+    )
+    return {
+        "total_potential_savings": plan.total_potential_savings,
+        "current_tax": plan.current_tax,
+        "optimized_tax": plan.optimized_tax,
+        "recommendation_count": len(plan.recommendations),
+        "recommendations": [
+            {
+                "strategy": r.strategy,
+                "category": r.category,
+                "estimated_savings": r.estimated_savings,
+                "difficulty": r.difficulty,
+                "irs_risk": r.irs_risk,
+                "description": r.description,
+                "action_items": r.action_items,
+            }
+            for r in plan.recommendations
+        ],
     }
 
 
