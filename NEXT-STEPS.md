@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.53.0 — 74 waves complete)
+Updated: 2026-04-25 (v3.54.0 — 75 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1370,7 +1370,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 3. **TCJA sunset 2025 vs 2026 comparison engine** — Tax Cuts and Jobs Act provisions expire end of 2025: brackets revert to 2017 rates, SALT cap ($10K) removed, QBI deduction (§199A) expires, CTC drops from $2,000 to $1,000, standard deduction roughly halves. Build `_YEAR_2026_SUNSET` config and comparison endpoint. This is the #1 planning question every client will ask in 2025.
 
-4. **QBI SSTB field on BusinessIncome** — Specified Service Trade or Business classification determines whether QBI phases out completely above the threshold (it does for SSTB). Currently missing from the input schema — high-income professionals (doctors, lawyers, consultants) get incorrect QBI results.
+4. ~~**QBI SSTB field on BusinessIncome**~~ — **RESOLVED in Wave 75 (v3.54.0)**. Added is_sstb + w2_wages_paid to BusinessIncome. SSTB QBI phases to $0 above threshold.
 
 5. **compare_scenarios should return marginal rates** — Current comparison output shows total tax and effective rate but not marginal rate. Marginal rate is the #1 thing users compare between scenarios.
 
@@ -1402,7 +1402,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 **Correctness (wrong answers):**
 - ~~Solo 401(k)/SEP modeled as Schedule C expense~~ (FIXED v3.53.0 Wave 74)
-- QBI missing SSTB classification for high-income phaseout
+- ~~QBI missing SSTB classification for high-income phaseout~~ (FIXED v3.54.0 Wave 75)
 - No SEP-IRA or SIMPLE IRA contribution limits (only traditional IRA modeled)
 - Reasonable compensation not enforced for S-corp QBI
 - PTET elections not modeled (affects state tax for 20+ states)

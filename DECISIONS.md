@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.53.0 API + v2.6.0 Portal — 74 waves complete)
+Updated: 2026-04-25 (v3.54.0 API + v2.6.0 Portal — 75 waves complete)
 
 ## Architecture
 
@@ -673,6 +673,12 @@ Updated: 2026-04-25 (v3.53.0 API + v2.6.0 Portal — 74 waves complete)
 215. **Net SE income for contribution limits = profit − 50% of SE tax** — SEP-IRA's 25% limit and Solo 401(k)'s employer contribution are based on net self-employment income, which is Schedule C profit minus the deductible half of SE tax. This is the IRS-prescribed method — the contribution limit depends on the tax, which depends on the income, creating a circular reference solved by the IRS rate tables.
 
 216. **Three plan types with year-specific limits** — SEP-IRA (employer-only, 25% of net SE income up to $70K/2025), Solo 401(k) (employee deferral $23,500 + employer 25%, total $70K), SIMPLE IRA (employee $16,500 + 3% employer match). Catch-up contributions: Solo 401(k) $7,500, SIMPLE $3,500 (both age 50+). Limits stored per-year in tax_config.py.
+
+## Wave 75 — QBI SSTB Classification (v3.54.0)
+
+217. **SSTB phaseout is fundamentally different from non-SSTB** — For Specified Service Trades or Businesses above the QBI threshold, QBI phases to $0 (not the W-2 wage limitation). In the phaseout range, the QBI amount itself is proportionally reduced: `applicable_QBI = total_QBI × (1 - phase_fraction)`, then 20% is applied. Non-SSTB uses a different formula: reduce excess of full 20% QBI over W-2 wage limitation. The distinction matters most for sole proprietors (no W-2 wages to themselves) — non-SSTB still gets $0 without employees, but the computation path and intermediate values differ.
+
+218. **w2_wages_paid on BusinessIncome enables non-SSTB W-2 limitation** — The W-2 wage limitation (`max(50% W-2, 25% W-2 + 2.5% UBIA)`) requires knowing how much the business pays its employees. Added `w2_wages_paid` field alongside `is_sstb`. For most Schedule C sole proprietors this is $0, but businesses with employees (e.g., a restaurant) can claim the W-2 limitation.
 
 213. **QBI needs SSTB classification** — The BusinessIncome schema lacks a `is_sstb` field (Specified Service Trade or Business). For high-income filers above the QBI threshold, SSTB status means QBI phases to $0 (not to the W-2 wage limitation). Without this field, lawyers/doctors/consultants get incorrect QBI results above ~$192K single / ~$384K MFJ.
 
