@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.47.0)
+Updated: 2026-04-24 (v3.48.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,24 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 69 — Webhook Notifications + Event System (v3.48.0) — 2026-04-24
+
+- [x] app/webhooks.py: HMAC-SHA256 signed webhook delivery system
+- [x] 5 event types: draft.created, draft.updated, document.uploaded, document.ocr_complete, plan.upgraded
+- [x] Endpoint CRUD: create, list, update, delete with per-tenant isolation
+- [x] Event dispatch: matches tenant + event type + active status
+- [x] Delivery log with configurable limit
+- [x] Test endpoint for verification
+- [x] POST/GET /webhooks, DELETE /webhooks/{id}, POST /webhooks/{id}/test, GET /webhooks/{id}/deliveries
+- [x] 1182/1182 unit tests (21 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/webhooks.py` — WebhookEndpoint, WebhookDelivery, WebhookEvent, dispatch_event(), HMAC signing
+- `tests/test_wave69_webhooks.py` — 21 tests (4 signing, 5 CRUD, 5 dispatch, 2 delivery log, 2 test endpoint, 1 event log, 2 API)
+
+**Modified files:**
+- `app/main.py` — Webhook CRUD + test + delivery endpoints, version 3.48.0
 
 ### Wave 68 — Withholding Analyzer / W-4 Recommendations (v3.47.0) — 2026-04-24
 

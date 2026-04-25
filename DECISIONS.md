@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.47.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.48.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -631,6 +631,10 @@ Updated: 2026-04-24 (v3.47.0 API + v2.6.0 Portal)
 195. **Withholding analyzer uses projected full-year extrapolation** — YTD withholding is divided by elapsed pay periods and multiplied by total periods to project annual withholding. This gives accurate mid-year recommendations even though the actual per-period amount may vary.
 
 196. **Safe harbor: 110% for high-income filers** — AGI > $75k (single) or $150k (MFJ) triggers 110% safe harbor threshold per IRS rules. Below that, 100% of current year tax is the safe harbor. Penalty risk flagged only when both under 90% of current tax AND under safe harbor AND gap > $1,000.
+
+197. **Webhooks use in-memory store with HMAC-SHA256 signing** — Production would use DB tables (webhook_endpoints, webhook_deliveries), but the in-memory store allows the full API contract to work without migrations. Delivery simulation returns 200; real httpx delivery is a future enhancement.
+
+198. **5 webhook event types** — draft.created, draft.updated, document.uploaded, document.ocr_complete, plan.upgraded. Event type validation on endpoint creation prevents typos. Test endpoint sends a special "test" event type.
 
 ## PDF Template Provenance
 

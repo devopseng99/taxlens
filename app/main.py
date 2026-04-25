@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.47.0)")
+    logger.info("TaxLens API starting (v3.48.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.47.0",
+    version="3.48.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.47.0",
+        "version": "3.48.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -470,7 +470,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.47.0",
+        "version": "3.48.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -1022,6 +1022,62 @@ async def withholding_check(
         "effective_rate": round(result.effective_rate, 4),
         "marginal_rate": result.marginal_rate,
     }
+
+
+# ---------------------------------------------------------------------------
+# Webhook Management
+# ---------------------------------------------------------------------------
+@app.post("/webhooks", tags=["Webhooks"])
+async def create_webhook(
+    url: str = Query(...),
+    events: str = Query(..., description="Comma-separated event types"),
+    description: str = Query(default=""),
+    _auth: str = Depends(require_auth),
+    request: Request = None,
+):
+    """Register a webhook endpoint for event notifications."""
+    from webhooks import create_endpoint, EVENT_TYPES
+    tenant_id = getattr(request.state, "tenant_id", "default") if request else "default"
+    event_list = [e.strip() for e in events.split(",") if e.strip()]
+    ep = create_endpoint(tenant_id=tenant_id, url=url, events=event_list, description=description)
+    return {"id": ep.id, "url": ep.url, "events": ep.events, "secret": ep.secret, "active": ep.active}
+
+
+@app.get("/webhooks", tags=["Webhooks"])
+async def list_webhooks(
+    _auth: str = Depends(require_auth),
+    request: Request = None,
+):
+    """List all webhook endpoints for the current tenant."""
+    from webhooks import list_endpoints
+    tenant_id = getattr(request.state, "tenant_id", "default") if request else "default"
+    endpoints = list_endpoints(tenant_id)
+    return [{"id": ep.id, "url": ep.url, "events": ep.events, "active": ep.active, "description": ep.description} for ep in endpoints]
+
+
+@app.delete("/webhooks/{endpoint_id}", tags=["Webhooks"])
+async def delete_webhook(endpoint_id: str, _auth: str = Depends(require_auth)):
+    """Delete a webhook endpoint."""
+    from webhooks import delete_endpoint
+    if not delete_endpoint(endpoint_id):
+        raise HTTPException(404, "Webhook endpoint not found")
+    return {"deleted": True}
+
+
+@app.post("/webhooks/{endpoint_id}/test", tags=["Webhooks"])
+async def test_webhook(endpoint_id: str, _auth: str = Depends(require_auth)):
+    """Send a test event to a webhook endpoint."""
+    from webhooks import test_endpoint
+    delivery = test_endpoint(endpoint_id)
+    return {"delivery_id": delivery.id, "success": delivery.success, "status_code": delivery.status_code}
+
+
+@app.get("/webhooks/{endpoint_id}/deliveries", tags=["Webhooks"])
+async def list_deliveries(endpoint_id: str, limit: int = Query(default=50), _auth: str = Depends(require_auth)):
+    """Get delivery log for a webhook endpoint."""
+    from webhooks import get_deliveries
+    deliveries = get_deliveries(endpoint_id=endpoint_id, limit=limit)
+    return [{"id": d.id, "event_type": d.event_type, "success": d.success, "status_code": d.status_code, "attempt": d.attempt, "created_at": d.created_at} for d in deliveries]
 
 
 @app.post("/upload", response_model=DocumentMetadata)
