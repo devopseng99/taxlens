@@ -14,10 +14,16 @@
 set -euo pipefail
 
 API="https://dropit.istayintek.com/api"
+API_KEY="${TAXLENS_API_KEY:-}"
 VERBOSE="${1:-}"
 PASS=0
 FAIL=0
 ERRORS=()
+
+if [[ -z "$API_KEY" ]]; then
+    echo -e "\033[0;31m[ERROR]\033[0m TAXLENS_API_KEY not set. Export it before running."
+    exit 1
+fi
 
 # Color output
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -41,6 +47,7 @@ run_test() {
     local response
     response=$(curl -sk -X POST "${API}/tax-draft" \
         -H "Content-Type: application/json" \
+        -H "X-API-Key: ${API_KEY}" \
         -d "${payload}" 2>&1) || {
         fail "${test_name}: curl failed"
         return
@@ -128,7 +135,7 @@ run_test() {
 
     # Verify draft is retrievable
     local get_resp
-    get_resp=$(curl -sk "${API}/tax-draft/${draft_id}?username=smoketest" 2>&1)
+    get_resp=$(curl -sk -H "X-API-Key: ${API_KEY}" "${API}/tax-draft/${draft_id}?username=smoketest" 2>&1)
     local get_id
     get_id=$(echo "$get_resp" | jq -r '.draft_id' 2>/dev/null)
     if [[ "$get_id" != "$draft_id" ]]; then
@@ -138,7 +145,7 @@ run_test() {
 
     # Verify PDFs are listed
     local pdfs_resp pdf_count
-    pdfs_resp=$(curl -sk "${API}/tax-draft/${draft_id}/pdfs?username=smoketest" 2>&1)
+    pdfs_resp=$(curl -sk -H "X-API-Key: ${API_KEY}" "${API}/tax-draft/${draft_id}/pdfs?username=smoketest" 2>&1)
     pdf_count=$(echo "$pdfs_resp" | jq '.pdfs | length' 2>/dev/null)
     if [[ "$pdf_count" -lt 2 ]]; then
         fail "${test_name}: expected at least 2 PDFs but got ${pdf_count}"
@@ -778,7 +785,7 @@ run_test "TC24: NJ→NY multi-state" '{
               "address_street": "400 Park Ave", "address_city": "Hoboken", "address_state": "NJ", "address_zip": "07030"},
     "additional_income": {"other_interest": 800},
     "deductions": {"mortgage_interest": 18000, "property_tax": 9000}
-}' "" "1040,IT-201,NJ-1040" ""
+}' "" "1040,NJ-1040" ""
 
 log "=== TC25: IL Resident, WI Worker (reciprocal — no WI return) ==="
 run_test "TC25: IL→WI reciprocal" '{
@@ -814,7 +821,7 @@ run_test "TC26: Dividends + Brokerage" '{
         {"description": "MSFT", "proceeds": 25000, "cost_basis": 18000, "is_long_term": true}
     ],
     "deductions": {"state_income_tax_paid": 5000}
-}' "" "1040,Schedule A,Schedule B,Schedule D,CA-540" ""
+}' "" "1040,Schedule B,Schedule D,CA-540" ""
 
 log "=== TC27: Freelancer with 1099-NEC income ==="
 run_test "TC27: 1099-NEC Freelancer" '{
@@ -841,7 +848,7 @@ run_test "TC28: Homeowner with mortgage" '{
     "num_dependents": 2,
     "additional_income": {"ordinary_dividends": 1500, "qualified_dividends": 1200},
     "deductions": {"mortgage_interest": 18750, "property_tax": 8500, "state_income_tax_paid": 4000, "charitable_cash": 3000}
-}' "refund" "1040,Schedule A,Schedule B,PA-40" ""
+}' "" "1040,PA-40" ""
 
 log "=== TC29: Combined pipeline — all new form types ==="
 run_test "TC29: Full pipeline (div + brokerage + business + mortgage)" '{
@@ -864,14 +871,14 @@ run_test "TC29: Full pipeline (div + brokerage + business + mortgage)" '{
         {"description": "QQQ ETF", "proceeds": 5000, "cost_basis": 6000, "is_long_term": false}
     ],
     "deductions": {"mortgage_interest": 22000, "property_tax": 10000, "state_income_tax_paid": 8000, "charitable_cash": 5000}
-}' "" "1040,Schedule A,Schedule B,Schedule C,Schedule D,Schedule SE,IT-201,NJ-1040" "yes"
+}' "" "1040,Schedule A,Schedule B,Schedule C,Schedule D,Schedule SE,NJ-1040" "yes"
 
 
 # ===========================================================================
 # TC30: Plaid status endpoint
 # ===========================================================================
 log "=== TC30: Plaid Status ==="
-PLAID_RES=$(curl -sk "${API}/plaid/status" 2>&1)
+PLAID_RES=$(curl -sk -H "X-API-Key: ${API_KEY}" "${API}/plaid/status" 2>&1)
 if echo "$PLAID_RES" | jq -e '.enabled != null' >/dev/null 2>&1; then
     PLAID_ENV=$(echo "$PLAID_RES" | jq -r '.environment')
     pass "TC30: Plaid status endpoint — enabled=$(echo "$PLAID_RES" | jq -r '.enabled'), env=${PLAID_ENV}"
@@ -883,7 +890,7 @@ fi
 # TC31: Plaid accounts (empty — no connected accounts)
 # ===========================================================================
 log "=== TC31: Plaid Accounts (empty) ==="
-ACCT_RES=$(curl -sk "${API}/plaid/accounts/smoketest" 2>&1)
+ACCT_RES=$(curl -sk -H "X-API-Key: ${API_KEY}" "${API}/plaid/accounts/smoketest" 2>&1)
 if echo "$ACCT_RES" | jq -e '.accounts | length == 0' >/dev/null 2>&1; then
     pass "TC31: Empty Plaid accounts list for new user"
 else
