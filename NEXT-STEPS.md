@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.46.0)
+Updated: 2026-04-24 (v3.47.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,24 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 68 — Withholding Analyzer / W-4 Recommendations (v3.47.0) — 2026-04-24
+
+- [x] app/withholding_analyzer.py: gap analysis with full-year projection from YTD data
+- [x] WithholdingInput: wages, withheld_ytd, pay periods, target_refund, deductions, estimated payments
+- [x] WithholdingResult: projected tax/withholding, gap, penalty risk, W-4 recommendation
+- [x] Safe harbor: 100%/110% threshold based on AGI, penalty risk detection
+- [x] Target refund mode: specify desired refund, compute required extra withholding per period
+- [x] Marginal rate from bracket lookup (upper_limit, rate format)
+- [x] POST /withholding-check endpoint with full parameter set
+- [x] 1161/1161 unit tests (15 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/withholding_analyzer.py` — WithholdingInput, WithholdingResult, analyze_withholding()
+- `tests/test_wave68_withholding_analyzer.py` — 15 tests (5 basic, 3 W-4, 3 penalty, 2 rates, 2 endpoint)
+
+**Modified files:**
+- `app/main.py` — POST /withholding-check endpoint, version 3.47.0
 
 ### Wave 67 — Amended Return / Form 1040-X (v3.46.0) — 2026-04-24
 

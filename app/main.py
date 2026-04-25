@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.46.0)")
+    logger.info("TaxLens API starting (v3.47.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.46.0",
+    version="3.47.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.46.0",
+        "version": "3.47.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -470,7 +470,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.46.0",
+        "version": "3.47.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -971,6 +971,56 @@ async def optimize_taxes(
             }
             for r in plan.recommendations
         ],
+    }
+
+
+@app.post("/withholding-check", tags=["Planning"])
+async def withholding_check(
+    annual_wages: float = Query(...),
+    federal_withheld_ytd: float = Query(...),
+    pay_periods_per_year: int = Query(default=26),
+    pay_periods_elapsed: int = Query(default=0),
+    filing_status: str = Query(default="single"),
+    current_w4_extra: float = Query(default=0),
+    num_dependents: int = Query(default=0),
+    other_income: float = Query(default=0),
+    deductions_above_standard: float = Query(default=0),
+    estimated_payments: float = Query(default=0),
+    target_refund: float = Query(default=0),
+    _auth: str = Depends(require_auth),
+):
+    """Analyze withholding gap and recommend W-4 adjustments."""
+    from withholding_analyzer import WithholdingInput, analyze_withholding
+    inp = WithholdingInput(
+        filing_status=filing_status,
+        annual_wages=annual_wages,
+        federal_withheld_ytd=federal_withheld_ytd,
+        pay_periods_per_year=pay_periods_per_year,
+        pay_periods_elapsed=pay_periods_elapsed,
+        current_w4_extra=current_w4_extra,
+        num_dependents=num_dependents,
+        other_income=other_income,
+        deductions_above_standard=deductions_above_standard,
+        estimated_payments=estimated_payments,
+        target_refund=target_refund,
+    )
+    result = analyze_withholding(inp)
+    return {
+        "projected_tax": round(result.projected_tax, 2),
+        "projected_withholding": round(result.projected_withholding, 2),
+        "projected_estimated": round(result.projected_estimated, 2),
+        "projected_total_payments": round(result.projected_total_payments, 2),
+        "gap": round(result.gap, 2),
+        "gap_description": result.gap_description,
+        "at_risk_of_penalty": result.at_risk_of_penalty,
+        "safe_harbor_amount": round(result.safe_harbor_amount, 2),
+        "recommended_extra_per_period": result.recommended_extra_per_period,
+        "remaining_periods": result.remaining_periods,
+        "adjustment_description": result.adjustment_description,
+        "target_refund": result.target_refund,
+        "target_withholding": round(result.target_withholding, 2),
+        "effective_rate": round(result.effective_rate, 4),
+        "marginal_rate": result.marginal_rate,
     }
 
 

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.46.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.47.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -627,6 +627,10 @@ Updated: 2026-04-24 (v3.46.0 API + v2.6.0 Portal)
 193. **1040-X uses A/B/C column pattern** — Column A = original, Column B = net change (amended - original), Column C = corrected (A + B). This mirrors the official IRS Form 1040-X layout. 17 lines cover AGI, deductions, taxable income, tax, credits, other taxes, total tax, payments, overpayment, amount owed, plus Part II income breakdown.
 
 194. **Auto-generated explanation for 1040-X Part III** — When no custom explanation is provided, `compute_amended_return()` generates one by describing each material change (e.g., "AGI increased by $15,000"). This saves filers from manually writing the required explanation of changes.
+
+195. **Withholding analyzer uses projected full-year extrapolation** — YTD withholding is divided by elapsed pay periods and multiplied by total periods to project annual withholding. This gives accurate mid-year recommendations even though the actual per-period amount may vary.
+
+196. **Safe harbor: 110% for high-income filers** — AGI > $75k (single) or $150k (MFJ) triggers 110% safe harbor threshold per IRS rules. Below that, 100% of current year tax is the safe harbor. Penalty risk flagged only when both under 90% of current tax AND under safe harbor AND gap > $1,000.
 
 ## PDF Template Provenance
 
