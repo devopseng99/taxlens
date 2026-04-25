@@ -19,6 +19,7 @@ from tax_engine import (
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured, parse_1099r_from_ocr,
+    parse_1099misc_from_ocr, parse_1099g_from_ocr,
 )
 from pdf_generator import generate_all_pdfs
 from audit_risk import assess_audit_risk
@@ -300,6 +301,8 @@ class TaxDraftRequest(BaseModel):
     nec_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-NECs with OCR")
     mortgage_1098_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1098s with OCR")
     retirement_1099r_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-Rs with OCR")
+    misc_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-MISCs with OCR")
+    unemployment_1099g_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-Gs with OCR")
 
     # Structured brokerage data (1099-B — JSON import, not OCR)
     brokerage_transactions: list[BrokerageTransactionInput] = Field(default=[], description="Structured 1099-B transactions")
@@ -468,6 +471,30 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         dist = parse_1099r_from_ocr(fields)
         ocr_retirement_dists.append(dist)
 
+    # --- Parse 1099-MISC income from OCR ---
+    ocr_misc_other_income = 0.0
+    ocr_misc_rents = 0.0
+    ocr_misc_royalties = 0.0
+    ocr_misc_nec = 0.0
+    ocr_misc_withheld = 0.0
+    for proc_id in req.misc_1099_proc_ids:
+        ocr_data = load_ocr_result(req.username, proc_id)
+        fields = ocr_data.get("fields", {})
+        misc = parse_1099misc_from_ocr(fields)
+        ocr_misc_other_income += misc["other_income"]
+        ocr_misc_rents += misc["rents"]
+        ocr_misc_royalties += misc["royalties"]
+        ocr_misc_nec += misc["nonemployee_compensation"]
+        ocr_misc_withheld += misc["federal_withheld"]
+
+    # --- Parse 1099-G unemployment from OCR ---
+    ocr_unemployment = []
+    for proc_id in req.unemployment_1099g_proc_ids:
+        ocr_data = load_ocr_result(req.username, proc_id)
+        fields = ocr_data.get("fields", {})
+        uc = parse_1099g_from_ocr(fields)
+        ocr_unemployment.append(uc)
+
     # --- Parse 1099-B structured brokerage transactions ---
     brokerage_txns = parse_1099b_from_structured(
         [t.model_dump() for t in req.brokerage_transactions]
@@ -540,8 +567,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         ordinary_dividends=ocr_ordinary_div + plaid_ordinary_div + req.additional_income.ordinary_dividends,
         qualified_dividends=ocr_qualified_div + plaid_qualified_div + req.additional_income.qualified_dividends,
         capital_transactions=cap_txns,
-        other_income=req.additional_income.other_income,
-        other_income_description=req.additional_income.other_income_description,
+        other_income=req.additional_income.other_income + ocr_misc_other_income + ocr_misc_royalties,
+        other_income_description=req.additional_income.other_income_description or ("1099-MISC income" if ocr_misc_other_income + ocr_misc_royalties > 0 else ""),
     )
 
     # --- Build deductions ---
@@ -746,6 +773,12 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for u in req.unemployment_benefits
     ] if req.unemployment_benefits else None
 
+    # Merge OCR-parsed 1099-G unemployment benefits
+    if ocr_unemployment:
+        if unemployment_list is None:
+            unemployment_list = []
+        unemployment_list.extend(ocr_unemployment)
+
     # --- Build education expenses ---
     edu_list = [
         EducationExpense(
@@ -804,7 +837,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         residence_state=req.residence_state,
         work_states=req.work_states,
         days_worked_by_state=req.days_worked_by_state or None,
-        additional_withholding=ocr_div_withheld + nec_withheld,
+        additional_withholding=ocr_div_withheld + nec_withheld + ocr_misc_withheld,
         rental_properties=rental_list,
         hsa_contributions=hsa_list,
         energy_improvements=energy_list,

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.38.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.39.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -589,6 +589,12 @@ Updated: 2026-04-24 (v3.38.0 API + v2.6.0 Portal)
 174. **Smoke test as CronJob, not external monitor** — In-cluster CronJob (`taxlens-smoke-test`) runs every 30 minutes checking `/health`, `/ready`, `/docs`, `/metrics`. Catches service degradation inside the cluster network without external monitoring infrastructure. Failed jobs retained (3) for debugging, successful jobs trimmed (1).
 
 175. **Backup secret from existing `taxlens-pg-secret`** — PG backup CronJob reads `PGPASSWORD` from the same `taxlens-pg-secret` used by the PostgreSQL StatefulSet. No new secrets to manage.
+
+176. **1099-MISC categorized income routing** — `parse_1099misc_from_ocr()` returns a dict with categorized income: rents → rental/other, royalties → Schedule E other_income, Box 7 NEC → self-employment, Boxes 3/5/8/9/10 → other_income. This allows proper routing of each income type to the correct tax schedule rather than lumping everything into one category.
+
+177. **1099-G OCR returns UnemploymentCompensation directly** — `parse_1099g_from_ocr()` returns the `UnemploymentCompensation` dataclass directly (not a dict), matching the existing engine type. OCR-parsed 1099-G entries are merged into the unemployment_list alongside manually entered entries, using the same extend pattern as 1099-R retirement distributions.
+
+178. **1099-MISC withholding added to additional_withholding** — Federal withholding from 1099-MISC (Box 4) is included in `additional_withholding` alongside 1099-DIV and 1099-NEC withholding, ensuring all non-W-2 withholding flows to Line 25d correctly.
 
 ## PDF Template Provenance
 

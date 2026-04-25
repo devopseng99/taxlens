@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.38.0)
+Updated: 2026-04-24 (v3.39.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,25 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 60 — 1099-MISC + 1099-G OCR Parsers (v3.39.0) — 2026-04-24
+
+- [x] parse_1099misc_from_ocr(): categorized extraction (rents, royalties, other, NEC, medical, withheld)
+- [x] 14-box extraction: Boxes 1-10 with proper income routing per category
+- [x] parse_1099g_from_ocr(): returns UnemploymentCompensation directly from OCR fields
+- [x] State extraction from Box10a with PayerState fallback
+- [x] misc_1099_proc_ids + unemployment_1099g_proc_ids on TaxDraftRequest
+- [x] 1099-MISC income routed: rents/royalties → other_income, NEC → businesses, withheld → additional_withholding
+- [x] OCR-parsed 1099-G entries merged into unemployment_list
+- [x] 1037/1037 unit tests (21 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave60_1099misc_1099g.py` — 21 tests (8 MISC parser, 5 G parser, 6 integration, 2 callable)
+
+**Modified files:**
+- `app/tax_engine.py` — parse_1099misc_from_ocr(), parse_1099g_from_ocr() functions
+- `app/tax_routes.py` — imports, proc_id fields, OCR loops, income/unemployment merge
+- `app/main.py` — version 3.39.0
 
 ### Wave 59 — 1099-R OCR Parser + PDF Generation (v3.38.0) — 2026-04-24
 

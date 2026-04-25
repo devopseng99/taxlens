@@ -1231,6 +1231,75 @@ def parse_1099r_from_ocr(ocr_fields: dict) -> RetirementDistribution:
     )
 
 
+def parse_1099misc_from_ocr(ocr_fields: dict) -> dict:
+    """Extract income from 1099-MISC OCR result.
+
+    Azure model: prebuilt-tax.us.1099MISC
+    Returns dict with categorized income:
+    - rents (Box 1) → RentalProperty or other_income
+    - royalties (Box 2) → other_income (Schedule E Part I)
+    - other_income (Box 3) → other_income
+    - fishing_boat_proceeds (Box 5)
+    - medical_payments (Box 6)
+    - nonemployee_compensation (Box 7 — pre-2020, now on 1099-NEC)
+    - substitute_payments (Box 8)
+    - crop_insurance (Box 9)
+    - attorney_fees (Box 10)
+    - excess_golden_parachute (Box 13)
+    - federal_withheld (Box 4)
+    """
+    rents = _parse_money(_get_field_value(ocr_fields, "Box1"))
+    royalties = _parse_money(_get_field_value(ocr_fields, "Box2"))
+    other = _parse_money(_get_field_value(ocr_fields, "Box3"))
+    withheld = _parse_money(_get_field_value(ocr_fields, "Box4"))
+    fishing = _parse_money(_get_field_value(ocr_fields, "Box5"))
+    medical = _parse_money(_get_field_value(ocr_fields, "Box6"))
+    nec = _parse_money(_get_field_value(ocr_fields, "Box7"))
+    substitute = _parse_money(_get_field_value(ocr_fields, "Box8"))
+    crop = _parse_money(_get_field_value(ocr_fields, "Box9"))
+    attorney = _parse_money(_get_field_value(ocr_fields, "Box10"))
+
+    payer = ocr_fields.get("Payer", {})
+    payer_name = ""
+    if isinstance(payer.get("value"), dict):
+        payer_name = str(payer["value"].get("Name", {}).get("value", ""))
+    elif isinstance(payer.get("value"), str):
+        payer_name = payer["value"]
+
+    return {
+        "payer_name": payer_name or "1099-MISC Payer",
+        "rents": rents,
+        "royalties": royalties,
+        "other_income": other + fishing + substitute + crop + attorney,
+        "medical_payments": medical,
+        "nonemployee_compensation": nec,
+        "federal_withheld": withheld,
+        "total_income": rents + royalties + other + fishing + nec + substitute + crop + attorney,
+    }
+
+
+def parse_1099g_from_ocr(ocr_fields: dict) -> UnemploymentCompensation:
+    """Extract unemployment compensation from 1099-G OCR result.
+
+    Azure model: prebuilt-tax.us.1099G
+    Returns UnemploymentCompensation dataclass.
+    """
+    compensation = _parse_money(_get_field_value(ocr_fields, "Box1"))
+    withheld = _parse_money(_get_field_value(ocr_fields, "Box4"))
+    state_withheld = _parse_money(_get_field_value(ocr_fields, "Box11"))
+
+    # State from Box 10a or separate field
+    state = str(_get_field_value(ocr_fields, "Box10a") or
+                _get_field_value(ocr_fields, "PayerState") or "").strip()
+
+    return UnemploymentCompensation(
+        state=state,
+        compensation=compensation,
+        federal_withheld=withheld,
+        state_withheld=state_withheld,
+    )
+
+
 def parse_1099b_from_structured(data: list[dict]) -> list[CapitalTransaction]:
     """Parse structured 1099-B transaction data (JSON/CSV import, not OCR).
 
