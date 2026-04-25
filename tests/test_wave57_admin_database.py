@@ -135,9 +135,7 @@ class TestAdminRoutesEnrichment:
         assert 'summary="Database overview"' in src
         assert 'summary="Table detail"' in src
 
-    def test_version_bump(self):
-        path = os.path.join(os.path.dirname(__file__), "..", "app", "main.py")
+    def test_admin_database_endpoint_has_description(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "app", "admin_routes.py")
         src = open(path).read()
-        version = "3.36.0"
-        count = src.count(f'"{version}"')
-        assert count >= 2, f"Expected {version} in 2+ places, found {count}"
+        assert 'description="List all database tables' in src

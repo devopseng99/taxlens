@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.36.0)
+Updated: 2026-04-24 (v3.37.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,22 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 58 — Landing Page Content API (v3.37.0) — 2026-04-24
+
+- [x] GET /content/about: mission, platform stats, technology stack, compliance info
+- [x] GET /content/security: data handling, encryption, RLS, audit logging, responsible disclosure
+- [x] GET /content/for-businesses: CPA/fintech/planning use cases, pricing tiers
+- [x] Content paths exempt from tenant context middleware
+- [x] Content tag in OpenAPI tags
+- [x] 999/999 unit tests (13 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave58_landing_content.py` — 13 tests (3 endpoints, 3 about, 2 security, 2 business, 3 integration)
+
+**Modified files:**
+- `app/main.py` — version 3.37.0, 3 content endpoints, Content openapi_tag
+- `app/middleware/tenant_context.py` — /content/ skip path
 
 ### Wave 57 — Admin Database Explorer (v3.36.0) — 2026-04-24
 

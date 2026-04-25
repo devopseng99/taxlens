@@ -79,7 +79,7 @@ class TenantContextMiddleware:
         path = request.url.path
 
         # Skip tenant context for health/docs/MCP
-        if path in _SKIP_PATHS or path.startswith("/docs") or path.startswith("/openapi") or path.startswith("/postgrest-openapi"):
+        if path in _SKIP_PATHS or path.startswith("/docs") or path.startswith("/openapi") or path.startswith("/postgrest-openapi") or path.startswith("/content/"):
             _set_state(request, None)
             await self.app(scope, receive, send)
             return

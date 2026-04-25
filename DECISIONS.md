@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.36.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.37.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,12 @@ Updated: 2026-04-24 (v3.36.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 58 — Landing Page Content API (v3.37.0)
+
+242. **Content endpoints serve structured JSON, not HTML** — `/content/about`, `/content/security`, and `/content/for-businesses` return structured JSON that any frontend (Astro, React, static site generator) can consume. This decouples content from presentation — the API is the single source of truth for platform capabilities, pricing, and security details.
+
+243. **Content paths exempt from tenant context** — Landing page content is public. Paths starting with `/content/` skip tenant context middleware, matching the pattern used for `/docs/` and `/billing/plans`.
 
 ## Wave 57 — Admin Database Explorer (v3.36.0)
 

@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.36.0)")
+    logger.info("TaxLens API starting (v3.37.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.36.0",
+    version="3.37.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -101,6 +101,7 @@ app = FastAPI(
         {"name": "Monitoring", "description": "Usage tracking and admin monitoring"},
         {"name": "Documentation", "description": "API guides, MCP integration, PostgREST spec"},
         {"name": "oauth", "description": "OAuth 2.0 token endpoint (RFC 6749 + PKCE)"},
+        {"name": "Content", "description": "Landing page content (about, security, for-businesses)"},
     ],
 )
 
@@ -344,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.36.0",
+        "version": "3.37.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -469,7 +470,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.36.0",
+        "version": "3.37.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -586,6 +587,122 @@ async def mcp_guide():
             "Compare standard deduction vs itemized with $25K mortgage interest",
             "How much should I pay in estimated taxes per quarter?",
         ],
+    }
+
+
+@app.get(
+    "/content/about",
+    summary="About page content",
+    tags=["Content"],
+)
+async def about_content():
+    """Structured content for the /about landing page."""
+    return {
+        "title": "About TaxLens",
+        "tagline": "Agentic Tax Intelligence for Everyone",
+        "mission": (
+            "TaxLens makes tax computation transparent, accessible, and programmable. "
+            "Built for CPAs, tax professionals, and developers who need accurate IRS-compliant "
+            "calculations without black-box software."
+        ),
+        "platform": {
+            "forms_supported": "53+ IRS forms and schedules",
+            "states": "10 state tax engines (IL, CA, NY, TX, FL, PA, OH, GA, NC, NJ)",
+            "ocr_types": "8 document types (W-2, 1099-INT/DIV/NEC/MISC/B, 1098)",
+            "pdf_generators": "29+ IRS-compliant PDF generators",
+            "api_endpoints": "60+ REST API endpoints",
+            "mcp_tools": "9 AI agent tools via Model Context Protocol",
+        },
+        "technology": {
+            "api": "FastAPI (Python 3.11) with PostgREST + PostgreSQL",
+            "security": "Multi-tenant isolation via RLS, SHA-256 hashed API keys, OAuth 2.0 + PKCE",
+            "deployment": "Kubernetes (RKE2) with Helm charts, Cloudflare tunnel",
+            "monitoring": "Prometheus metrics, structured JSON logging",
+        },
+        "compliance": {
+            "tax_years": ["2024", "2025"],
+            "irs_forms": "Uses official IRS fillable PDF templates",
+            "accuracy": "896+ unit tests covering edge cases, AMT, NIIT, phaseouts",
+        },
+    }
+
+
+@app.get(
+    "/content/security",
+    summary="Security page content",
+    tags=["Content"],
+)
+async def security_content():
+    """Structured content for the /security landing page."""
+    return {
+        "title": "Security & Data Handling",
+        "overview": (
+            "TaxLens is designed with security-first principles. All tax data is "
+            "tenant-isolated, encrypted in transit, and never shared across accounts."
+        ),
+        "data_handling": {
+            "encryption_in_transit": "TLS 1.3 via Cloudflare tunnel (zero-trust)",
+            "storage": "Local PVC on Kubernetes — no cloud storage, no third-party access",
+            "multi_tenant_isolation": "PostgreSQL Row-Level Security (RLS) per tenant_id",
+            "api_key_storage": "SHA-256 hashed — raw keys never stored",
+            "oauth_tokens": "SHA-256 hashed with TTL-based expiry and rotation",
+        },
+        "authentication": {
+            "methods": ["API Key (X-API-Key)", "OAuth 2.0 Bearer Token", "PKCE S256"],
+            "admin_access": "Separate admin key, not API key",
+            "rate_limiting": "Per-tenant token bucket + per-IP sliding window",
+        },
+        "infrastructure": {
+            "kubernetes": "RKE2 on dedicated hardware",
+            "no_cloud_vendors": "No AWS/GCP/Azure for core data storage",
+            "ocr_processing": "Azure Document Intelligence (stateless, no data retention)",
+            "audit_logging": "All CRUD operations logged via PostgreSQL triggers",
+        },
+        "responsible_disclosure": {
+            "contact": "security@istayintek.com",
+            "scope": "API endpoints, authentication, data isolation",
+        },
+    }
+
+
+@app.get(
+    "/content/for-businesses",
+    summary="Business use cases",
+    tags=["Content"],
+)
+async def for_businesses_content():
+    """Structured content for the /for-businesses landing page."""
+    return {
+        "title": "TaxLens for Businesses",
+        "subtitle": "Built for CPA firms, tax professionals, and fintech developers",
+        "use_cases": [
+            {
+                "title": "CPA / EA Firms",
+                "description": "Multi-client tax computation via API. Upload W-2s and 1099s, "
+                               "get complete returns with PDFs. No per-return software licenses.",
+                "features": ["Multi-tenant client isolation", "Batch document upload",
+                             "PDF package with cover letter", "Audit risk assessment"],
+            },
+            {
+                "title": "Fintech Integration",
+                "description": "Embed tax computation in your app via REST API or MCP. "
+                               "9 AI agent tools for conversational tax planning.",
+                "features": ["OAuth 2.0 + PKCE authentication", "MCP for AI agents",
+                             "Webhook notifications", "Stripe billing integration"],
+            },
+            {
+                "title": "Tax Planning",
+                "description": "Scenario comparison, quarterly estimates, withholding analysis. "
+                               "Help clients optimize their tax position year-round.",
+                "features": ["Side-by-side scenario comparison", "Quarterly payment calculator",
+                             "Standard vs itemized optimization", "Multi-state support"],
+            },
+        ],
+        "pricing": {
+            "starter": {"price": "$29/mo", "computations": "50/day", "features": "Core forms + OCR"},
+            "professional": {"price": "$99/mo", "computations": "500/day", "features": "All forms + MCP + Plaid"},
+            "enterprise": {"price": "$299/mo", "computations": "Unlimited", "features": "Everything + priority support"},
+        },
     }
 
 
