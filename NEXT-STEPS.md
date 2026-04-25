@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.42.0)
+Updated: 2026-04-24 (v3.43.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,25 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 64 — Scenario Comparison API + Tax Calendar (v3.43.0) — 2026-04-24
+
+- [x] GET /tax-calendar: 11 federal IRS deadlines + 10 state deadline sets
+- [x] State-specific deadlines via ?state= query param
+- [x] TX/FL empty (no income tax)
+- [x] POST /compare-scenarios: 2-4 scenarios, side-by-side with deltas from base
+- [x] Result fields: total_income, AGI, taxable_income, total_tax, rates, refund/owed
+- [x] tax_delta and refund_delta computed from first scenario
+- [x] Planning tag in OpenAPI
+- [x] Tax calendar exempt from tenant context middleware
+- [x] 1097/1097 unit tests (16 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave64_scenarios_calendar.py` — 16 tests (8 calendar, 8 scenarios)
+
+**Modified files:**
+- `app/main.py` — _TAX_CALENDAR_2025, _STATE_DEADLINES, tax_calendar endpoint, compare_scenarios_api endpoint
+- `app/middleware/tenant_context.py` — /tax-calendar skip path
 
 ### Wave 63 — Batch Document Upload + Document Manager (v3.42.0) — 2026-04-24
 

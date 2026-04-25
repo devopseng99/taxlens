@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.42.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.43.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -609,6 +609,10 @@ Updated: 2026-04-24 (v3.42.0 API + v2.6.0 Portal)
 184. **Batch analyze uses asyncio.gather for parallel OCR** — Multiple documents are analyzed in parallel via `asyncio.gather()`, with per-document error isolation. One failed OCR doesn't block others.
 
 185. **OCR correction merges fields, doesn't replace** — `PATCH /documents/{proc_id}/ocr-result` merges corrections into existing fields. Scalar values get wrapped in `{"value": ...}`. A `manually_corrected` flag is set for audit trail.
+
+186. **Tax calendar is static data, not computed** — IRS deadlines for the 2025 tax year are hardcoded as `_TAX_CALENDAR_2025`. State deadlines in `_STATE_DEADLINES` for 10 states. This is intentional — tax dates don't change frequently and hardcoding ensures correctness without an external data source.
+
+187. **Scenario comparison computes deltas from first scenario** — The first scenario in the list is the "base". All subsequent scenarios include `tax_delta` and `refund_delta` computed against the base. This provides a clear comparison point without requiring the client to compute differences.
 
 ## PDF Template Provenance
 

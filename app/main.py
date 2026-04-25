@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.42.0)")
+    logger.info("TaxLens API starting (v3.43.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.42.0",
+    version="3.43.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.42.0",
+        "version": "3.43.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -470,7 +470,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.42.0",
+        "version": "3.43.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -717,6 +717,124 @@ async def whoami(request: Request, _auth: str = Depends(require_auth)):
         "role": getattr(request.state, "role", None),
         "db_enabled": DB_ENABLED,
     }
+
+
+# ---------------------------------------------------------------------------
+# Tax Calendar
+# ---------------------------------------------------------------------------
+_TAX_CALENDAR_2025 = [
+    {"date": "2026-01-15", "event": "Q4 2025 estimated tax payment due", "form": "1040-ES"},
+    {"date": "2026-01-31", "event": "W-2 and 1099 forms due to taxpayers", "form": "W-2/1099"},
+    {"date": "2026-02-18", "event": "1099-B due to taxpayers (brokerages)", "form": "1099-B"},
+    {"date": "2026-03-15", "event": "S-Corp / Partnership returns due (Form 1065/1120-S)", "form": "1065/1120-S"},
+    {"date": "2026-04-15", "event": "Individual tax return due (Form 1040)", "form": "1040"},
+    {"date": "2026-04-15", "event": "Q1 2026 estimated tax payment due", "form": "1040-ES"},
+    {"date": "2026-06-15", "event": "Q2 2026 estimated tax payment due", "form": "1040-ES"},
+    {"date": "2026-06-15", "event": "Automatic extension for US citizens abroad", "form": "1040"},
+    {"date": "2026-09-15", "event": "Q3 2026 estimated tax payment due", "form": "1040-ES"},
+    {"date": "2026-09-15", "event": "Extended partnership/S-Corp returns due", "form": "1065/1120-S"},
+    {"date": "2026-10-15", "event": "Extended individual return due (Form 4868)", "form": "1040"},
+]
+
+_STATE_DEADLINES = {
+    "CA": [{"date": "2026-04-15", "event": "CA Form 540 due"}, {"date": "2026-10-15", "event": "CA extended return due"}],
+    "NY": [{"date": "2026-04-15", "event": "NY IT-201/IT-203 due"}],
+    "IL": [{"date": "2026-04-15", "event": "IL-1040 due"}],
+    "NJ": [{"date": "2026-04-15", "event": "NJ-1040 due"}],
+    "PA": [{"date": "2026-04-15", "event": "PA-40 due"}],
+    "GA": [{"date": "2026-04-15", "event": "GA Form 500 due"}],
+    "NC": [{"date": "2026-04-15", "event": "NC D-400 due"}],
+    "OH": [{"date": "2026-04-15", "event": "OH IT-1040 due"}],
+    "TX": [],
+    "FL": [],
+}
+
+
+@app.get("/tax-calendar", tags=["Planning"])
+async def tax_calendar(
+    state: str = Query(default="", description="State code for state-specific deadlines"),
+):
+    """Return IRS tax calendar deadlines for 2025 tax year with optional state deadlines."""
+    result = {"federal": _TAX_CALENDAR_2025}
+    if state:
+        state_upper = state.upper()
+        state_events = _STATE_DEADLINES.get(state_upper, [])
+        result["state"] = state_events
+        result["state_code"] = state_upper
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Scenario Comparison (API wrapper for MCP tool)
+# ---------------------------------------------------------------------------
+@app.post("/compare-scenarios", tags=["Planning"])
+async def compare_scenarios_api(
+    scenarios: list[dict],
+    _auth: str = Depends(require_auth),
+):
+    """Compare 2-4 tax filing scenarios side-by-side.
+
+    Each scenario dict should have: label, filing_status, wages, and
+    optional fields matching compute_tax parameters.
+    """
+    if len(scenarios) < 2:
+        raise HTTPException(400, "Need at least 2 scenarios to compare")
+    if len(scenarios) > 4:
+        raise HTTPException(400, "Maximum 4 scenarios")
+
+    from tax_engine import (
+        PersonInfo, W2Income, Deductions, AdditionalIncome, Payments, compute_tax,
+    )
+
+    results = []
+    for i, scenario in enumerate(scenarios):
+        label = scenario.pop("label", f"Scenario {i + 1}")
+        filer = PersonInfo(first_name="Scenario", last_name=str(i + 1))
+        w2s = [W2Income(
+            wages=scenario.get("wages", 0),
+            federal_withheld=scenario.get("federal_withheld", 0),
+        )]
+        result = compute_tax(
+            filing_status=scenario.get("filing_status", "single"),
+            filer=filer,
+            w2s=w2s,
+            deductions=Deductions(
+                mortgage_interest=scenario.get("mortgage_interest", 0),
+                property_tax=scenario.get("property_tax", 0),
+                state_income_tax_paid=scenario.get("state_income_tax_paid", 0),
+                charitable_cash=scenario.get("charitable_cash", 0),
+                student_loan_interest=scenario.get("student_loan_interest", 0),
+            ),
+            additional=AdditionalIncome(
+                other_interest=scenario.get("interest_income", 0),
+                ordinary_dividends=scenario.get("dividend_income", 0),
+            ),
+            payments=Payments(
+                estimated_federal=scenario.get("estimated_payments", 0),
+            ),
+            num_dependents=scenario.get("num_dependents", 0),
+            residence_state=scenario.get("residence_state", ""),
+        )
+        results.append({
+            "label": label,
+            "filing_status": scenario.get("filing_status", "single"),
+            "total_income": round(result.line_9_total_income, 2),
+            "agi": round(result.line_11_agi, 2),
+            "taxable_income": round(result.line_15_taxable_income, 2),
+            "total_tax": round(result.line_24_total_tax, 2),
+            "effective_rate": round(result.effective_rate * 100, 2),
+            "marginal_rate": round(result.marginal_rate * 100, 2),
+            "refund": round(result.line_34_overpaid, 2),
+            "owed": round(result.line_37_owed, 2),
+        })
+
+    # Compute deltas from first scenario
+    base = results[0]
+    for r in results[1:]:
+        r["tax_delta"] = round(r["total_tax"] - base["total_tax"], 2)
+        r["refund_delta"] = round(r["refund"] - base["refund"], 2)
+
+    return {"scenarios": results, "base_scenario": base["label"]}
 
 
 @app.post("/upload", response_model=DocumentMetadata)
