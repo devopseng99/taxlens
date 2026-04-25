@@ -581,6 +581,7 @@ class TaxResult:
     qbi_deduction: float = 0.0           # Section 199A QBI deduction
     qbi_is_sstb: bool = False             # Any business is SSTB
     qbi_sstb_phaseout: bool = False       # SSTB phaseout applied (reduces QBI to $0 above range)
+    personal_exemption: float = 0.0       # Personal exemption (restored for 2026+ TCJA sunset)
     amt: float = 0.0                      # Alternative Minimum Tax (Form 6251)
     amt_income: float = 0.0               # AMT taxable income
     amt_exemption: float = 0.0            # AMT exemption amount
@@ -2164,7 +2165,18 @@ def compute_tax(
         # QBI deduction can't exceed taxable income
         result.qbi_deduction = min(result.qbi_deduction, max(0, result.line_11_agi - result.line_13_deduction))
 
-    result.line_15_taxable_income = max(0, result.line_11_agi - result.line_13_deduction - result.qbi_deduction)
+    # Personal exemption (restored for 2026+ TCJA sunset; $0 for 2024-2025)
+    personal_exemption_amount = getattr(c, 'PERSONAL_EXEMPTION', 0)
+    if personal_exemption_amount > 0:
+        num_exemptions = 1  # Filer
+        if filing_status == MFJ:
+            num_exemptions = 2  # Filer + spouse
+        num_exemptions += num_dependents
+        result.personal_exemption = personal_exemption_amount * num_exemptions
+    else:
+        result.personal_exemption = 0.0
+
+    result.line_15_taxable_income = max(0, result.line_11_agi - result.line_13_deduction - result.qbi_deduction - result.personal_exemption)
 
     # =======================================================================
     # TAX COMPUTATION (Line 16)

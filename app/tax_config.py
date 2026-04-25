@@ -1,14 +1,17 @@
-"""Federal & Illinois tax constants — multi-year support (2024 + 2025).
+"""Federal & Illinois tax constants — multi-year support (2024 + 2025 + 2026 sunset).
 
 2024 constants: IRS Rev. Proc. 2023-34 (filed in 2025)
 2025 constants: IRS Rev. Proc. 2024-40 (filed in 2026)
+2026 constants: TCJA sunset projection — brackets revert to pre-TCJA rates,
+                SALT cap removed, QBI §199A expires, CTC drops to $1,000,
+                personal exemption restored, standard deduction halves.
 """
 
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
 TAX_YEAR = 2025  # Default tax year
-SUPPORTED_TAX_YEARS = {2024, 2025}
+SUPPORTED_TAX_YEARS = {2024, 2025, 2026}
 
 # ---------------------------------------------------------------------------
 # Filing statuses (constant across years)
@@ -340,7 +343,112 @@ _YEAR_2025 = {
     "IL_PERSONAL_EXEMPTION": 2_775,
 }
 
-_YEAR_CONFIGS = {2024: _YEAR_2024, 2025: _YEAR_2025}
+# ---------------------------------------------------------------------------
+# 2026 TCJA Sunset — Pre-TCJA brackets + inflation to 2026
+# Source: IRC §1 (2017 rates), CPI-U ~2.8% annual inflation from 2017 base
+# Key changes: 7 brackets (10/15/25/28/33/35/39.6%), lower standard deduction,
+# personal exemption restored, SALT cap removed, QBI §199A expires, CTC → $1K
+# ---------------------------------------------------------------------------
+_YEAR_2026_SUNSET = {
+    # Pre-TCJA brackets (2017 rates, inflation-adjusted to 2026 using ~28% cumulative CPI)
+    "FEDERAL_BRACKETS": {
+        SINGLE: [
+            (11_000, 0.10), (44_725, 0.15), (100_050, 0.25),
+            (191_500, 0.28), (416_700, 0.33), (418_400, 0.35),
+            (float("inf"), 0.396),
+        ],
+        MFJ: [
+            (22_000, 0.10), (89_450, 0.15), (200_100, 0.25),
+            (383_000, 0.28), (469_050, 0.33), (470_700, 0.35),
+            (float("inf"), 0.396),
+        ],
+        HOH: [
+            (15_700, 0.10), (59_850, 0.15), (154_800, 0.25),
+            (191_500, 0.28), (416_700, 0.33), (444_550, 0.35),
+            (float("inf"), 0.396),
+        ],
+        MFS: [
+            (11_000, 0.10), (44_725, 0.15), (100_050, 0.25),
+            (191_500, 0.28), (234_525, 0.33), (235_350, 0.35),
+            (float("inf"), 0.396),
+        ],
+    },
+    # Pre-TCJA standard deduction was roughly half of TCJA levels
+    "STANDARD_DEDUCTION": {SINGLE: 8_300, MFJ: 16_600, HOH: 12_200, MFS: 8_300},
+    "ADDITIONAL_STD_DED_SINGLE": 2_050,
+    "ADDITIONAL_STD_DED_MARRIED": 1_650,
+    # Personal exemption restored (was $0 under TCJA)
+    "PERSONAL_EXEMPTION": 5_300,
+    "PERSONAL_EXEMPTION_PHASEOUT_START": {SINGLE: 313_800, MFJ: 470_700, HOH: 392_200, MFS: 235_350},
+    "PERSONAL_EXEMPTION_PHASEOUT_RATE": 0.02,  # Pease: 2% per $2,500 over threshold
+    # LTCG brackets (inflation-adjusted, rates unchanged)
+    "LTCG_BRACKETS": {
+        SINGLE: [(49_700, 0.00), (548_200, 0.15), (float("inf"), 0.20)],
+        MFJ:    [(99_400, 0.00), (616_850, 0.15), (float("inf"), 0.20)],
+        HOH:    [(66_550, 0.00), (582_450, 0.15), (float("inf"), 0.20)],
+        MFS:    [(49_700, 0.00), (308_425, 0.15), (float("inf"), 0.20)],
+    },
+    "SS_WAGE_BASE": 181_200,
+    # CTC drops from $2,000 to $1,000 (pre-TCJA level)
+    "CTC_PER_CHILD": 1_000,
+    "CTC_REFUNDABLE_MAX": 0,   # Pre-TCJA: refundable portion was 15% of earned income > $3K (not modeled here, simplified to 0)
+    # AMT — reverts to lower exemptions
+    "AMT_EXEMPTION": {SINGLE: 65_450, MFJ: 101_600, HOH: 65_450, MFS: 50_800},
+    "AMT_PHASEOUT_START": {SINGLE: 145_500, MFJ: 194_000, HOH: 145_500, MFS: 97_000},
+    "AMT_RATE_BREAK": {SINGLE: 245_700, MFJ: 245_700, HOH: 245_700, MFS: 122_850},
+    # QBI §199A EXPIRES — no deduction for 2026+
+    "QBI_DEDUCTION_RATE": 0.00,
+    "QBI_TAXABLE_INCOME_LIMIT": {SINGLE: 0, MFJ: 0, HOH: 0, MFS: 0},
+    "QBI_PHASEOUT_RANGE": {SINGLE: 0, MFJ: 0, HOH: 0, MFS: 0},
+    # SALT cap REMOVED — unlimited deduction
+    "SALT_CAP": 999_999_999,   # Effectively unlimited
+    "SALT_CAP_MFS": 999_999_999,
+    # EITC — largely unchanged (not TCJA provision), inflation-adjusted
+    "EITC_MAX_CREDIT": {0: 668, 1: 4_453, 2: 7_358, 3: 8_278},
+    "EITC_PHASE_IN_RATE": {0: 0.0765, 1: 0.34, 2: 0.40, 3: 0.45},
+    "EITC_PHASE_OUT_RATE": {0: 0.0765, 1: 0.1598, 2: 0.2106, 3: 0.2106},
+    "EITC_EARNED_INCOME_AMOUNT": {0: 8_740, 1: 13_100, 2: 18_400, 3: 18_400},
+    "EITC_PHASEOUT_START": {
+        SINGLE: {0: 10_930, 1: 22_720, 2: 22_720, 3: 22_720},
+        HOH:    {0: 10_930, 1: 22_720, 2: 22_720, 3: 22_720},
+        MFJ:    {0: 18_260, 1: 30_050, 2: 30_050, 3: 30_050},
+        MFS:    {0: 10_930, 1: 22_720, 2: 22_720, 3: 22_720},
+    },
+    "EITC_INVESTMENT_INCOME_LIMIT": 11_940,
+    # Saver's — inflation-adjusted
+    "SAVERS_AGI_TIERS": {
+        SINGLE: (24_440, 26_500, 37_550),
+        HOH:    (36_660, 39_750, 56_325),
+        MFJ:    (48_880, 53_000, 75_100),
+        MFS:    (24_440, 26_500, 37_550),
+    },
+    # HSA — inflation-adjusted
+    "HSA_LIMIT_SELF": 4_420,
+    "HSA_LIMIT_FAMILY": 8_800,
+    "HDHP_MIN_DEDUCTIBLE_SELF": 1_700,
+    "HDHP_MIN_DEDUCTIBLE_FAMILY": 3_400,
+    "HDHP_MAX_OOP_SELF": 8_540,
+    "HDHP_MAX_OOP_FAMILY": 17_080,
+    # Section 179 — inflation-adjusted
+    "SECTION_179_LIMIT": 1_285_000,
+    "SECTION_179_PHASEOUT_START": 3_220_000,
+    # IRA — inflation-adjusted
+    "IRA_CONTRIBUTION_LIMIT": 7_000,
+    # Self-employed retirement — inflation-adjusted
+    "SOLO_401K_EMPLOYEE_LIMIT": 24_000,
+    "SOLO_401K_CATCHUP": 7_500,
+    "SOLO_401K_TOTAL_LIMIT": 72_000,
+    "SEP_IRA_LIMIT": 72_000,
+    "SIMPLE_IRA_LIMIT": 17_000,
+    "SIMPLE_IRA_CATCHUP": 3_500,
+    # Estimated tax penalty rate
+    "ESTIMATED_TAX_PENALTY_RATE": 0.08,
+    # Illinois (rate unchanged)
+    "IL_FLAT_RATE": 0.0495,
+    "IL_PERSONAL_EXEMPTION": 2_850,
+}
+
+_YEAR_CONFIGS = {2024: _YEAR_2024, 2025: _YEAR_2025, 2026: _YEAR_2026_SUNSET}
 
 
 def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
@@ -355,7 +463,16 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     cfg = _YEAR_CONFIGS[tax_year]
     ns = SimpleNamespace(**cfg)
 
-    # Add fixed-rate constants (same for all years)
+    # 2026 sunset: override fixed-rate constants that revert
+    if tax_year >= 2026:
+        ns.QBI_DEDUCTION_RATE = cfg.get("QBI_DEDUCTION_RATE", 0.00)
+        ns.SALT_CAP = cfg.get("SALT_CAP", SALT_CAP)
+        ns.SALT_CAP_MFS = cfg.get("SALT_CAP_MFS", SALT_CAP_MFS)
+        ns.CTC_PER_CHILD = cfg.get("CTC_PER_CHILD", CTC_PER_CHILD)
+        if not hasattr(ns, "PERSONAL_EXEMPTION"):
+            ns.PERSONAL_EXEMPTION = 0
+
+    # Add fixed-rate constants (same for all years unless overridden above)
     ns.SS_RATE = SS_RATE
     ns.MEDICARE_RATE = MEDICARE_RATE
     ns.ADDITIONAL_MEDICARE_RATE = ADDITIONAL_MEDICARE_RATE
@@ -366,7 +483,8 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.SE_INCOME_FACTOR = SE_INCOME_FACTOR
     ns.SE_SS_RATE = SE_SS_RATE
     ns.SE_MEDICARE_RATE = SE_MEDICARE_RATE
-    ns.QBI_DEDUCTION_RATE = QBI_DEDUCTION_RATE
+    if tax_year < 2026:
+        ns.QBI_DEDUCTION_RATE = QBI_DEDUCTION_RATE
     ns.AMT_RATE_LOW = AMT_RATE_LOW
     ns.AMT_RATE_HIGH = AMT_RATE_HIGH
     ns.AOTC_MAX = AOTC_MAX
@@ -381,7 +499,8 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.CDCC_MAX_EXPENSES_ONE = CDCC_MAX_EXPENSES_ONE
     ns.CDCC_MAX_EXPENSES_TWO = CDCC_MAX_EXPENSES_TWO
     ns.SAVERS_MAX_CONTRIBUTION = SAVERS_MAX_CONTRIBUTION
-    ns.CTC_PER_CHILD = CTC_PER_CHILD
+    if tax_year < 2026:
+        ns.CTC_PER_CHILD = CTC_PER_CHILD
     ns.CTC_PHASEOUT_START = CTC_PHASEOUT_START
     ns.CTC_PHASEOUT_RATE = CTC_PHASEOUT_RATE
     ns.ESTIMATED_TAX_PENALTY_THRESHOLD = ESTIMATED_TAX_PENALTY_THRESHOLD
@@ -389,8 +508,9 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     ns.ESTIMATED_TAX_PRIOR_YEAR_PCT = ESTIMATED_TAX_PRIOR_YEAR_PCT
     ns.ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI = ESTIMATED_TAX_PRIOR_YEAR_HIGH_AGI
     ns.ESTIMATED_TAX_HIGH_AGI_THRESHOLD = ESTIMATED_TAX_HIGH_AGI_THRESHOLD
-    ns.SALT_CAP = SALT_CAP
-    ns.SALT_CAP_MFS = SALT_CAP_MFS
+    if tax_year < 2026:
+        ns.SALT_CAP = SALT_CAP
+        ns.SALT_CAP_MFS = SALT_CAP_MFS
     ns.STUDENT_LOAN_INTEREST_MAX = STUDENT_LOAN_INTEREST_MAX
     ns.MEDICAL_AGI_THRESHOLD = MEDICAL_AGI_THRESHOLD
     ns.CHARITABLE_CASH_AGI_LIMIT = CHARITABLE_CASH_AGI_LIMIT

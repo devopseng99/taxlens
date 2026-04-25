@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.56.0)")
+    logger.info("TaxLens API starting (v3.57.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.56.0",
+    version="3.57.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.56.0",
+        "version": "3.57.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -482,7 +482,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.56.0",
+        "version": "3.57.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -848,6 +848,105 @@ async def compare_scenarios_api(
         r["refund_delta"] = round(r["refund"] - base["refund"], 2)
 
     return {"scenarios": results, "base_scenario": base["label"]}
+
+
+# ---------------------------------------------------------------------------
+# TCJA Sunset Comparison (2025 Current Law vs 2026 Sunset)
+# ---------------------------------------------------------------------------
+@app.post("/tcja-comparison", tags=["Planning"])
+async def tcja_comparison(
+    filing_status: str = Query(default="single"),
+    wages: float = Query(default=0),
+    federal_withheld: float = Query(default=0),
+    business_income: float = Query(default=0),
+    business_expenses: float = Query(default=0),
+    mortgage_interest: float = Query(default=0),
+    property_tax: float = Query(default=0),
+    state_income_tax_paid: float = Query(default=0),
+    charitable_cash: float = Query(default=0),
+    num_dependents: int = Query(default=0),
+    _auth: str = Depends(require_auth),
+):
+    """Compare identical income under 2025 current law vs 2026 TCJA sunset.
+
+    Shows the tax impact of TCJA expiration: bracket reversion, SALT cap removal,
+    QBI expiration, CTC reduction, personal exemption restoration, and lower
+    standard deduction.
+    """
+    from tax_engine import (
+        PersonInfo, W2Income, BusinessIncome, Deductions,
+        AdditionalIncome, Payments, compute_tax,
+    )
+    from tax_projector import _marginal_rate, _effective_rate
+
+    common_kwargs = dict(
+        filing_status=filing_status,
+        filer=PersonInfo(first_name="TCJA", last_name="Compare"),
+        w2s=[W2Income(wages=wages, federal_withheld=federal_withheld)] if wages > 0 else [],
+        businesses=[BusinessIncome(gross_receipts=business_income, other_expenses=business_expenses)] if business_income > 0 else [],
+        additional=AdditionalIncome(),
+        deductions=Deductions(
+            mortgage_interest=mortgage_interest,
+            property_tax=property_tax,
+            state_income_tax_paid=state_income_tax_paid,
+            charitable_cash=charitable_cash,
+        ),
+        payments=Payments(),
+        num_dependents=num_dependents,
+    )
+
+    r2025 = compute_tax(**common_kwargs, tax_year=2025)
+    r2026 = compute_tax(**common_kwargs, tax_year=2026)
+
+    def _scenario(r, year):
+        return {
+            "tax_year": year,
+            "total_income": round(r.line_9_total_income, 2),
+            "agi": round(r.line_11_agi, 2),
+            "deduction_type": r.deduction_type,
+            "deduction_amount": round(r.line_13_deduction, 2),
+            "personal_exemption": round(r.personal_exemption, 2),
+            "qbi_deduction": round(r.qbi_deduction, 2),
+            "taxable_income": round(r.line_15_taxable_income, 2),
+            "total_tax": round(r.line_24_total_tax, 2),
+            "effective_rate": round(_effective_rate(r.line_24_total_tax, r.line_9_total_income) * 100, 2),
+            "marginal_rate": round(_marginal_rate(r.line_15_taxable_income, filing_status, year) * 100, 2),
+            "ctc": round(r.line_27_ctc, 2),
+            "refund": round(r.line_34_overpaid, 2),
+            "owed": round(r.line_37_owed, 2),
+        }
+
+    s2025 = _scenario(r2025, 2025)
+    s2026 = _scenario(r2026, 2026)
+
+    # Key deltas
+    tax_delta = round(s2026["total_tax"] - s2025["total_tax"], 2)
+
+    tcja_impacts = []
+    if s2026["qbi_deduction"] < s2025["qbi_deduction"]:
+        tcja_impacts.append(f"QBI deduction lost: -${s2025['qbi_deduction']:,.0f}")
+    if s2026["deduction_amount"] < s2025["deduction_amount"]:
+        tcja_impacts.append(f"Standard deduction reduced: ${s2025['deduction_amount']:,.0f} → ${s2026['deduction_amount']:,.0f}")
+    if s2026["personal_exemption"] > 0:
+        tcja_impacts.append(f"Personal exemption restored: +${s2026['personal_exemption']:,.0f}")
+    if s2026["ctc"] < s2025["ctc"]:
+        tcja_impacts.append(f"CTC reduced: ${s2025['ctc']:,.0f} → ${s2026['ctc']:,.0f}")
+    if s2026["marginal_rate"] != s2025["marginal_rate"]:
+        tcja_impacts.append(f"Marginal rate change: {s2025['marginal_rate']}% → {s2026['marginal_rate']}%")
+    salt_2025 = r2025.sched_a_salt
+    salt_2026 = r2026.sched_a_salt
+    if salt_2026 > salt_2025:
+        tcja_impacts.append(f"SALT cap removed: ${salt_2025:,.0f} → ${salt_2026:,.0f}")
+
+    return {
+        "current_law_2025": s2025,
+        "sunset_2026": s2026,
+        "tax_increase": tax_delta,
+        "tax_increase_pct": round((tax_delta / s2025["total_tax"] * 100) if s2025["total_tax"] > 0 else 0, 1),
+        "tcja_impacts": tcja_impacts,
+        "disclaimer": "2026 values are projections based on TCJA sunset provisions. "
+                       "Congress may extend, modify, or replace these provisions.",
+    }
 
 
 # ---------------------------------------------------------------------------

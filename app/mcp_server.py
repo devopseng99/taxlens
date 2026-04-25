@@ -732,6 +732,85 @@ def compare_scenarios(
 
 
 @mcp.tool()
+def compare_tcja_sunset(
+    filing_status: str = "single",
+    wages: float = 0,
+    business_income: float = 0,
+    business_expenses: float = 0,
+    mortgage_interest: float = 0,
+    property_tax: float = 0,
+    state_income_tax_paid: float = 0,
+    charitable_cash: float = 0,
+    num_dependents: int = 0,
+) -> str:
+    """Compare identical income under 2025 current law vs 2026 TCJA sunset.
+
+    Shows the impact of TCJA expiration: bracket reversion (10-37% → 10-39.6%),
+    SALT cap removal ($10K → unlimited), QBI §199A expiration, CTC reduction
+    ($2K → $1K), personal exemption restoration (~$5,300/person), and lower
+    standard deduction (~$15K → ~$8,300 single).
+
+    Args:
+        filing_status: single, mfj, hoh, mfs
+        wages: W-2 wages
+        business_income: Schedule C gross receipts
+        business_expenses: Schedule C expenses
+        mortgage_interest: Itemized mortgage interest
+        property_tax: Itemized property tax
+        state_income_tax_paid: Itemized state income tax
+        charitable_cash: Itemized charitable contributions
+        num_dependents: Number of dependents (affects CTC + personal exemptions)
+    """
+    from tax_projector import _marginal_rate, _effective_rate
+
+    common = dict(
+        filing_status=filing_status,
+        wages=wages,
+        business_income=business_income,
+        business_expenses=business_expenses,
+        mortgage_interest=mortgage_interest,
+        state_tax_paid=state_income_tax_paid,
+        property_tax=property_tax,
+        charitable=charitable_cash,
+        num_dependents=num_dependents,
+    )
+
+    inputs_2025 = _build_inputs(**common, tax_year=2025)
+    inputs_2026 = _build_inputs(**common, tax_year=2026)
+    r2025 = compute_tax(**inputs_2025)
+    r2026 = compute_tax(**inputs_2026)
+
+    def _s(r, year):
+        return {
+            "tax_year": year,
+            "total_income": round(r.line_9_total_income, 2),
+            "agi": round(r.line_11_agi, 2),
+            "deduction_type": r.deduction_type,
+            "deduction_amount": round(r.line_13_deduction, 2),
+            "personal_exemption": round(r.personal_exemption, 2),
+            "qbi_deduction": round(r.qbi_deduction, 2),
+            "taxable_income": round(r.line_15_taxable_income, 2),
+            "total_tax": round(r.line_24_total_tax, 2),
+            "effective_rate_pct": round(_effective_rate(r.line_24_total_tax, r.line_9_total_income) * 100, 2),
+            "marginal_rate_pct": round(_marginal_rate(r.line_15_taxable_income, filing_status, year) * 100, 2),
+            "ctc": round(r.line_27_ctc, 2),
+            "refund": round(r.line_34_overpaid, 2),
+            "owed": round(r.line_37_owed, 2),
+        }
+
+    s2025 = _s(r2025, 2025)
+    s2026 = _s(r2026, 2026)
+    delta = round(s2026["total_tax"] - s2025["total_tax"], 2)
+
+    return json.dumps({
+        "current_law_2025": s2025,
+        "sunset_2026": s2026,
+        "tax_increase": delta,
+        "disclaimer": "2026 values are projections based on TCJA sunset. Congress may modify.",
+    }, indent=2, default=str)
+
+
+@mcp.tool()
 def estimate_impact(
     base_scenario: dict,
     change_description: str,

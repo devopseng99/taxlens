@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.56.0 API + v2.6.0 Portal — 77 waves complete)
+Updated: 2026-04-25 (v3.57.0 API + v2.6.0 Portal — 78 waves complete)
 
 ## Architecture
 
@@ -687,6 +687,14 @@ Updated: 2026-04-25 (v3.56.0 API + v2.6.0 Portal — 77 waves complete)
 219. **Compute marginal/effective rates inline, not on TaxResult** — The compare_scenarios endpoints (both REST and MCP) previously tried to access `result.effective_rate` and `result.marginal_rate` on TaxResult — fields that didn't exist (latent bug). Fixed by computing rates inline using `_effective_rate()` and `_marginal_rate()` from `tax_projector.py`. Rates are per-scenario since each may have different filing status and income levels.
 
 220. **Audit risk passing checks alongside flags** — Added `PassingCheck` dataclass and `passing_checks` list to `AuditRiskReport`. Every check that doesn't trigger a flag now records a passing check with the same category, the filer's value, and the norm. This gives users confidence about what's normal on their return, not just what's flagged. The `to_dict()` method includes `num_passing` and `passing_checks` array.
+
+## Wave 78 — TCJA Sunset 2025 vs 2026 Comparison Engine (v3.57.0)
+
+224. **2026 TCJA sunset as a third supported tax year** — Rather than a separate "projection" mode, 2026 is a full tax year config with all the TCJA reversion values: pre-TCJA brackets (10/15/25/28/33/35/39.6%), halved standard deduction (~$8,300 single), restored personal exemption (~$5,300/person), SALT cap removed, QBI §199A expired (rate=0%), CTC reduced to $1,000, and lower AMT exemptions. This means `compute_tax(tax_year=2026)` works identically to 2024/2025 — same engine, different constants.
+
+225. **Year-conditional fixed-rate overrides in get_year_config()** — Several "fixed" constants (QBI_DEDUCTION_RATE, SALT_CAP, CTC_PER_CHILD) are actually TCJA provisions that expire. For tax_year >= 2026, these are overridden from the year-specific config rather than using the module-level statutory constant. This uses `if tax_year < 2026:` guards so 2024/2025 behavior is unchanged.
+
+226. **Personal exemption as a new TaxResult field** — Added `personal_exemption` field to TaxResult, computed as `PERSONAL_EXEMPTION × (1 + num_spouses + num_dependents)`. For 2024/2025 this is $0 (TCJA). For 2026+, it's ~$5,300 per person and reduces taxable income alongside deductions and QBI. This correctly models the pre-TCJA treatment where personal exemptions were a major deduction for families.
 
 ## Wave 77 — PII Encryption for SSNs (v3.56.0)
 
