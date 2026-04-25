@@ -256,6 +256,8 @@ class BusinessIncome:
     home_expenses: float = 0.0     # Mortgage interest + utilities + insurance for home
     other_expenses: float = 0.0
     other_expenses_description: str = ""
+    is_sstb: bool = False             # Specified Service Trade or Business (§199A(d)(2))
+    w2_wages_paid: float = 0.0        # W-2 wages paid to employees (for QBI W-2 limitation)
 
     @property
     def gross_profit(self) -> float:
@@ -577,6 +579,8 @@ class TaxResult:
     niit: float = 0.0                    # Net Investment Income Tax (3.8%)
     additional_medicare_tax: float = 0.0 # Additional Medicare Tax (0.9%)
     qbi_deduction: float = 0.0           # Section 199A QBI deduction
+    qbi_is_sstb: bool = False             # Any business is SSTB
+    qbi_sstb_phaseout: bool = False       # SSTB phaseout applied (reduces QBI to $0 above range)
     amt: float = 0.0                      # Alternative Minimum Tax (Form 6251)
     amt_income: float = 0.0               # AMT taxable income
     amt_exemption: float = 0.0            # AMT exemption amount
@@ -2116,6 +2120,12 @@ def compute_tax(
     # QBI deduction (Section 199A) — 20% of qualified business income
     # Includes Schedule C profit + K-1 §199A income
     total_qbi = result.sched_c_total_profit + result.k1_section_199a_income
+    # Check SSTB status — any SSTB business taints the QBI calculation
+    any_sstb = any(b.is_sstb for b in businesses)
+    # Sum W-2 wages paid to employees across all businesses
+    total_w2_wages_paid = sum(b.w2_wages_paid for b in businesses)
+    result.qbi_is_sstb = any_sstb
+
     if total_qbi > 0:
         qbi_limit = c.QBI_TAXABLE_INCOME_LIMIT[filing_status]
         qbi_range = c.QBI_PHASEOUT_RANGE[filing_status]
@@ -2123,22 +2133,33 @@ def compute_tax(
         full_qbi = total_qbi * c.QBI_DEDUCTION_RATE
 
         if tentative_taxable <= qbi_limit:
-            # Below threshold: full 20% deduction
+            # Below threshold: full 20% deduction (SSTB doesn't matter)
             result.qbi_deduction = full_qbi
         elif tentative_taxable >= qbi_limit + qbi_range:
-            # Above phase-out: limited to greater of 50% W-2 wages or 25% W-2 wages + 2.5% UBIA
-            # For Schedule C filers (no W-2 wages from own business), this is typically $0
-            # unless they have W-2 employees in their business
-            w2_wages_paid = 0.0  # Self-employed Schedule C filers have no W-2 wages to themselves
-            result.qbi_deduction = max(w2_wages_paid * 0.50, w2_wages_paid * 0.25)
+            if any_sstb:
+                # SSTB above phaseout range: QBI = $0 (no W-2 wage alternative)
+                result.qbi_deduction = 0.0
+                result.qbi_sstb_phaseout = True
+            else:
+                # Non-SSTB above phase-out: limited to W-2 wages paid
+                result.qbi_deduction = max(total_w2_wages_paid * 0.50,
+                                           total_w2_wages_paid * 0.25)
         else:
-            # In phase-out range: reduce excess of full QBI over W-2 limit
-            w2_wages_paid = 0.0
-            w2_limited = max(w2_wages_paid * 0.50, w2_wages_paid * 0.25)
-            excess = max(0, full_qbi - w2_limited)
+            # In phase-out range
             phase_fraction = (tentative_taxable - qbi_limit) / qbi_range
-            reduction = excess * phase_fraction
-            result.qbi_deduction = max(0, full_qbi - reduction)
+            if any_sstb:
+                # SSTB: QBI itself is proportionally reduced, then 20% applied
+                # Applicable QBI = total_qbi × (1 - phase_fraction)
+                applicable_qbi = total_qbi * (1 - phase_fraction)
+                result.qbi_deduction = applicable_qbi * c.QBI_DEDUCTION_RATE
+                result.qbi_sstb_phaseout = True
+            else:
+                # Non-SSTB: reduce excess of full QBI over W-2 limit
+                w2_limited = max(total_w2_wages_paid * 0.50,
+                                 total_w2_wages_paid * 0.25)
+                excess = max(0, full_qbi - w2_limited)
+                reduction = excess * phase_fraction
+                result.qbi_deduction = max(0, full_qbi - reduction)
 
         # QBI deduction can't exceed taxable income
         result.qbi_deduction = min(result.qbi_deduction, max(0, result.line_11_agi - result.line_13_deduction))

@@ -104,6 +104,8 @@ class BusinessIncomeInput(BaseModel):
     home_expenses: float = 0.0
     other_expenses: float = 0.0
     other_expenses_description: str = ""
+    is_sstb: bool = Field(default=False, description="Specified Service Trade or Business (law, medicine, consulting, etc.) — affects QBI phaseout above threshold")
+    w2_wages_paid: float = Field(default=0.0, description="W-2 wages paid to employees (for QBI W-2 wage limitation)")
 
 
 class BrokerageTransactionInput(BaseModel):
@@ -648,6 +650,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
             home_expenses=b.home_expenses,
             other_expenses=b.other_expenses,
             other_expenses_description=b.other_expenses_description,
+            is_sstb=b.is_sstb,
+            w2_wages_paid=b.w2_wages_paid,
         )
         for b in req.businesses
     ]

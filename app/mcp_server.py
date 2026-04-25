@@ -69,6 +69,8 @@ def _build_inputs(
     long_term_gains: float = 0,
     business_income: float = 0,
     business_expenses: float = 0,
+    business_is_sstb: bool = False,
+    business_w2_wages_paid: float = 0,
     mortgage_interest: float = 0,
     property_tax: float = 0,
     state_tax_paid: float = 0,
@@ -157,6 +159,8 @@ def _build_inputs(
             business_name="Self-Employment",
             gross_receipts=business_income,
             other_expenses=business_expenses,
+            is_sstb=business_is_sstb,
+            w2_wages_paid=business_w2_wages_paid,
         ))
 
     deductions = Deductions(
@@ -507,6 +511,8 @@ def compute_tax_scenario(
     long_term_gains: float = 0,
     business_income: float = 0,
     business_expenses: float = 0,
+    business_is_sstb: bool = False,
+    business_w2_wages_paid: float = 0,
     mortgage_interest: float = 0,
     property_tax: float = 0,
     state_tax_paid: float = 0,
@@ -571,6 +577,8 @@ def compute_tax_scenario(
         long_term_gains: Net long-term capital gains (negative for losses)
         business_income: Gross self-employment / 1099-NEC income
         business_expenses: Total business expenses (deducted from business_income)
+        business_is_sstb: True if business is a Specified Service Trade or Business (law, medicine, consulting, accounting, etc.). SSTB businesses have QBI phased to $0 above threshold (~$192K single, ~$384K MFJ).
+        business_w2_wages_paid: W-2 wages paid to employees (for QBI W-2 wage limitation on non-SSTB businesses above threshold).
         mortgage_interest: Mortgage interest paid (1098 Box 1)
         property_tax: Real estate property tax paid
         state_tax_paid: State income tax paid (for SALT deduction)
@@ -626,7 +634,8 @@ def compute_tax_scenario(
         interest=interest, ordinary_dividends=ordinary_dividends,
         qualified_dividends=qualified_dividends, short_term_gains=short_term_gains,
         long_term_gains=long_term_gains, business_income=business_income,
-        business_expenses=business_expenses, mortgage_interest=mortgage_interest,
+        business_expenses=business_expenses, business_is_sstb=business_is_sstb,
+        business_w2_wages_paid=business_w2_wages_paid, mortgage_interest=mortgage_interest,
         property_tax=property_tax, state_tax_paid=state_tax_paid,
         charitable=charitable, charitable_noncash=charitable_noncash,
         medical_expenses=medical_expenses, student_loan_interest=student_loan_interest,
@@ -866,6 +875,8 @@ def assess_audit_risk_tool(
     long_term_gains: float = 0,
     business_income: float = 0,
     business_expenses: float = 0,
+    business_is_sstb: bool = False,
+    business_w2_wages_paid: float = 0,
     mortgage_interest: float = 0,
     property_tax: float = 0,
     state_tax_paid: float = 0,
@@ -904,7 +915,8 @@ def assess_audit_risk_tool(
         interest=interest, ordinary_dividends=ordinary_dividends,
         qualified_dividends=qualified_dividends, short_term_gains=short_term_gains,
         long_term_gains=long_term_gains, business_income=business_income,
-        business_expenses=business_expenses, mortgage_interest=mortgage_interest,
+        business_expenses=business_expenses, business_is_sstb=business_is_sstb,
+        business_w2_wages_paid=business_w2_wages_paid, mortgage_interest=mortgage_interest,
         property_tax=property_tax, state_tax_paid=state_tax_paid,
         charitable=charitable, charitable_noncash=charitable_noncash,
         medical_expenses=medical_expenses, student_loan_interest=student_loan_interest,
