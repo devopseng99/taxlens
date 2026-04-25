@@ -372,6 +372,10 @@ class TaxDraftRequest(BaseModel):
     alimony_paid: float = Field(default=0, description="Alimony paid under pre-2019 divorce agreement (above-the-line deduction)")
     alimony_received: float = Field(default=0, description="Alimony received under pre-2019 divorce agreement (taxable income)")
     capital_loss_carryover: float = Field(default=0, description="Prior-year capital loss carryover from Schedule D (IRC §1211)")
+    charitable_carryover: float = Field(default=0, description="Prior-year charitable contribution carryover (IRC §170 5-year)")
+    passive_loss_carryover: float = Field(default=0, description="Prior-year suspended passive activity losses (IRC §469)")
+    nol_carryover: float = Field(default=0, description="Prior-year net operating loss carryover (IRC §172)")
+    amt_credit_carryover: float = Field(default=0, description="Prior-year AMT credit carryover (Form 8801)")
 
     # Education / care / retirement credits (Forms 8863, 2441, 8880)
     education_expenses: list[EducationExpenseInput] = Field(default=[], description="Per-student education expenses (AOTC $2,500 max, LLC $2,000 max)")
@@ -897,6 +901,10 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         alimony_paid=req.alimony_paid,
         alimony_received=req.alimony_received,
         capital_loss_carryover=req.capital_loss_carryover,
+        charitable_carryover=req.charitable_carryover,
+        passive_loss_carryover=req.passive_loss_carryover,
+        nol_carryover=req.nol_carryover,
+        amt_credit_carryover=req.amt_credit_carryover,
         filer_age_65_plus=req.filer_age_65_plus,
         filer_is_blind=req.filer_is_blind,
         spouse_age_65_plus=req.spouse_age_65_plus,

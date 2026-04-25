@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.58.0 API + v2.6.0 Portal — 79 waves complete)
+Updated: 2026-04-25 (v3.59.0 API + v2.6.0 Portal — 80 waves complete)
 
 ## Architecture
 
@@ -709,6 +709,12 @@ Updated: 2026-04-25 (v3.58.0 API + v2.6.0 Portal — 79 waves complete)
 225. **PTET credit applied after state return computation** — State returns are computed first (via `compute_all_state_returns()`), then PTET credits are subtracted from matching state returns' `total_tax`. This avoids coupling PTET logic into per-state compute functions. The credit is tracked on both `StateTaxResult.ptet_credit` and `TaxResult.ptet_credits` (aggregated list).
 
 226. **15 states enabled for PTET, PA/OH intentionally excluded** — CA, NY, IL, NJ, GA, NC, VA, MA, MD, MN, CO, AZ, WI, IN, MI all have PTET programs. PA's flat 3.07% rate makes PTET less common in practice, and OH has CAT not income tax. Both excluded to avoid misleading results.
+
+227. **Carryforwards are input/output fields, not persistent state** — Rather than building a multi-year persistence layer (database), carryforwards are modeled as compute_tax() input parameters (prior-year carryover) and TaxResult output fields (current-year carryforward). Clients track the linkage between years. This keeps the engine stateless and testable.
+
+228. **NOL limited to 80% of taxable income (post-TCJA §172)** — The Tax Cuts and Jobs Act limited NOL deductions to 80% of taxable income (pre-NOL). This prevents large NOLs from zeroing out taxable income entirely. The remaining 20% ensures some minimum tax. Prior-2018 NOLs had no percentage limit but a 2-year carryback (not modeled).
+
+229. **AMT credit from prior year offsets regular tax down to tentative minimum tax** — The AMT credit (Form 8801) prevents double taxation when AMT was paid in a prior year due to timing differences. The credit is limited to the excess of regular tax over TMT, ensuring the taxpayer never pays less than the tentative minimum. Current-year AMT adds to the carryforward pool for future use.
 
 ## PDF Template Provenance
 

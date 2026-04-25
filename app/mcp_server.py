@@ -108,6 +108,10 @@ def _build_inputs(
     alimony_paid: float = 0,
     alimony_received: float = 0,
     capital_loss_carryover: float = 0,
+    charitable_carryover: float = 0,
+    passive_loss_carryover: float = 0,
+    nol_carryover: float = 0,
+    amt_credit_carryover: float = 0,
     filer_age_65_plus: bool = False,
     filer_is_blind: bool = False,
     spouse_age_65_plus: bool = False,
@@ -472,6 +476,10 @@ def _build_inputs(
         alimony_paid=alimony_paid,
         alimony_received=alimony_received,
         capital_loss_carryover=capital_loss_carryover,
+        charitable_carryover=charitable_carryover,
+        passive_loss_carryover=passive_loss_carryover,
+        nol_carryover=nol_carryover,
+        amt_credit_carryover=amt_credit_carryover,
         filer_age_65_plus=filer_age_65_plus,
         filer_is_blind=filer_is_blind,
         spouse_age_65_plus=spouse_age_65_plus,
@@ -553,6 +561,10 @@ def compute_tax_scenario(
     alimony_paid: float = 0,
     alimony_received: float = 0,
     capital_loss_carryover: float = 0,
+    charitable_carryover: float = 0,
+    passive_loss_carryover: float = 0,
+    nol_carryover: float = 0,
+    amt_credit_carryover: float = 0,
     filer_age_65_plus: bool = False,
     filer_is_blind: bool = False,
     spouse_age_65_plus: bool = False,
@@ -619,6 +631,10 @@ def compute_tax_scenario(
         alimony_paid: Alimony paid under pre-2019 divorce agreement (above-the-line deduction).
         alimony_received: Alimony received under pre-2019 divorce agreement (taxable income).
         capital_loss_carryover: Prior-year capital loss carryover from Schedule D (IRC §1211). Applied as additional short-term loss.
+        charitable_carryover: Prior-year charitable contribution carryover (IRC §170, 5-year). Applied to remaining AGI room.
+        passive_loss_carryover: Prior-year suspended passive activity losses (IRC §469). Offsets current rental income.
+        nol_carryover: Prior-year net operating loss carryover (IRC §172). Limited to 80% of taxable income.
+        amt_credit_carryover: Prior-year AMT credit carryover (Form 8801). Offsets regular tax down to tentative minimum tax.
         filer_age_65_plus: True if filer is 65+ at end of tax year (additional standard deduction).
         filer_is_blind: True if filer is legally blind (additional standard deduction).
         spouse_age_65_plus: True if spouse is 65+ (MFJ/MFS only).
@@ -668,6 +684,10 @@ def compute_tax_scenario(
         alimony_paid=alimony_paid,
         alimony_received=alimony_received,
         capital_loss_carryover=capital_loss_carryover,
+        charitable_carryover=charitable_carryover,
+        passive_loss_carryover=passive_loss_carryover,
+        nol_carryover=nol_carryover,
+        amt_credit_carryover=amt_credit_carryover,
         filer_age_65_plus=filer_age_65_plus,
         filer_is_blind=filer_is_blind,
         spouse_age_65_plus=spouse_age_65_plus,

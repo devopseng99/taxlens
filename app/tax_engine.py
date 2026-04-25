@@ -628,6 +628,7 @@ class TaxResult:
     charitable_cash_before_limit: float = 0.0   # Cash before AGI cap
     charitable_noncash_before_limit: float = 0.0 # Non-cash before AGI cap
     charitable_carryforward: float = 0.0         # Excess over AGI limits → 5-year carryforward
+    charitable_carryover_used: float = 0.0       # Prior-year carryover applied this year
     sched_a_total: float = 0.0
 
     # --- Schedule B ---
@@ -658,6 +659,18 @@ class TaxResult:
     sched_e_total_income: float = 0.0
     sched_e_total_expenses: float = 0.0
     sched_e_net_income: float = 0.0
+    passive_loss_suspended: float = 0.0          # Current-year rental loss disallowed by §469
+    passive_loss_carryover_used: float = 0.0     # Prior-year suspended loss applied this year
+    passive_loss_carryforward: float = 0.0       # Total suspended loss → next year
+
+    # --- NOL (Net Operating Loss) ---
+    nol_amount: float = 0.0                      # Current-year NOL (if taxable income < 0 before NOL)
+    nol_carryover_used: float = 0.0              # Prior-year NOL applied this year
+    nol_carryforward: float = 0.0                # Remaining NOL → next year (80% of taxable income limit)
+
+    # --- AMT Credit Carryforward ---
+    amt_credit_carryover_used: float = 0.0       # Prior-year AMT credit applied this year
+    amt_credit_carryforward: float = 0.0         # Remaining AMT credit → next year
 
     # --- Crypto / Form 8949 ---
     crypto_short_term_gain: float = 0.0
@@ -922,6 +935,27 @@ class TaxResult:
             } if self.gambling_winnings > 0 else None,
             "student_loan_deduction": round(self.student_loan_deduction, 2) if self.student_loan_deduction > 0 else None,
             "student_loan_phaseout_applied": self.student_loan_phaseout_applied if self.student_loan_phaseout_applied else None,
+            "carryforwards": {
+                "charitable_carryforward": round(self.charitable_carryforward, 2),
+                "charitable_carryover_used": round(self.charitable_carryover_used, 2),
+                "capital_loss_carryforward": round(self.capital_loss_carryforward, 2),
+                "capital_loss_carryover_used": round(self.capital_loss_carryover_used, 2),
+                "passive_loss_suspended": round(self.passive_loss_suspended, 2),
+                "passive_loss_carryover_used": round(self.passive_loss_carryover_used, 2),
+                "passive_loss_carryforward": round(self.passive_loss_carryforward, 2),
+                "nol_amount": round(self.nol_amount, 2),
+                "nol_carryover_used": round(self.nol_carryover_used, 2),
+                "nol_carryforward": round(self.nol_carryforward, 2),
+                "amt_credit_carryover_used": round(self.amt_credit_carryover_used, 2),
+                "amt_credit_carryforward": round(self.amt_credit_carryforward, 2),
+            } if any([
+                self.charitable_carryforward, self.charitable_carryover_used,
+                self.capital_loss_carryforward, self.capital_loss_carryover_used,
+                self.passive_loss_suspended, self.passive_loss_carryforward,
+                self.nol_amount, self.nol_carryover_used, self.nol_carryforward,
+                self.amt_credit_carryover_used, self.amt_credit_carryforward,
+            ]) else None,
+            # Backward compat: flat keys
             "charitable_carryforward": round(self.charitable_carryforward, 2) if self.charitable_carryforward > 0 else None,
             "capital_loss_carryforward": round(self.capital_loss_carryforward, 2) if self.capital_loss_carryforward > 0 else None,
             "capital_loss_carryover_used": round(self.capital_loss_carryover_used, 2) if self.capital_loss_carryover_used > 0 else None,
@@ -1405,6 +1439,10 @@ def compute_tax(
     alimony_paid: float = 0.0,
     alimony_received: float = 0.0,
     capital_loss_carryover: float = 0.0,
+    charitable_carryover: float = 0.0,
+    passive_loss_carryover: float = 0.0,
+    nol_carryover: float = 0.0,
+    amt_credit_carryover: float = 0.0,
     filer_age_65_plus: bool = False,
     filer_is_blind: bool = False,
     spouse_age_65_plus: bool = False,
@@ -1524,7 +1562,14 @@ def compute_tax(
 
         if raw_net >= 0:
             # Net rental income — fully included
-            result.sched_e_net_income = raw_net
+            # Prior-year suspended losses can offset current rental income
+            if passive_loss_carryover > 0:
+                offset = min(passive_loss_carryover, raw_net)
+                result.passive_loss_carryover_used = round(offset, 2)
+                result.sched_e_net_income = raw_net - offset
+                result.passive_loss_carryforward = round(passive_loss_carryover - offset, 2)
+            else:
+                result.sched_e_net_income = raw_net
         else:
             # Net rental loss — passive activity loss rules (IRC §469)
             # Active participation: up to $25K loss allowed, phased out for AGI $100K-$150K
@@ -1543,6 +1588,16 @@ def compute_tax(
                 reduction = (prelim_agi - c.RENTAL_LOSS_PHASEOUT_START) * 0.50
                 allowed_loss = max(0, min(abs(raw_net), c.RENTAL_LOSS_LIMIT - reduction))
             result.sched_e_net_income = -allowed_loss
+            # Track suspended loss (disallowed portion + prior carryover)
+            current_suspended = abs(raw_net) - allowed_loss
+            result.passive_loss_suspended = round(current_suspended, 2)
+            result.passive_loss_carryforward = round(
+                current_suspended + passive_loss_carryover, 2
+            )
+    elif passive_loss_carryover > 0:
+        # No rental properties this year but prior suspended losses exist
+        # Cannot use without passive income — carry forward entirely
+        result.passive_loss_carryforward = round(passive_loss_carryover, 2)
 
     # =======================================================================
     # CRYPTO / FORM 8949 — Digital Asset Transactions
@@ -2094,9 +2149,19 @@ def compute_tax(
     # Total charitable also capped at 60% of AGI (IRC §170(b))
     overall_limit = result.line_11_agi * c.CHARITABLE_CASH_AGI_LIMIT
     total_allowed = min(allowed_cash + allowed_noncash, overall_limit)
+
+    # Prior-year charitable carryover — uses remaining room under AGI limit
+    carryover_room = max(0, overall_limit - total_allowed)
+    carryover_used = min(charitable_carryover, carryover_room)
+    total_allowed += carryover_used
+    result.charitable_carryover_used = round(carryover_used, 2)
+
     result.sched_a_charitable = round(total_allowed, 2)
     total_raw = raw_cash + raw_noncash
-    result.charitable_carryforward = round(max(0, total_raw - total_allowed), 2)
+    # New carryforward = excess from current year + unused prior carryover
+    current_excess = max(0, total_raw - (total_allowed - carryover_used))
+    remaining_prior = charitable_carryover - carryover_used
+    result.charitable_carryforward = round(current_excess + remaining_prior, 2)
 
     result.sched_a_total = (
         result.sched_a_medical
@@ -2198,7 +2263,24 @@ def compute_tax(
     else:
         result.personal_exemption = 0.0
 
-    result.line_15_taxable_income = max(0, result.line_11_agi - result.line_13_deduction - result.qbi_deduction - result.personal_exemption)
+    raw_taxable = result.line_11_agi - result.line_13_deduction - result.qbi_deduction - result.personal_exemption
+    # Track current-year NOL if taxable income is negative (before NOL carryover)
+    if raw_taxable < 0:
+        result.nol_amount = round(abs(raw_taxable), 2)
+    result.line_15_taxable_income = max(0, raw_taxable)
+
+    # =======================================================================
+    # NOL CARRYOVER DEDUCTION (IRC §172)
+    # =======================================================================
+    # Post-2020 NOLs: limited to 80% of taxable income (TCJA §172(a)(2))
+    if nol_carryover > 0 and result.line_15_taxable_income > 0:
+        nol_limit = result.line_15_taxable_income * 0.80
+        nol_used = min(nol_carryover, nol_limit)
+        result.nol_carryover_used = round(nol_used, 2)
+        result.line_15_taxable_income = max(0, result.line_15_taxable_income - nol_used)
+        result.nol_carryforward = round(nol_carryover - nol_used, 2)
+    elif nol_carryover > 0:
+        result.nol_carryforward = round(nol_carryover, 2)
 
     # =======================================================================
     # TAX COMPUTATION (Line 16)
@@ -2289,6 +2371,20 @@ def compute_tax(
     result.amt = max(0, tentative_min_tax - regular_tax)
 
     # =======================================================================
+    # AMT CREDIT CARRYOVER (Form 8801)
+    # =======================================================================
+    # Prior-year AMT credit can offset regular tax down to tentative minimum tax
+    if amt_credit_carryover > 0:
+        # Credit limited to: regular_tax - tentative_min_tax (can't go below TMT)
+        credit_room = max(0, regular_tax - tentative_min_tax)
+        amt_credit_used = min(amt_credit_carryover, credit_room)
+        result.amt_credit_carryover_used = round(amt_credit_used, 2)
+        result.amt_credit_carryforward = round(amt_credit_carryover - amt_credit_used, 2)
+    # Current-year AMT becomes next year's potential credit
+    if result.amt > 0:
+        result.amt_credit_carryforward = round(result.amt_credit_carryforward + result.amt, 2)
+
+    # =======================================================================
     # TOTAL TAX (Line 24)
     # =======================================================================
 
@@ -2300,7 +2396,9 @@ def compute_tax(
         + result.additional_medicare_tax
         + result.amt
         + result.retirement_early_penalty
+        - result.amt_credit_carryover_used  # Prior-year AMT credit reduces total tax
     )
+    result.line_24_total_tax = max(0, result.line_24_total_tax)
 
     # =======================================================================
     # CREDITS

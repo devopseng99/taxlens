@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.58.0 — 79 waves complete)
+Updated: 2026-04-25 (v3.59.0 — 80 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1380,7 +1380,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 7. ~~**PTET (Pass-Through Entity Tax) framework**~~ — **RESOLVED in Wave 79 (v3.58.0)**. K1Income carries ptet_election/ptet_state/ptet_tax_paid. StateConfig has ptet_available flag. 15 states enabled. Credit aggregated on TaxResult and applied to state returns. SALT cap bypass verified — entity-level PTET not subject to $10K cap. 19 tests.
 
-8. **Carryforward tracking system** — Charitable contribution carryforward, NOL carryforward, capital loss carryforward, AMT credit carryforward, passive activity loss carryforward. Currently `charitable_carryforward` is tracked but not consumed in subsequent years. Need persistent per-filer carryforward state.
+8. ~~**Carryforward tracking system**~~ — **RESOLVED in Wave 80 (v3.59.0)**. Five carryforward types: charitable (IRC §170), capital loss (§1211), passive activity loss (§469), NOL (§172 with 80% limit), AMT credit (Form 8801). Each has input (prior-year carryover) and output (current-year carryforward). Engine remains stateless — clients chain years. 28 tests.
 
 9. **Entity type optimization engine** — Compare sole prop vs S-corp vs C-corp for a given business profile. Reasonable compensation analysis for S-corp. This is the highest-value advisory feature for business owners.
 
@@ -1407,7 +1407,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 - ~~PTET elections not modeled~~ (FIXED v3.58.0 Wave 79 — 15 states, K-1 credit flow, SALT bypass)
 
 **Completeness (missing features):**
-- No carryforward consumption (charitable, NOL, capital loss, AMT credit, passive)
+- ~~No carryforward consumption~~ (FIXED v3.59.0 Wave 80 — 5 types: charitable, capital loss, passive, NOL, AMT credit)
 - No entity comparison (sole prop vs S-corp vs C-corp)
 - ~~No TCJA sunset comparison~~ (FIXED v3.57.0 Wave 78)
 - No mega backdoor Roth pathway
