@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.59.0 — 80 waves complete)
+Updated: 2026-04-25 (v3.60.0 — 81 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1382,7 +1382,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 8. ~~**Carryforward tracking system**~~ — **RESOLVED in Wave 80 (v3.59.0)**. Five carryforward types: charitable (IRC §170), capital loss (§1211), passive activity loss (§469), NOL (§172 with 80% limit), AMT credit (Form 8801). Each has input (prior-year carryover) and output (current-year carryforward). Engine remains stateless — clients chain years. 28 tests.
 
-9. **Entity type optimization engine** — Compare sole prop vs S-corp vs C-corp for a given business profile. Reasonable compensation analysis for S-corp. This is the highest-value advisory feature for business owners.
+9. ~~**Entity type optimization engine**~~ — **RESOLVED in Wave 81 (v3.60.0)**. `entity_optimizer.py` compares sole prop vs S-corp vs C-corp: SE tax, FICA split, QBI deduction, corporate double taxation. Reasonable compensation range (40-70%). REST `/entity-comparison` + MCP `compare_entity_types`. 30 tests.
 
 10. **State fillable PDF templates** — Currently only IL has a fillable PDF. All other states use ReportLab summary pages. Add official state templates for top-10 states (CA, NY, NJ, PA, NC, GA, OH, VA, MA, MD).
 
@@ -1408,7 +1408,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 **Completeness (missing features):**
 - ~~No carryforward consumption~~ (FIXED v3.59.0 Wave 80 — 5 types: charitable, capital loss, passive, NOL, AMT credit)
-- No entity comparison (sole prop vs S-corp vs C-corp)
+- ~~No entity comparison~~ (FIXED v3.60.0 Wave 81 — sole prop vs S-corp vs C-corp optimizer)
 - ~~No TCJA sunset comparison~~ (FIXED v3.57.0 Wave 78)
 - No mega backdoor Roth pathway
 - No state fillable PDFs (except IL)

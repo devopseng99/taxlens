@@ -834,6 +834,41 @@ def compare_tcja_sunset(
 
 
 @mcp.tool()
+def compare_entity_types(
+    business_income: float,
+    filing_status: str = "single",
+    other_income: float = 0,
+    reasonable_compensation: float | None = None,
+    is_sstb: bool = False,
+    tax_year: int = 2025,
+) -> str:
+    """Compare sole proprietorship vs S-corp vs C-corp tax burden.
+
+    Shows SE tax savings, FICA split, QBI deduction, corporate double taxation,
+    and recommends the optimal entity structure. Includes reasonable compensation
+    range for S-corp election.
+
+    Args:
+        business_income: Net business profit (Schedule C equivalent).
+        filing_status: "single", "mfj", "hoh", or "mfs".
+        other_income: Non-business income (W-2, interest) for bracket positioning.
+        reasonable_compensation: S-corp W-2 salary. If omitted, uses 50% of income.
+        is_sstb: Specified Service Trade or Business (limits QBI for high earners).
+        tax_year: Tax year (2024, 2025, or 2026).
+    """
+    from entity_optimizer import compare_entities, comparison_to_dict
+    comp = compare_entities(
+        business_income=business_income,
+        filing_status=filing_status,
+        other_income=other_income,
+        reasonable_compensation=reasonable_compensation,
+        is_sstb=is_sstb,
+        tax_year=tax_year,
+    )
+    return json.dumps(comparison_to_dict(comp), indent=2)
+
+
+@mcp.tool()
 def estimate_impact(
     base_scenario: dict,
     change_description: str,

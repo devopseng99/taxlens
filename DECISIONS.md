@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.59.0 API + v2.6.0 Portal — 80 waves complete)
+Updated: 2026-04-25 (v3.60.0 API + v2.6.0 Portal — 81 waves complete)
 
 ## Architecture
 
@@ -715,6 +715,10 @@ Updated: 2026-04-25 (v3.59.0 API + v2.6.0 Portal — 80 waves complete)
 228. **NOL limited to 80% of taxable income (post-TCJA §172)** — The Tax Cuts and Jobs Act limited NOL deductions to 80% of taxable income (pre-NOL). This prevents large NOLs from zeroing out taxable income entirely. The remaining 20% ensures some minimum tax. Prior-2018 NOLs had no percentage limit but a 2-year carryback (not modeled).
 
 229. **AMT credit from prior year offsets regular tax down to tentative minimum tax** — The AMT credit (Form 8801) prevents double taxation when AMT was paid in a prior year due to timing differences. The credit is limited to the excess of regular tax over TMT, ensuring the taxpayer never pays less than the tentative minimum. Current-year AMT adds to the carryforward pool for future use.
+
+230. **Entity optimizer is a standalone module, not in tax_engine.py** — `entity_optimizer.py` computes simplified sole prop / S-corp / C-corp comparisons independently, importing only `compute_bracket_tax` and tax_config constants. It intentionally doesn't run `compute_tax()` three times (which would be accurate but slow and complex). The trade-off: simplified SE tax, FICA, and bracket calculations that are directionally correct for advisory purposes but may differ from a full return computation by a few hundred dollars.
+
+231. **Reasonable compensation range is heuristic, not IRS-prescribed** — The 40-70% range for S-corp reasonable compensation is based on industry practice and audit precedent, not an IRS formula. The IRS looks at factors like duties, time spent, comparable salaries, and industry norms. The optimizer provides a starting range; CPAs should validate with comparable salary data.
 
 ## PDF Template Provenance
 

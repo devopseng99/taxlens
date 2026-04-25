@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.59.0)")
+    logger.info("TaxLens API starting (v3.60.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.59.0",
+    version="3.60.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.59.0",
+        "version": "3.60.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -482,7 +482,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.59.0",
+        "version": "3.60.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -947,6 +947,36 @@ async def tcja_comparison(
         "disclaimer": "2026 values are projections based on TCJA sunset provisions. "
                        "Congress may extend, modify, or replace these provisions.",
     }
+
+
+# ---------------------------------------------------------------------------
+# Entity Type Optimization (Sole Prop vs S-Corp vs C-Corp)
+# ---------------------------------------------------------------------------
+@app.post("/entity-comparison", tags=["Planning"])
+async def entity_comparison(
+    business_income: float = Query(..., description="Net business profit (Schedule C equivalent)"),
+    filing_status: str = Query(default="single"),
+    other_income: float = Query(default=0, description="Non-business income (W-2, interest, etc.)"),
+    reasonable_compensation: float | None = Query(default=None, description="S-corp W-2 salary (auto-calculated if omitted)"),
+    is_sstb: bool = Query(default=False, description="Specified Service Trade or Business (§199A(d)(2))"),
+    tax_year: int = Query(default=2025, description="Tax year"),
+    _auth: str = Depends(require_auth),
+):
+    """Compare tax burden under sole proprietorship, S-corp, and C-corp.
+
+    Shows SE tax savings, FICA split, QBI deduction, and double-taxation
+    impact for each entity structure. Includes reasonable compensation range.
+    """
+    from entity_optimizer import compare_entities, comparison_to_dict
+    comp = compare_entities(
+        business_income=business_income,
+        filing_status=filing_status,
+        other_income=other_income,
+        reasonable_compensation=reasonable_compensation,
+        is_sstb=is_sstb,
+        tax_year=tax_year,
+    )
+    return comparison_to_dict(comp)
 
 
 # ---------------------------------------------------------------------------
