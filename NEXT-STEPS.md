@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.52.0)
+Updated: 2026-04-25 (v3.52.0 — 73 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1358,13 +1358,66 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `app/tax_config.py` — CHARITABLE_CASH_AGI_LIMIT (60%), CHARITABLE_NONCASH_AGI_LIMIT (30%)
 - `app/main.py` — version 3.29.0
 
-## Future Enhancements
+## Post-Wave-73 Roadmap (2026-04-25)
 
-- **MCP OAuth 2.0 implementation** (deferred — API key auth working)
-- **Multi-replica rate limiting:** Redis-backed token bucket for horizontal scaling
-- **Stripe live mode:** Create full-access key, cutover from test → live
-- **Grafana dashboards:** Wire Prometheus metrics to visual dashboards
-- **API reference docs:** OpenAPI spec + MCP integration guide
-- **PostgREST auto-generated OpenAPI:** Expose PostgREST's /api docs for DB schema
-- **Landing page completion:** /about, /security, /for-businesses pages (from original spec)
+All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from the platform reflection.
+
+### 90-Day Priority (BLOCKERS + TCJA Sunset)
+
+1. **BLOCKER: Fix Solo 401(k) / SEP-IRA mismodeling** — Currently modeled as Schedule C expense (reduces SE tax). Should be Schedule 1 line 16 above-the-line deduction (does NOT reduce SE tax). This is a correctness bug that produces wrong results for every self-employed filer using retirement deductions.
+
+2. **BLOCKER: PII encryption for SSNs** — SSNs stored in plaintext throughout: PersonInfo → TaxResult → result.json → PostgREST → PostgreSQL. Need field-level encryption at rest (Fernet, same pattern as Plaid tokens) and redaction in API responses (show last 4 only).
+
+3. **TCJA sunset 2025 vs 2026 comparison engine** — Tax Cuts and Jobs Act provisions expire end of 2025: brackets revert to 2017 rates, SALT cap ($10K) removed, QBI deduction (§199A) expires, CTC drops from $2,000 to $1,000, standard deduction roughly halves. Build `_YEAR_2026_SUNSET` config and comparison endpoint. This is the #1 planning question every client will ask in 2025.
+
+4. **QBI SSTB field on BusinessIncome** — Specified Service Trade or Business classification determines whether QBI phases out completely above the threshold (it does for SSTB). Currently missing from the input schema — high-income professionals (doctors, lawyers, consultants) get incorrect QBI results.
+
+5. **compare_scenarios should return marginal rates** — Current comparison output shows total tax and effective rate but not marginal rate. Marginal rate is the #1 thing users compare between scenarios.
+
+6. **Audit risk should show passing checks** — Currently only shows flags (what's risky). Should also show "clean" indicators — filers want reassurance, not just warnings.
+
+### 6-Month Priorities
+
+7. **PTET (Pass-Through Entity Tax) framework** — #1 state-level planning move for S-corp/partnership owners. 20+ states offer PTET elections that convert SALT-capped personal deductions into uncapped entity-level deductions. Need: entity-level computation, credit-on-K-1 flow, state election tracking.
+
+8. **Carryforward tracking system** — Charitable contribution carryforward, NOL carryforward, capital loss carryforward, AMT credit carryforward, passive activity loss carryforward. Currently `charitable_carryforward` is tracked but not consumed in subsequent years. Need persistent per-filer carryforward state.
+
+9. **Entity type optimization engine** — Compare sole prop vs S-corp vs C-corp for a given business profile. Reasonable compensation analysis for S-corp. This is the highest-value advisory feature for business owners.
+
+10. **State fillable PDF templates** — Currently only IL has a fillable PDF. All other states use ReportLab summary pages. Add official state templates for top-10 states (CA, NY, NJ, PA, NC, GA, OH, VA, MA, MD).
+
+11. **Mega backdoor Roth modeling** — After-tax 401(k) → in-plan Roth conversion. Needs employer plan limits (§415(c) $70,000 total) minus employee deferrals and employer match. High-value for high-income savers.
+
+12. **IL PPRT (Personal Property Replacement Tax)** — 1.5% on S-corp/partnership income earned in IL. Not currently modeled. Affects every IL business owner.
+
+### 18-Month Vision
+
+13. **E-file integration** — MeF XML generation for federal + state. This is the ultimate goal — advisory without filing is half the product.
+14. **Entity tax returns (1120, 1120-S, 1065)** — Currently individual-only. Business entity returns open the CPA market.
+15. **Lifetime tax optimizer** — Multi-year Roth conversion ladders, Social Security timing, RMD planning, estate tax integration.
+16. **API marketplace** — Third-party integrator access with per-call billing. The MCP + OAuth infrastructure is ready.
+17. **Real-time law tracking** — Automated tax law change detection and constant updates when new Rev. Proc. or legislation passes.
+
+### Known Gaps by Severity
+
+**Correctness (wrong answers):**
+- Solo 401(k)/SEP modeled as Schedule C expense (BLOCKER)
+- QBI missing SSTB classification for high-income phaseout
+- No SEP-IRA or SIMPLE IRA contribution limits (only traditional IRA modeled)
+- Reasonable compensation not enforced for S-corp QBI
+- PTET elections not modeled (affects state tax for 20+ states)
+
+**Completeness (missing features):**
+- No carryforward consumption (charitable, NOL, capital loss, AMT credit, passive)
+- No entity comparison (sole prop vs S-corp vs C-corp)
+- No TCJA sunset comparison (2025 vs 2026 law)
+- No mega backdoor Roth pathway
+- No state fillable PDFs (except IL)
+- SSNs stored in plaintext (PII risk)
+
+**Scale (production readiness):**
+- Webhook delivery is simulated (always 200) — needs real httpx delivery with retries
+- Metering buffer is in-memory only — needs Redis Streams for multi-replica
+- No e-file capability (MeF XML generation)
+- No entity tax returns (1120, 1120-S, 1065)
 - **Tax engine:** All planned features complete (53 waves shipped)

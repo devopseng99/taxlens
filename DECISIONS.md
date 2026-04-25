@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.52.0 API + v2.6.0 Portal)
+Updated: 2026-04-25 (v3.52.0 API + v2.6.0 Portal — 73 waves complete)
 
 ## Architecture
 
@@ -651,6 +651,22 @@ Updated: 2026-04-24 (v3.52.0 API + v2.6.0 Portal)
 205. **7 custom Prometheus metrics** — counters (drafts, OCR pages, API requests, webhook deliveries), gauges (active tenants, Stripe MRR), histogram (computation duration with 6 buckets). All prefixed with `taxlens_`.
 
 206. **4 alert rules** — High error rate >5% (critical), P95 latency >2s (warning), disk >80% (warning), webhook failures (warning). All with stabilization windows to avoid flapping.
+
+## Post-Wave-73 Strategic Decisions (2026-04-25)
+
+207. **Stay in planning/advisory lane, don't compete on filing UX** — TaxLens's moat is the computation engine + MCP interface, not a consumer filing UI. TurboTax/FreeTaxUSA own the consumer UX. Compete by being the best engine that CPAs, agents, and integrators build on top of. The portal is for tenant management, not end-user tax filing.
+
+208. **TCJA sunset comparison is the #1 urgent feature** — Every tax professional and high-net-worth individual will ask "what happens to my taxes in 2026?" The Tax Cuts and Jobs Act provisions expire Dec 31 2025: brackets revert, SALT uncapped, QBI gone, CTC halved, standard deduction drops. Building `_YEAR_2026_SUNSET` config and a comparison endpoint is the single highest-value feature for the next 8 months.
+
+209. **Solo 401(k)/SEP-IRA is a BLOCKER** — Currently mismodeled as a Schedule C business expense (line 19), which reduces SE tax base. IRS treatment: Schedule 1 line 16 above-the-line deduction — reduces income tax but NOT self-employment tax. Every self-employed filer using retirement deductions gets wrong SE tax. Must fix before any production advisory use.
+
+210. **PII encryption is stop-ship for real deployment** — SSNs flow in plaintext through PersonInfo → TaxResult → result.json → PostgREST → PostgreSQL → API responses. For a real multi-tenant deployment, need: (1) field-level Fernet encryption at rest (same pattern as Plaid tokens), (2) last-4-only display in API responses, (3) tenant isolation audit for SSN access paths.
+
+211. **PTET is the #1 state planning feature** — Pass-Through Entity Tax elections (available in 30+ states) let S-corp/partnership owners convert SALT-capped personal deductions into uncapped entity-level deductions. This is the single biggest tax planning move for passthrough business owners post-TCJA. Requires entity-level computation layer.
+
+212. **Carryforwards need persistent per-filer state** — Five major carryforwards exist (charitable, NOL, capital loss, AMT credit, passive activity loss) but none are consumed across tax years. The `charitable_carryforward` field on TaxResult is tracked but never imported into the next year's computation. Need a carryforward ledger per filer.
+
+213. **QBI needs SSTB classification** — The BusinessIncome schema lacks a `is_sstb` field (Specified Service Trade or Business). For high-income filers above the QBI threshold, SSTB status means QBI phases to $0 (not to the W-2 wage limitation). Without this field, lawyers/doctors/consultants get incorrect QBI results above ~$192K single / ~$384K MFJ.
 
 ## PDF Template Provenance
 
