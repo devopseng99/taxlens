@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.35.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.36.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,12 @@ Updated: 2026-04-24 (v3.35.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 57 — Admin Database Explorer (v3.36.0)
+
+240. **Database overview endpoint with table allowlist** — `GET /admin/database` returns row counts for all 12 core tables. The `DB_TABLES` allowlist prevents arbitrary table access — `GET /admin/database/{table_name}` returns 404 for tables not in the list.
+
+241. **Table detail with sample rows** — `GET /admin/database/{table_name}?limit=10` returns sample rows ordered by created_at desc plus column names derived from the first row. Provides a lightweight admin view without requiring direct database access.
 
 ## Wave 56 — API Reference Documentation (v3.35.0)
 

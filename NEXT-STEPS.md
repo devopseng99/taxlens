@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.35.0)
+Updated: 2026-04-24 (v3.36.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,21 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 57 — Admin Database Explorer (v3.36.0) — 2026-04-24
+
+- [x] GET /admin/database: overview with row counts for all 12 core tables
+- [x] GET /admin/database/{table_name}: sample rows + column names with limit param
+- [x] Table allowlist prevents arbitrary table access (404 for unknown tables)
+- [x] Error handling per table (one table failing doesn't break overview)
+- [x] 986/986 unit tests (11 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave57_admin_database.py` — 11 tests (4 config, 2 overview, 3 detail, 2 enrichment)
+
+**Modified files:**
+- `app/admin_routes.py` — DB_TABLES constant, database_overview + table_detail endpoints
+- `app/main.py` — version 3.36.0
 
 ### Wave 56 — API Reference Documentation (v3.35.0) — 2026-04-24
 

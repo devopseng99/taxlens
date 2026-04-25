@@ -123,12 +123,12 @@ class TestMCPGuide:
 # Version & Integration
 # =========================================================================
 class TestVersionIntegration:
-    def test_version_3_35_0(self):
+    def test_api_guide_endpoint_in_main(self):
         path = os.path.join(os.path.dirname(__file__), "..", "app", "main.py")
         src = open(path).read()
-        version = "3.35.0"
-        count = src.count(f'"{version}"')
-        assert count >= 2, f"Expected {version} in 2+ places, found {count}"
+        assert "api_guide" in src
+        assert "mcp_guide" in src
+        assert "postgrest_openapi" in src
 
     def test_docs_endpoints_importable(self):
         """main.py can be parsed without errors (endpoints are valid)."""

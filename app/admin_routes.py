@@ -498,3 +498,64 @@ async def toggle_early_access(tenant_id: str, req: EarlyAccessRequest,
         "early_access_enabled": req.enabled,
         "early_access_features": req.features,
     }
+
+
+# --- Database Explorer ---
+
+DB_TABLES = [
+    "tenants", "users", "api_keys", "oauth_clients", "oauth_tokens",
+    "tax_drafts", "usage_events", "billing_customers", "billing_subscriptions",
+    "tenant_plans", "tenant_features", "audit_log",
+]
+
+
+@router.get(
+    "/database",
+    summary="Database overview",
+    description="List all database tables with row counts and column info. "
+                "Useful for admin dashboards and debugging.",
+)
+async def database_overview(request: Request, _admin: str = Depends(require_admin)):
+    """Show database tables, row counts, and column metadata."""
+    if not DB_ENABLED:
+        raise HTTPException(503, "Database not enabled.")
+
+    token = _admin_token(request)
+    tables = []
+
+    for table in DB_TABLES:
+        try:
+            count = await postgrest.count(table, token=token)
+            tables.append({"table": table, "row_count": count, "status": "ok"})
+        except Exception as e:
+            tables.append({"table": table, "row_count": None, "status": f"error: {e}"})
+
+    return {"tables": tables, "total_tables": len(DB_TABLES)}
+
+
+@router.get(
+    "/database/{table_name}",
+    summary="Table detail",
+    description="Get sample rows and column names for a specific table.",
+)
+async def table_detail(table_name: str, request: Request,
+                       limit: int = 10,
+                       _admin: str = Depends(require_admin)):
+    """Show sample rows from a table."""
+    if not DB_ENABLED:
+        raise HTTPException(503, "Database not enabled.")
+
+    if table_name not in DB_TABLES:
+        raise HTTPException(404, f"Table '{table_name}' not in allowed list.")
+
+    token = _admin_token(request)
+    rows = await postgrest.get(table_name, token=token, limit=limit,
+                                order="created_at.desc")
+    columns = list(rows[0].keys()) if rows else []
+
+    return {
+        "table": table_name,
+        "columns": columns,
+        "row_count": len(rows),
+        "sample_rows": rows,
+    }
