@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.55.0 API + v2.6.0 Portal — 76 waves complete)
+Updated: 2026-04-25 (v3.56.0 API + v2.6.0 Portal — 77 waves complete)
 
 ## Architecture
 
@@ -687,6 +687,14 @@ Updated: 2026-04-25 (v3.55.0 API + v2.6.0 Portal — 76 waves complete)
 219. **Compute marginal/effective rates inline, not on TaxResult** — The compare_scenarios endpoints (both REST and MCP) previously tried to access `result.effective_rate` and `result.marginal_rate` on TaxResult — fields that didn't exist (latent bug). Fixed by computing rates inline using `_effective_rate()` and `_marginal_rate()` from `tax_projector.py`. Rates are per-scenario since each may have different filing status and income levels.
 
 220. **Audit risk passing checks alongside flags** — Added `PassingCheck` dataclass and `passing_checks` list to `AuditRiskReport`. Every check that doesn't trigger a flag now records a passing check with the same category, the filer's value, and the norm. This gives users confidence about what's normal on their return, not just what's flagged. The `to_dict()` method includes `num_passing` and `passing_checks` array.
+
+## Wave 77 — PII Encryption for SSNs (v3.56.0)
+
+221. **SSN masking at the storage boundary, not in the dataclass** — PersonInfo and Dependent retain `ssn` fields in plaintext during computation (needed for PDF generation on IRS forms). SSNs are redacted at the storage boundary: `result.json` "input" section stores masked SSNs (`***-**-6789`), and API responses never expose full SSNs. This avoids circular complexity where encryption/decryption would need to weave through the computation engine.
+
+222. **Fernet encryption with graceful degradation** — When `PII_FERNET_KEY` env var is set, `encrypt_ssn()` produces Fernet ciphertext (AES-128-CBC + HMAC, timestamped). When unset, it falls back to masking (last 4 digits only). This means the system is safe-by-default: even without encryption configured, SSNs are never stored in plaintext. The Fernet pattern matches the existing Plaid token encryption (`PLAID_FERNET_KEY`).
+
+223. **Redaction is immutable — never mutates input dicts** — `redact_person_dict()` and `redact_input_block()` always return new dicts, never modifying the originals. This prevents accidental loss of SSN data mid-computation when the same PersonInput dict is referenced by both the computation pipeline and the storage pipeline.
 
 ## PDF Template Provenance
 

@@ -28,6 +28,7 @@ from pdf_generator import generate_all_pdfs
 from audit_risk import assess_audit_risk
 from prior_year_import import extract_from_fillable_pdf, PriorYearData
 from auth import require_auth
+from pii import redact_input_block
 
 router = APIRouter(prefix="/tax-draft", tags=["Tax Drafts"])
 
@@ -925,8 +926,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for name in pdf_paths.keys()
     }
 
-    # Store the original request input for review
-    result_json["input"] = {
+    # Store the original request input for review (SSNs redacted at rest)
+    raw_input = {
         "filing_status": req.filing_status,
         "residence_state": req.residence_state,
         "work_states": req.work_states,
@@ -945,6 +946,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         "deductions": req.deductions.model_dump(),
         "payments": req.payments.model_dump(),
     }
+    result_json["input"] = redact_input_block(raw_input)
 
     (draft_dir / "result.json").write_text(json.dumps(result_json, indent=2, default=str))
 
