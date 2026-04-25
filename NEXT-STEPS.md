@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.60.0 — 81 waves complete)
+Updated: 2026-04-25 (v3.61.0 — 82 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1386,7 +1386,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 10. **State fillable PDF templates** — Currently only IL has a fillable PDF. All other states use ReportLab summary pages. Add official state templates for top-10 states (CA, NY, NJ, PA, NC, GA, OH, VA, MA, MD).
 
-11. **Mega backdoor Roth modeling** — After-tax 401(k) → in-plan Roth conversion. Needs employer plan limits (§415(c) $70,000 total) minus employee deferrals and employer match. High-value for high-income savers.
+11. ~~**Mega backdoor Roth modeling**~~ — **RESOLVED in Wave 82 (v3.61.0)**. `mega_backdoor_roth.py` computes after-tax 401(k) space under §415(c), handles catch-up (doesn't count toward §415(c)), projects Roth vs taxable growth. REST `/mega-backdoor-roth` + MCP `compute_mega_backdoor_roth`. 18 tests.
 
 12. **IL PPRT (Personal Property Replacement Tax)** — 1.5% on S-corp/partnership income earned in IL. Not currently modeled. Affects every IL business owner.
 
@@ -1410,7 +1410,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 - ~~No carryforward consumption~~ (FIXED v3.59.0 Wave 80 — 5 types: charitable, capital loss, passive, NOL, AMT credit)
 - ~~No entity comparison~~ (FIXED v3.60.0 Wave 81 — sole prop vs S-corp vs C-corp optimizer)
 - ~~No TCJA sunset comparison~~ (FIXED v3.57.0 Wave 78)
-- No mega backdoor Roth pathway
+- ~~No mega backdoor Roth pathway~~ (FIXED v3.61.0 Wave 82 — §415(c) space calc + Roth vs taxable projection)
 - No state fillable PDFs (except IL)
 - ~~SSNs stored in plaintext~~ (FIXED v3.56.0 Wave 77 — masked at storage boundary)
 

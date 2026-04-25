@@ -869,6 +869,43 @@ def compare_entity_types(
 
 
 @mcp.tool()
+def compute_mega_backdoor_roth(
+    employee_deferrals: float,
+    employer_match: float = 0,
+    age_50_plus: bool = False,
+    marginal_rate: float = 0.24,
+    projection_years: int = 10,
+    annual_return: float = 0.07,
+    tax_year: int = 2025,
+) -> str:
+    """Calculate mega backdoor Roth space and projected tax savings.
+
+    The mega backdoor Roth converts after-tax 401(k) contributions to Roth,
+    enabling tax-free growth beyond the normal deferral limit.
+
+    Args:
+        employee_deferrals: Total pre-tax + Roth 401(k) deferrals for the year.
+        employer_match: Employer matching contributions (vested).
+        age_50_plus: True if age 50+ for catch-up eligibility.
+        marginal_rate: Expected marginal tax rate at withdrawal (for projection).
+        projection_years: Years to project growth comparison.
+        annual_return: Expected annual investment return.
+        tax_year: Tax year (determines IRS limits).
+    """
+    from mega_backdoor_roth import compute_mega_backdoor, result_to_dict
+    result = compute_mega_backdoor(
+        employee_deferrals=employee_deferrals,
+        employer_match=employer_match,
+        age_50_plus=age_50_plus,
+        marginal_rate=marginal_rate,
+        projection_years=projection_years,
+        annual_return=annual_return,
+        tax_year=tax_year,
+    )
+    return json.dumps(result_to_dict(result), indent=2)
+
+
+@mcp.tool()
 def estimate_impact(
     base_scenario: dict,
     change_description: str,

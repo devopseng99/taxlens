@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.60.0)")
+    logger.info("TaxLens API starting (v3.61.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.60.0",
+    version="3.61.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.60.0",
+        "version": "3.61.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -482,7 +482,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.60.0",
+        "version": "3.61.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -977,6 +977,38 @@ async def entity_comparison(
         tax_year=tax_year,
     )
     return comparison_to_dict(comp)
+
+
+# ---------------------------------------------------------------------------
+# Mega Backdoor Roth Calculator
+# ---------------------------------------------------------------------------
+@app.post("/mega-backdoor-roth", tags=["Planning"])
+async def mega_backdoor_roth(
+    employee_deferrals: float = Query(..., description="Total pre-tax + Roth 401(k) deferrals"),
+    employer_match: float = Query(default=0, description="Employer matching contributions (vested)"),
+    age_50_plus: bool = Query(default=False, description="Age 50+ for catch-up eligibility"),
+    marginal_rate: float = Query(default=0.24, description="Expected marginal tax rate at withdrawal"),
+    projection_years: int = Query(default=10, description="Years to project growth"),
+    annual_return: float = Query(default=0.07, description="Expected annual return rate"),
+    tax_year: int = Query(default=2025, description="Tax year"),
+    _auth: str = Depends(require_auth),
+):
+    """Calculate mega backdoor Roth space and projected tax savings.
+
+    Computes after-tax 401(k) contribution space under §415(c) limits,
+    then projects Roth vs taxable growth over the specified period.
+    """
+    from mega_backdoor_roth import compute_mega_backdoor, result_to_dict
+    result = compute_mega_backdoor(
+        employee_deferrals=employee_deferrals,
+        employer_match=employer_match,
+        age_50_plus=age_50_plus,
+        marginal_rate=marginal_rate,
+        projection_years=projection_years,
+        annual_return=annual_return,
+        tax_year=tax_year,
+    )
+    return result_to_dict(result)
 
 
 # ---------------------------------------------------------------------------

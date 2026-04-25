@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.60.0 API + v2.6.0 Portal — 81 waves complete)
+Updated: 2026-04-25 (v3.61.0 API + v2.6.0 Portal — 82 waves complete)
 
 ## Architecture
 
@@ -719,6 +719,10 @@ Updated: 2026-04-25 (v3.60.0 API + v2.6.0 Portal — 81 waves complete)
 230. **Entity optimizer is a standalone module, not in tax_engine.py** — `entity_optimizer.py` computes simplified sole prop / S-corp / C-corp comparisons independently, importing only `compute_bracket_tax` and tax_config constants. It intentionally doesn't run `compute_tax()` three times (which would be accurate but slow and complex). The trade-off: simplified SE tax, FICA, and bracket calculations that are directionally correct for advisory purposes but may differ from a full return computation by a few hundred dollars.
 
 231. **Reasonable compensation range is heuristic, not IRS-prescribed** — The 40-70% range for S-corp reasonable compensation is based on industry practice and audit precedent, not an IRS formula. The IRS looks at factors like duties, time spent, comparable salaries, and industry norms. The optimizer provides a starting range; CPAs should validate with comparable salary data.
+
+232. **Catch-up contributions don't count toward §415(c)** — The mega backdoor Roth calculator correctly excludes age 50+ catch-up ($7,500) from the §415(c) annual additions limit. Only regular deferrals (up to §402(g)) and employer match count toward the $70K/$72K total. This is a common misunderstanding that would undercount available after-tax space.
+
+233. **Roth vs taxable projection uses annual LTCG tax drag** — The 10-year projection compares Roth (tax-free growth) vs taxable (growth taxed at 15% annually). This is conservative: real taxable accounts may defer gains and realize them at sale, but annual tax drag is the standard comparison methodology.
 
 ## PDF Template Provenance
 
