@@ -1177,6 +1177,60 @@ def parse_1098_from_ocr(ocr_fields: dict) -> float:
     return 0.0
 
 
+def parse_1099r_from_ocr(ocr_fields: dict) -> RetirementDistribution:
+    """Extract retirement distribution data from 1099-R OCR result.
+
+    Azure model: prebuilt-tax.us.1099R
+    Returns RetirementDistribution with gross, taxable, distribution code, withholding.
+    """
+    payer = ocr_fields.get("Payer", {})
+    payer_name = ""
+    if isinstance(payer.get("value"), dict):
+        payer_name = str(payer["value"].get("Name", {}).get("value", ""))
+    elif isinstance(payer.get("value"), str):
+        payer_name = payer["value"]
+
+    gross = _parse_money(_get_field_value(ocr_fields, "Box1"))
+    taxable = _parse_money(_get_field_value(ocr_fields, "Box2a"))
+    taxable_not_det = False
+    box2b = _get_field_value(ocr_fields, "Box2b")
+    if box2b and str(box2b).lower() in ("true", "yes", "x", "1"):
+        taxable_not_det = True
+
+    withheld = _parse_money(_get_field_value(ocr_fields, "Box4"))
+    dist_code = str(_get_field_value(ocr_fields, "Box7") or "7").strip()
+    if not dist_code:
+        dist_code = "7"
+
+    # IRA/SEP/SIMPLE checkbox (Box 7 indicator)
+    is_ira = False
+    ira_flag = _get_field_value(ocr_fields, "IRAOrSEPOrSIMPLE")
+    if ira_flag and str(ira_flag).lower() in ("true", "yes", "x", "1"):
+        is_ira = True
+
+    # Roth indicator
+    is_roth = dist_code in ("B", "J", "T", "Q")
+    # Also check explicit Roth field
+    roth_flag = _get_field_value(ocr_fields, "Roth")
+    if roth_flag and str(roth_flag).lower() in ("true", "yes", "x", "1"):
+        is_roth = True
+
+    # Early distribution (under 59½)
+    is_early = dist_code in ("1", "J", "S")
+
+    return RetirementDistribution(
+        payer_name=payer_name or "1099-R Distribution",
+        gross_distribution=gross,
+        taxable_amount=taxable,
+        taxable_amount_not_determined=taxable_not_det,
+        federal_withheld=withheld,
+        distribution_code=dist_code[:1] if dist_code else "7",
+        is_ira=is_ira,
+        is_roth=is_roth,
+        is_early=is_early,
+    )
+
+
 def parse_1099b_from_structured(data: list[dict]) -> list[CapitalTransaction]:
     """Parse structured 1099-B transaction data (JSON/CSV import, not OCR).
 

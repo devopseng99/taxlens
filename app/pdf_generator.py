@@ -1946,6 +1946,97 @@ def generate_form_8606(result: TaxResult) -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Form 1099-R PDF — Retirement Distributions
+# ---------------------------------------------------------------------------
+def generate_1099r(dist, payer_ein: str = "") -> BytesIO:
+    """Generate a 1099-R summary PDF for a single retirement distribution.
+
+    Args:
+        dist: RetirementDistribution dataclass instance
+        payer_ein: Employer Identification Number (optional)
+    """
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    # Header
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, height - 50, "Form 1099-R — Distributions From Pensions, Annuities,")
+    c.drawString(72, height - 68, "Retirement or Profit-Sharing Plans, IRAs, Insurance Contracts, etc.")
+    c.setFont("Helvetica", 9)
+    c.drawString(72, height - 84, "Tax Year 2025  |  Copy B — For Recipient")
+
+    y = height - 120
+
+    # Payer info
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "PAYER'S name and address:")
+    c.setFont("Helvetica", 10)
+    y -= 16
+    c.drawString(90, y, dist.payer_name)
+    if payer_ein:
+        y -= 16
+        c.drawString(90, y, f"PAYER'S TIN: {payer_ein}")
+
+    y -= 30
+
+    # Distribution boxes
+    boxes = [
+        ("1  Gross distribution", f"${dist.gross_distribution:,.2f}"),
+        ("2a Taxable amount", f"${dist.taxable_amount:,.2f}"),
+        ("2b Taxable amount not determined", "X" if dist.taxable_amount_not_determined else ""),
+        ("4  Federal income tax withheld", f"${dist.federal_withheld:,.2f}"),
+        ("7  Distribution code(s)", dist.distribution_code),
+        ("    IRA/SEP/SIMPLE", "X" if dist.is_ira else ""),
+    ]
+
+    for label, value in boxes:
+        c.setFont("Helvetica", 9)
+        c.drawString(72, y, label)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(350, y, value)
+        y -= 18
+
+    # Distribution type summary
+    y -= 20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Distribution Summary:")
+    y -= 16
+    c.setFont("Helvetica", 10)
+
+    dist_type = "Normal distribution"
+    if dist.is_roth:
+        dist_type = "Roth distribution (qualified = tax-free)"
+    elif dist.distribution_code == "G":
+        dist_type = "Direct rollover (not taxable)"
+    elif dist.is_early:
+        dist_type = "Early distribution (may be subject to 10% penalty)"
+
+    c.drawString(90, y, f"Type: {dist_type}")
+    y -= 16
+    c.drawString(90, y, f"Account type: {'IRA/SEP/SIMPLE' if dist.is_ira else 'Pension/Annuity/401(k)'}")
+    y -= 16
+
+    taxable_val = dist.taxable_amount if not dist.taxable_amount_not_determined else dist.gross_distribution
+    if dist.is_roth or dist.distribution_code in ("G", "H"):
+        taxable_val = 0.0
+    c.drawString(90, y, f"Taxable on return: ${taxable_val:,.2f}")
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
 def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
@@ -2133,6 +2224,15 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "retirement_summary.pdf"
         p.write_bytes(buf.read())
         paths["retirement_summary"] = str(p)
+
+        # Individual 1099-R PDFs
+        if hasattr(result, "_retirement_distributions"):
+            for i, dist in enumerate(result._retirement_distributions):
+                buf = generate_1099r(dist)
+                fname = f"1099r_{i+1}.pdf" if i > 0 else "1099r.pdf"
+                p = out / fname
+                p.write_bytes(buf.read())
+                paths[f"1099r{'_' + str(i+1) if i > 0 else ''}"] = str(p)
 
     # Form 4562 — Depreciation (if depreciable assets)
     if result.depreciation_assets_count > 0:

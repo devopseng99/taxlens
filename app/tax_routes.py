@@ -18,7 +18,7 @@ from tax_engine import (
     GamblingIncome, ForeignTaxCredit, QuarterlyIncome,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
-    parse_1099b_from_structured,
+    parse_1099b_from_structured, parse_1099r_from_ocr,
 )
 from pdf_generator import generate_all_pdfs
 from audit_risk import assess_audit_risk
@@ -299,6 +299,7 @@ class TaxDraftRequest(BaseModel):
     div_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-DIVs with OCR")
     nec_1099_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-NECs with OCR")
     mortgage_1098_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1098s with OCR")
+    retirement_1099r_proc_ids: list[str] = Field(default=[], description="proc_ids of uploaded 1099-Rs with OCR")
 
     # Structured brokerage data (1099-B — JSON import, not OCR)
     brokerage_transactions: list[BrokerageTransactionInput] = Field(default=[], description="Structured 1099-B transactions")
@@ -458,6 +459,14 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         ocr_data = load_ocr_result(req.username, proc_id)
         fields = ocr_data.get("fields", {})
         ocr_mortgage += parse_1098_from_ocr(fields)
+
+    # --- Parse 1099-R retirement distributions from OCR ---
+    ocr_retirement_dists = []
+    for proc_id in req.retirement_1099r_proc_ids:
+        ocr_data = load_ocr_result(req.username, proc_id)
+        fields = ocr_data.get("fields", {})
+        dist = parse_1099r_from_ocr(fields)
+        ocr_retirement_dists.append(dist)
 
     # --- Parse 1099-B structured brokerage transactions ---
     brokerage_txns = parse_1099b_from_structured(
@@ -702,6 +711,12 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for r in req.retirement_distributions
     ] if req.retirement_distributions else None
 
+    # Merge OCR-parsed 1099-R distributions
+    if ocr_retirement_dists:
+        if retirement_list is None:
+            retirement_list = []
+        retirement_list.extend(ocr_retirement_dists)
+
     # --- Build IRA contributions ---
     ira_list = [
         IRAContribution(
@@ -935,6 +950,7 @@ async def download_pdf(
         "form_8949": "form_8949.pdf",
         "form_4562": "form_4562.pdf",
         "retirement_summary": "retirement_summary.pdf",
+        "1099r": "1099r.pdf",
         "ss_summary": "ss_summary.pdf",
         "il_1040": "il_1040.pdf",
     }

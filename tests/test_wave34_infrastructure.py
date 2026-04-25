@@ -79,7 +79,7 @@ class TestHealthEndpointSource:
         """Version string is consistent in both locations."""
         src = self._read_main()
         # Count occurrences of the version string
-        version = "3.37.0"
+        version = "3.38.0"
         count = src.count(f'"{version}"')
         assert count >= 2, f"Expected version {version} in at least 2 places, found {count}"
 

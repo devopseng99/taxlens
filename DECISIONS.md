@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.37.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.38.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,12 @@ Updated: 2026-04-24 (v3.37.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 59 — 1099-R OCR Parser + PDF Generation (v3.38.0)
+
+244. **1099-R OCR parser extracts distribution codes for tax treatment** — `parse_1099r_from_ocr()` reads 9 fields from Azure's `prebuilt-tax.us.1099R` model. Distribution code determines tax treatment: "7" (normal), "1" (early → 10% penalty), "G" (rollover → tax-free), "Q" (qualified Roth → tax-free). The parser sets `is_early`, `is_roth`, and `is_ira` flags from the code.
+
+245. **1099-R PDF as ReportLab-drawn summary** — Rather than a fillable IRS template (1099-R is an informational form, not a filing form), the PDF summarizes distribution details including payer, amounts, tax treatment, and withholding. Includes distribution type interpretation (e.g., "Early distribution — may be subject to 10% penalty").
 
 ## Wave 58 — Landing Page Content API (v3.37.0)
 

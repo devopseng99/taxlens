@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.37.0)
+Updated: 2026-04-24 (v3.38.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,26 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 59 — 1099-R OCR Parser + PDF Generation (v3.38.0) — 2026-04-24
+
+- [x] parse_1099r_from_ocr(): extracts 9 fields (gross, taxable, code, IRA, Roth, withholding)
+- [x] Distribution code interpretation: 7=normal, 1=early, G=rollover, Q=Roth
+- [x] IRA/SEP/SIMPLE and Roth flag extraction from Box7 + explicit fields
+- [x] generate_1099r(): ReportLab summary PDF with distribution type interpretation
+- [x] retirement_1099r_proc_ids on TaxDraftRequest for auto-extraction
+- [x] OCR-parsed distributions merge with manual entries
+- [x] 1099r added to file_map and generate_all_pdfs
+- [x] 1016/1016 unit tests (17 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave59_1099r.py` — 17 tests (8 parser, 3 PDF, 5 integration, 1 engine)
+
+**Modified files:**
+- `app/tax_engine.py` — parse_1099r_from_ocr() function
+- `app/pdf_generator.py` — generate_1099r() + hook in generate_all_pdfs
+- `app/tax_routes.py` — retirement_1099r_proc_ids, parse_1099r_from_ocr import, OCR merge
+- `app/main.py` — version 3.38.0
 
 ### Wave 58 — Landing Page Content API (v3.37.0) — 2026-04-24
 

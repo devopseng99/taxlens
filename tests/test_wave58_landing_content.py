@@ -111,7 +111,9 @@ class TestContentMiddleware:
         src = open(path).read()
         assert '"Content"' in src
 
-    def test_version_3_37_0(self):
+    def test_content_endpoints_in_main(self):
         path = os.path.join(os.path.dirname(__file__), "..", "app", "main.py")
         src = open(path).read()
-        assert '"3.37.0"' in src
+        assert "about_content" in src
+        assert "security_content" in src
+        assert "for_businesses_content" in src
