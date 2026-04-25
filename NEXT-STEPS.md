@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.51.0)
+Updated: 2026-04-24 (v3.52.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,22 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 73 — Grafana Dashboard Integration (v3.52.0) — 2026-04-24
+
+- [x] app/grafana_dashboards.py: 4 dashboard definitions + 7 custom metrics + 4 alert rules
+- [x] Dashboards: API Performance, Business Metrics, Tenant Activity, Infrastructure
+- [x] Custom metrics: taxlens_drafts_total, taxlens_ocr_pages_total, taxlens_active_tenants, taxlens_computation_duration_seconds, taxlens_api_requests_total, taxlens_webhook_deliveries_total, taxlens_stripe_mrr
+- [x] Alerts: high error rate >5% (critical), P95 >2s (warning), disk >80% (warning), webhook failures (warning)
+- [x] GET /admin/dashboards endpoint
+- [x] 1274/1274 unit tests (14 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/grafana_dashboards.py` — CUSTOM_METRICS, ALERT_RULES, 4 dashboard generators
+- `tests/test_wave73_grafana.py` — 14 tests (3 metrics, 5 alerts, 5 dashboards, 1 endpoint)
+
+**Modified files:**
+- `app/main.py` — GET /admin/dashboards endpoint, version 3.52.0
 
 ### Wave 72 — Stripe Live Mode Activation (v3.51.0) — 2026-04-24
 

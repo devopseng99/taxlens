@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.51.0)")
+    logger.info("TaxLens API starting (v3.52.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.51.0",
+    version="3.52.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.51.0",
+        "version": "3.52.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -482,7 +482,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.51.0",
+        "version": "3.52.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -1095,6 +1095,17 @@ async def list_deliveries(endpoint_id: str, limit: int = Query(default=50), _aut
 # ---------------------------------------------------------------------------
 # Revenue Dashboard (Admin)
 # ---------------------------------------------------------------------------
+@app.get("/admin/dashboards", tags=["Admin"])
+async def grafana_dashboards(_auth: str = Depends(require_auth)):
+    """Grafana dashboard definitions and alert rules."""
+    from grafana_dashboards import get_all_dashboards, get_alert_rules_yaml, CUSTOM_METRICS
+    return {
+        "dashboards": {k: v["dashboard"]["title"] for k, v in get_all_dashboards().items()},
+        "alert_rules_count": len(get_alert_rules_yaml()),
+        "custom_metrics_count": len(CUSTOM_METRICS),
+    }
+
+
 @app.get("/admin/revenue", tags=["Admin"])
 async def revenue_dashboard(_auth: str = Depends(require_auth)):
     """Revenue dashboard — MRR, ARR, subscriber breakdown."""

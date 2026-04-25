@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.51.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.52.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -647,6 +647,10 @@ Updated: 2026-04-24 (v3.51.0 API + v2.6.0 Portal)
 203. **Three-tier Stripe pricing** — Starter $29/mo, Professional $99/mo, Enterprise $299/mo. Metered billing for usage overage (computations, OCR pages, API calls). Revenue metrics computed from subscriber list with churn tracking.
 
 204. **Billing state machine** — 6 states (free→trialing→active→past_due→canceled→downgraded) with validated transitions. Invalid transitions rejected to prevent state corruption.
+
+205. **7 custom Prometheus metrics** — counters (drafts, OCR pages, API requests, webhook deliveries), gauges (active tenants, Stripe MRR), histogram (computation duration with 6 buckets). All prefixed with `taxlens_`.
+
+206. **4 alert rules** — High error rate >5% (critical), P95 latency >2s (warning), disk >80% (warning), webhook failures (warning). All with stabilization windows to avoid flapping.
 
 ## PDF Template Provenance
 
