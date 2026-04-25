@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.32.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.33.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,16 @@ Updated: 2026-04-24 (v3.32.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 54 — MCP OAuth 2.0 Token Endpoint (v3.33.0)
+
+229. **POST /oauth/token as RFC 6749 form-urlencoded endpoint** — The token endpoint accepts `application/x-www-form-urlencoded` as required by the OAuth 2.0 spec. Three grant types: `client_credentials` (MCP agents), `authorization_code` with PKCE S256 (browser clients), and `refresh_token` (rotation). All tokens stored as SHA256 hashes — the raw token is only returned once to the client.
+
+230. **Refresh token rotation on every use** — Each refresh_token grant deletes the old refresh token and issues a new access + refresh pair. This limits the damage window if a refresh token is compromised — the attacker can use it once, but the legitimate client's next refresh will fail, alerting the tenant.
+
+231. **Scope enforcement: intersection of client + request + VALID_SCOPES** — The granted scope is the intersection of what the client is allowed (per oauth_clients.scopes), what the request asked for, and the global VALID_SCOPES set (compute, drafts, documents, mcp, plaid). Scope narrowing on refresh is allowed; widening is forbidden.
+
+232. **OAuth token endpoint exempt from tenant context middleware** — `/oauth/token` is added to both _SKIP_PATHS (tenant_context.py) and EXEMPT_PATHS (MeteringRateLimitMiddleware) since it handles its own authentication via client_id/client_secret. The endpoint validates credentials internally against PostgREST.
 
 ## Wave 53 — Form 2210 Schedule AI Annualized Installment Method (v3.32.0)
 

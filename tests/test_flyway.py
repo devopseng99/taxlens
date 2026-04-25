@@ -106,18 +106,20 @@ class TestMigrationDiscovery:
         engine = MigrationEngine("postgres://fake:fake@localhost/fake",
                                   migrations_dir=migrations_dir)
         files = engine.discover()
-        assert len(files) == 6
+        assert len(files) == 7
         assert files[0].version == 1
         assert files[1].version == 2
         assert files[2].version == 3
         assert files[3].version == 4
         assert files[4].version == 5
         assert files[5].version == 6
+        assert files[6].version == 7
         assert "create schema" in files[0].description
         assert "feature" in files[4].description
         assert "roles and rls" in files[1].description
         assert "functions" in files[2].description
         assert "audit log triggers" in files[3].description
+        assert "oauth" in files[6].description
 
     def test_discover_empty_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:

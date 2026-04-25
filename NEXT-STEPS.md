@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.32.0)
+Updated: 2026-04-24 (v3.33.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,30 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 54 — MCP OAuth 2.0 Token Endpoint (v3.33.0) — 2026-04-24
+
+- [x] POST /oauth/token: client_credentials, authorization_code (PKCE S256), refresh_token grants
+- [x] Token response: access_token, token_type, expires_in, scope, refresh_token
+- [x] Refresh token rotation (old invalidated on each use)
+- [x] Scope enforcement: intersection of client scopes × requested × VALID_SCOPES
+- [x] Authorization code creation helper (for admin/authorization UI)
+- [x] Token cleanup function (deletes expired tokens)
+- [x] Token scope introspection (validate_token_scopes for route-level checks)
+- [x] V007 migration: indexes on oauth_tokens(client_id, expires_at) and (token_type, client_id)
+- [x] OAuth endpoint exempt from tenant context + rate limit middleware
+- [x] 929/929 unit tests (33 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/oauth.py` — OAuth 2.0 token endpoint (3 grant types, PKCE, cleanup, introspection)
+- `app/db/flyway/migrations/V007__oauth_token_indexes.sql` — 2 new indexes
+- `tests/test_wave54_oauth.py` — 33 tests (5 utilities, 3 validation, 3 client_credentials, 6 auth_code, 4 refresh, 2 code creation, 2 cleanup, 4 scope validation, 4 integration)
+
+**Modified files:**
+- `app/main.py` — version 3.33.0, mount oauth_router, add /oauth/token to EXEMPT_PATHS
+- `app/middleware/tenant_context.py` — add /oauth/token to _SKIP_PATHS
+- `tests/test_wave34_infrastructure.py` — version 3.33.0
+- `tests/test_flyway.py` — migration count 6→7
 
 ### Wave 53 — Form 2210 Schedule AI Annualized Installment Method (v3.32.0) — 2026-04-24
 

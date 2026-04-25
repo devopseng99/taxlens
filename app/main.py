@@ -20,6 +20,7 @@ from plaid_routes import router as plaid_router
 from admin_routes import router as admin_router
 from billing_routes import router as billing_router
 from monitoring import router as monitoring_router
+from oauth import router as oauth_router
 from auth import require_auth, AUTH_ENABLED
 from contextlib import asynccontextmanager
 from mcp_server import mcp
@@ -63,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.32.0)")
+    logger.info("TaxLens API starting (v3.33.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -77,7 +78,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.32.0",
+    version="3.33.0",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
@@ -110,7 +111,7 @@ class MeteringRateLimitMiddleware:
 
     EXEMPT_PATHS = {"/health", "/billing/webhook", "/billing/plans",
                     "/billing/onboarding/free", "/docs", "/openapi.json",
-                    "/mcp", "/mcp/", "/metrics"}
+                    "/mcp", "/mcp/", "/metrics", "/oauth/token"}
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -208,6 +209,9 @@ app.include_router(billing_router)
 
 # Mount monitoring routes (usage/me, admin monitoring)
 app.include_router(monitoring_router)
+
+# Mount OAuth token endpoint
+app.include_router(oauth_router)
 
 # Mount MCP server (StreamableHTTP at /mcp)
 # Accessible at https://dropit.istayintek.com/api/mcp
@@ -320,7 +324,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.32.0",
+        "version": "3.33.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
