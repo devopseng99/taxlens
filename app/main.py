@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.50.0)")
+    logger.info("TaxLens API starting (v3.51.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.50.0",
+    version="3.51.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.50.0",
+        "version": "3.51.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -482,7 +482,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.50.0",
+        "version": "3.51.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -1090,6 +1090,29 @@ async def list_deliveries(endpoint_id: str, limit: int = Query(default=50), _aut
     from webhooks import get_deliveries
     deliveries = get_deliveries(endpoint_id=endpoint_id, limit=limit)
     return [{"id": d.id, "event_type": d.event_type, "success": d.success, "status_code": d.status_code, "attempt": d.attempt, "created_at": d.created_at} for d in deliveries]
+
+
+# ---------------------------------------------------------------------------
+# Revenue Dashboard (Admin)
+# ---------------------------------------------------------------------------
+@app.get("/admin/revenue", tags=["Admin"])
+async def revenue_dashboard(_auth: str = Depends(require_auth)):
+    """Revenue dashboard — MRR, ARR, subscriber breakdown."""
+    from stripe_live import compute_revenue_metrics, LIVE_PRODUCTS
+    # In production, query billing_customers table; for now return demo data
+    return {
+        "products": {
+            tier: {"name": p.name, "price_monthly": p.price_monthly / 100, "features": p.features}
+            for tier, p in LIVE_PRODUCTS.items()
+        },
+        "metrics": {
+            "total_subscribers": 0,
+            "mrr": 0.0,
+            "arr": 0.0,
+            "subscribers_by_tier": {},
+            "churn_rate": 0.0,
+        },
+    }
 
 
 @app.post("/upload", response_model=DocumentMetadata)

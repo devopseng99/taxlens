@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.50.0)
+Updated: 2026-04-24 (v3.51.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,23 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 72 — Stripe Live Mode Activation (v3.51.0) — 2026-04-24
+
+- [x] app/stripe_live.py: Live products, metered billing, revenue metrics
+- [x] 3 tiers: Starter $29, Professional $99, Enterprise $299 (monthly)
+- [x] Metered usage: computations, ocr_pages, api_calls with tenant isolation
+- [x] Revenue dashboard: MRR, ARR, subscriber breakdown by tier, churn rate
+- [x] Billing state machine: 6 states with validated transitions
+- [x] GET /admin/revenue endpoint for revenue dashboard
+- [x] 1260/1260 unit tests (17 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/stripe_live.py` — LIVE_PRODUCTS, metered usage, RevenueMetrics, billing state machine
+- `tests/test_wave72_stripe_live.py` — 17 tests (5 products, 3 usage, 5 revenue, 3 transitions, 1 endpoint)
+
+**Modified files:**
+- `app/main.py` — GET /admin/revenue endpoint, version 3.51.0
 
 ### Wave 71 — Additional 10 State Tax Engines (v3.50.0) — 2026-04-24
 

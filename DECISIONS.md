@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.50.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.51.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -643,6 +643,10 @@ Updated: 2026-04-24 (v3.50.0 API + v2.6.0 Portal)
 201. **Indiana uses `in_.py` module name** — Python keyword `in` prevents `in.py`. The `get_state_config()` function maps `IN` → `in_` for the import. All other states use lowercase abbreviation directly.
 
 202. **20 states: 4 flat + 7 graduated + 9 no-tax** — Flat: IL, PA, NC, MA, MI, AZ, CO, IN. Graduated: CA, NY, NJ, GA, OH, VA, MN, MD, WI. No-tax: AK, FL, NV, NH, SD, TN, TX, WA, WY. Reciprocal agreements expanded: VA-DC-KY-MD-PA-WV, MD-DC-PA-VA-WV, MI-IL-IN-KY-MN-OH-WI, WI-IL-IN-KY-MI, IN-KY-MI-OH-PA-WI.
+
+203. **Three-tier Stripe pricing** — Starter $29/mo, Professional $99/mo, Enterprise $299/mo. Metered billing for usage overage (computations, OCR pages, API calls). Revenue metrics computed from subscriber list with churn tracking.
+
+204. **Billing state machine** — 6 states (free→trialing→active→past_due→canceled→downgraded) with validated transitions. Invalid transitions rejected to prevent state corruption.
 
 ## PDF Template Provenance
 
