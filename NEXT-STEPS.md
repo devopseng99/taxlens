@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.41.0)
+Updated: 2026-04-24 (v3.42.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,23 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 63 — Batch Document Upload + Document Manager (v3.42.0) — 2026-04-24
+
+- [x] POST /tax-draft/batch-upload: accept up to 20 files, save with UUID proc_ids + metadata
+- [x] POST /tax-draft/batch-analyze: parallel Azure OCR via asyncio.gather
+- [x] PATCH /tax-draft/documents/{proc_id}/ocr-result: manual OCR field correction
+- [x] GET /tax-draft/documents: list all uploaded documents with status
+- [x] _DOC_TYPE_MAP: Azure doc_type → internal form type mapping (8 form types)
+- [x] Per-document error isolation in batch analyze
+- [x] 1081/1081 unit tests (19 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave63_batch_upload.py` — 19 tests (4 type map, 4 upload, 3 analyze, 3 correction, 2 list, 3 storage)
+
+**Modified files:**
+- `app/tax_routes.py` — batch endpoints, _DOC_TYPE_MAP, asyncio/uuid imports
+- `app/main.py` — version 3.42.0
 
 ### Wave 62 — Enhanced PDF Package + Cover Letter (v3.41.0) — 2026-04-24
 

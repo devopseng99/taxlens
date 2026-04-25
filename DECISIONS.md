@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.41.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.42.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -603,6 +603,12 @@ Updated: 2026-04-24 (v3.41.0 API + v2.6.0 Portal)
 181. **Full return PDF uses pypdf PdfWriter merge (not PdfMerger)** — `PdfWriter.add_page()` + `add_outline_item()` for bookmarks. PdfMerger is deprecated in pypdf 3+. Cover page generated via ReportLab, then merged first. Forms ordered per `_FORM_ORDER` constant matching IRS filing sequence.
 
 182. **Full return endpoint reconstructs TaxResult from result.json** — The `/pdf/full_return` endpoint reads the saved `result.json` file and populates a minimal TaxResult for the cover page. This avoids recomputing the entire return just to generate the merge.
+
+183. **Batch upload saves original + metadata.json** — Each uploaded document gets a UUID proc_id, and both the original file and a metadata.json are saved. Metadata tracks status (uploaded→analyzed), form type, OCR confidence. This allows the document lifecycle to be tracked without the OCR result itself.
+
+184. **Batch analyze uses asyncio.gather for parallel OCR** — Multiple documents are analyzed in parallel via `asyncio.gather()`, with per-document error isolation. One failed OCR doesn't block others.
+
+185. **OCR correction merges fields, doesn't replace** — `PATCH /documents/{proc_id}/ocr-result` merges corrections into existing fields. Scalar values get wrapped in `{"value": ...}`. A `manually_corrected` flag is set for audit trail.
 
 ## PDF Template Provenance
 

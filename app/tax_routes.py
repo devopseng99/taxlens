@@ -1,7 +1,10 @@
 """Tax draft API routes — create, view, and download completed tax form PDFs."""
 
+import asyncio
 import json
 import os
+import tempfile
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -1110,6 +1113,199 @@ async def list_draft_pdfs(draft_id: str, username: str = Query(...)):
             "url": f"/api/tax-draft/{draft_id}/pdf/{name}?username={username}",
         }
     return {"draft_id": draft_id, "pdfs": pdfs}
+
+
+# ---------------------------------------------------------------------------
+# Batch Document Upload + Analyze
+# ---------------------------------------------------------------------------
+# Form type detection map: Azure doc_type → internal form type
+_DOC_TYPE_MAP = {
+    "tax.us.w2": "w2",
+    "tax.us.1099Int": "1099int",
+    "tax.us.1099Div": "1099div",
+    "tax.us.1099Nec": "1099nec",
+    "tax.us.1099R": "1099r",
+    "tax.us.1099Misc": "1099misc",
+    "tax.us.1099G": "1099g",
+    "tax.us.1098": "1098",
+}
+
+
+@router.post(
+    "/batch-upload",
+    summary="Batch upload tax documents",
+    description="Upload multiple tax documents (W-2s, 1099s, 1098s) in a single request. "
+                "Returns proc_ids for each uploaded file. Use /batch-analyze to run OCR.",
+)
+async def batch_upload(
+    files: list[UploadFile] = File(..., description="Tax document files (PDF or image)"),
+    username: str = Query(...),
+    _auth: str = Depends(require_auth),
+):
+    """Upload multiple tax documents at once. Returns proc_ids for OCR processing."""
+    if len(files) > 20:
+        raise HTTPException(400, "Maximum 20 files per batch upload")
+
+    results = []
+    user_dir = STORAGE_ROOT / username.replace("/", "_").replace("..", "_")
+
+    for file in files:
+        proc_id = str(uuid.uuid4())
+        doc_dir = user_dir / proc_id
+        doc_dir.mkdir(parents=True, exist_ok=True)
+
+        content = await file.read()
+        ext = Path(file.filename or "doc.pdf").suffix or ".pdf"
+        doc_path = doc_dir / f"original{ext}"
+        doc_path.write_bytes(content)
+
+        # Save metadata
+        meta = {
+            "proc_id": proc_id,
+            "filename": file.filename,
+            "size_bytes": len(content),
+            "content_type": file.content_type,
+            "status": "uploaded",
+        }
+        (doc_dir / "metadata.json").write_text(json.dumps(meta))
+
+        results.append({
+            "proc_id": proc_id,
+            "filename": file.filename,
+            "size_bytes": len(content),
+            "status": "uploaded",
+        })
+
+    return {"uploaded": len(results), "documents": results}
+
+
+@router.post(
+    "/batch-analyze",
+    summary="Batch OCR analyze uploaded documents",
+    description="Run Azure Document Intelligence OCR on multiple previously uploaded documents "
+                "in parallel. Returns extracted fields and detected form types.",
+)
+async def batch_analyze(
+    proc_ids: list[str] = Query(..., description="proc_ids from batch-upload"),
+    username: str = Query(...),
+    _auth: str = Depends(require_auth),
+):
+    """Run parallel OCR on multiple uploaded documents."""
+    from ocr import analyze_document, OCR_ENABLED
+
+    if not OCR_ENABLED:
+        raise HTTPException(503, "Azure Document Intelligence not configured")
+
+    user_dir = STORAGE_ROOT / username.replace("/", "_").replace("..", "_")
+
+    async def _analyze_one(proc_id: str) -> dict:
+        doc_dir = user_dir / proc_id
+        if not doc_dir.exists():
+            return {"proc_id": proc_id, "status": "error", "error": "Document not found"}
+
+        # Find the original file
+        originals = list(doc_dir.glob("original.*"))
+        if not originals:
+            return {"proc_id": proc_id, "status": "error", "error": "No original file"}
+
+        try:
+            result = await analyze_document(originals[0], model_id="prebuilt-tax.us")
+            # Save OCR result
+            (doc_dir / "ocr_result.json").write_text(json.dumps(result))
+
+            # Detect form type
+            form_type = _DOC_TYPE_MAP.get(result.get("doc_type", ""), "unknown")
+
+            # Update metadata
+            meta_path = doc_dir / "metadata.json"
+            if meta_path.exists():
+                meta = json.loads(meta_path.read_text())
+                meta["status"] = "analyzed"
+                meta["form_type"] = form_type
+                meta["doc_type"] = result.get("doc_type", "")
+                meta["confidence"] = result.get("confidence", 0)
+                meta_path.write_text(json.dumps(meta))
+
+            return {
+                "proc_id": proc_id,
+                "status": "analyzed",
+                "form_type": form_type,
+                "doc_type": result.get("doc_type", ""),
+                "confidence": result.get("confidence", 0),
+                "pages": result.get("pages", 0),
+            }
+        except Exception as e:
+            return {"proc_id": proc_id, "status": "error", "error": str(e)}
+
+    results = await asyncio.gather(*[_analyze_one(pid) for pid in proc_ids])
+    return {"analyzed": len(results), "results": list(results)}
+
+
+@router.patch(
+    "/documents/{proc_id}/ocr-result",
+    summary="Correct OCR result",
+    description="Manually correct or update OCR-extracted fields for a document. "
+                "Useful when OCR confidence is low or fields need adjustment.",
+)
+async def patch_ocr_result(
+    proc_id: str,
+    corrections: dict,
+    username: str = Query(...),
+    _auth: str = Depends(require_auth),
+):
+    """Manually correct OCR-extracted fields for a document."""
+    user_dir = STORAGE_ROOT / username.replace("/", "_").replace("..", "_")
+    doc_dir = user_dir / proc_id
+    ocr_path = doc_dir / "ocr_result.json"
+
+    if not ocr_path.exists():
+        raise HTTPException(404, f"No OCR result for document {proc_id}")
+
+    existing = json.loads(ocr_path.read_text())
+    fields = existing.get("fields", {})
+
+    # Merge corrections into fields
+    for key, value in corrections.items():
+        if isinstance(value, dict):
+            if key in fields:
+                fields[key].update(value)
+            else:
+                fields[key] = value
+        else:
+            fields[key] = {"value": value}
+
+    existing["fields"] = fields
+    existing["manually_corrected"] = True
+    ocr_path.write_text(json.dumps(existing))
+
+    return {"proc_id": proc_id, "status": "corrected", "fields_updated": list(corrections.keys())}
+
+
+@router.get(
+    "/documents",
+    summary="List uploaded documents",
+    description="List all uploaded documents for a user with their OCR status and metadata.",
+)
+async def list_documents(
+    username: str = Query(...),
+    _auth: str = Depends(require_auth),
+):
+    """List all uploaded documents with status."""
+    user_dir = STORAGE_ROOT / username.replace("/", "_").replace("..", "_")
+    if not user_dir.exists():
+        return {"documents": []}
+
+    documents = []
+    for meta_file in user_dir.glob("*/metadata.json"):
+        try:
+            meta = json.loads(meta_file.read_text())
+            documents.append(meta)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    # Sort by proc_id (creation order)
+    documents.sort(key=lambda d: d.get("proc_id", ""))
+    return {"documents": documents, "total": len(documents)}
 
 
 @router.get(
