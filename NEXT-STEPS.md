@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.48.0)
+Updated: 2026-04-24 (v3.49.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,23 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 70 — Horizontal Scaling Infrastructure (v3.49.0) — 2026-04-24
+
+- [x] app/scaling.py: MeteringBuffer with flush/aggregate pattern
+- [x] record_usage() convenience function for tenant metering (computation, ocr_page, api_call)
+- [x] HPAConfig: K8s HPA manifest generator (CPU-based, 1-3 replicas, 70% target)
+- [x] PDBConfig: K8s PDB manifest generator (minAvailable=1)
+- [x] ScalingStatus for health endpoint (metering backend, buffer size, tenants tracked)
+- [x] Health endpoint now includes scaling metrics
+- [x] 1195/1195 unit tests (13 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/scaling.py` — MeteringBuffer, HPAConfig, PDBConfig, ScalingStatus
+- `tests/test_wave70_horizontal_scaling.py` — 13 tests (6 metering, 3 HPA, 2 PDB, 2 status)
+
+**Modified files:**
+- `app/main.py` — scaling status in health endpoint, version 3.49.0
 
 ### Wave 69 — Webhook Notifications + Event System (v3.48.0) — 2026-04-24
 

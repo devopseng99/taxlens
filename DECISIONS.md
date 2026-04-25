@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.48.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.49.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -635,6 +635,10 @@ Updated: 2026-04-24 (v3.48.0 API + v2.6.0 Portal)
 197. **Webhooks use in-memory store with HMAC-SHA256 signing** — Production would use DB tables (webhook_endpoints, webhook_deliveries), but the in-memory store allows the full API contract to work without migrations. Delivery simulation returns 200; real httpx delivery is a future enhancement.
 
 198. **5 webhook event types** — draft.created, draft.updated, document.uploaded, document.ocr_complete, plan.upgraded. Event type validation on endpoint creation prevents typos. Test endpoint sends a special "test" event type.
+
+199. **Metering buffer: in-memory with Redis Streams upgrade path** — Single-replica in-memory metering with flush/aggregate pattern. Same API contract works with Redis Streams backend. Aggregated totals persist across flush (buffer clears, running totals stay).
+
+200. **HPA: CPU-based autoscaling 1-3 replicas** — Conservative scaling: 70% CPU target, 60s scale-up stabilization, 300s scale-down stabilization. PDB ensures minAvailable=1 during voluntary disruptions.
 
 ## PDF Template Provenance
 

@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.48.0)")
+    logger.info("TaxLens API starting (v3.49.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.48.0",
+    version="3.49.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.48.0",
+        "version": "3.49.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -382,6 +382,18 @@ async def health(deep: bool = False):
             result["storage_write_ok"] = False
             status = "degraded"
             result["status"] = status
+
+    # Scaling status
+    try:
+        from scaling import get_scaling_status
+        ss = get_scaling_status()
+        result["scaling"] = {
+            "metering_backend": ss.metering_backend,
+            "buffer_size": ss.buffer_size,
+            "tenants_tracked": ss.tenants_tracked,
+        }
+    except Exception:
+        pass
 
     return result
 
@@ -470,7 +482,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.48.0",
+        "version": "3.49.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
