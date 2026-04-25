@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.43.0)
+Updated: 2026-04-24 (v3.44.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,25 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 65 — Tax Projection + Multi-Year Planning (v3.44.0) — 2026-04-24
+
+- [x] app/tax_projector.py: multi-year projection engine + Roth conversion optimizer
+- [x] inflate(): CPI-U chained methodology, rounded to $50 per IRS convention
+- [x] get_2026_projected_constants(): 11 inflation-adjusted constants for 2026
+- [x] project_tax_liability(): 3-year projection with income growth (2024-2026)
+- [x] optimize_roth_conversion(): binary search for optimal conversion within target bracket
+- [x] POST /tax-projection: 3-year comparison with projected 2026 constants
+- [x] POST /roth-optimizer: find max Roth conversion staying in target bracket
+- [x] _effective_rate() + _marginal_rate() helpers (TaxResult lacks these)
+- [x] 1116/1116 unit tests (19 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/tax_projector.py` — projection engine, Roth optimizer, inflation helpers
+- `tests/test_wave65_tax_projection.py` — 19 tests (3 inflation, 4 constants, 5 projection, 4 Roth, 3 endpoint)
+
+**Modified files:**
+- `app/main.py` — /tax-projection, /roth-optimizer endpoints, version 3.44.0
 
 ### Wave 64 — Scenario Comparison API + Tax Calendar (v3.43.0) — 2026-04-24
 

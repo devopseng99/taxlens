@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.43.0)")
+    logger.info("TaxLens API starting (v3.44.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.43.0",
+    version="3.44.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.43.0",
+        "version": "3.44.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -470,7 +470,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.43.0",
+        "version": "3.44.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -835,6 +835,85 @@ async def compare_scenarios_api(
         r["refund_delta"] = round(r["refund"] - base["refund"], 2)
 
     return {"scenarios": results, "base_scenario": base["label"]}
+
+
+# ---------------------------------------------------------------------------
+# Tax Projection + Roth Conversion
+# ---------------------------------------------------------------------------
+@app.post("/tax-projection", tags=["Planning"])
+async def tax_projection(
+    wages: float = Query(..., description="Current W-2 wages"),
+    federal_withheld: float = Query(default=0, description="Current federal withholding"),
+    filing_status: str = Query(default="single"),
+    income_growth_rate: float = Query(default=0.03, description="Annual income growth (0.03 = 3%)"),
+    interest_income: float = Query(default=0),
+    dividend_income: float = Query(default=0),
+    mortgage_interest: float = Query(default=0),
+    property_tax: float = Query(default=0),
+    charitable: float = Query(default=0),
+    num_dependents: int = Query(default=0),
+    _auth: str = Depends(require_auth),
+):
+    """Project tax liability across 3 years (2024-2026) with income growth."""
+    from tax_projector import ProjectionScenario, project_tax_liability, get_2026_projected_constants
+
+    base = ProjectionScenario(
+        wages=wages, federal_withheld=federal_withheld,
+        filing_status=filing_status, income_growth_rate=income_growth_rate,
+        interest_income=interest_income, dividend_income=dividend_income,
+        mortgage_interest=mortgage_interest, property_tax=property_tax,
+        charitable=charitable, num_dependents=num_dependents,
+    )
+    projections = project_tax_liability(base)
+    constants_2026 = get_2026_projected_constants()
+
+    return {
+        "projections": [
+            {
+                "tax_year": p.tax_year,
+                "total_income": p.total_income,
+                "agi": p.agi,
+                "taxable_income": p.taxable_income,
+                "total_tax": p.total_tax,
+                "effective_rate": p.effective_rate,
+                "marginal_rate": p.marginal_rate,
+                "refund_or_owed": p.refund_or_owed,
+                "is_projected": p.is_projected,
+            }
+            for p in projections
+        ],
+        "projected_2026_constants": constants_2026,
+    }
+
+
+@app.post("/roth-optimizer", tags=["Planning"])
+async def roth_optimizer(
+    wages: float = Query(..., description="W-2 wages"),
+    federal_withheld: float = Query(default=0),
+    other_income: float = Query(default=0, description="Other ordinary income"),
+    filing_status: str = Query(default="single"),
+    target_bracket_rate: float = Query(default=0.22, description="Target bracket (0.22 = 22%)"),
+    max_conversion: float = Query(default=500000),
+    _auth: str = Depends(require_auth),
+):
+    """Find optimal Roth conversion amount to stay within target bracket."""
+    from tax_projector import optimize_roth_conversion
+
+    result = optimize_roth_conversion(
+        wages=wages, federal_withheld=federal_withheld,
+        other_income=other_income, filing_status=filing_status,
+        target_bracket_rate=target_bracket_rate,
+        max_conversion=max_conversion,
+    )
+    return {
+        "optimal_conversion": result.optimal_conversion,
+        "tax_on_conversion": result.tax_on_conversion,
+        "marginal_rate_at_conversion": result.marginal_rate_at_conversion,
+        "stays_in_bracket": result.stays_in_bracket,
+        "target_bracket_top": result.target_bracket_top,
+        "total_tax_without_conversion": result.total_tax_without_conversion,
+        "total_tax_with_conversion": result.total_tax_with_conversion,
+    }
 
 
 @app.post("/upload", response_model=DocumentMetadata)

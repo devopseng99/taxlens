@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.43.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.44.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -613,6 +613,12 @@ Updated: 2026-04-24 (v3.43.0 API + v2.6.0 Portal)
 186. **Tax calendar is static data, not computed** — IRS deadlines for the 2025 tax year are hardcoded as `_TAX_CALENDAR_2025`. State deadlines in `_STATE_DEADLINES` for 10 states. This is intentional — tax dates don't change frequently and hardcoding ensures correctness without an external data source.
 
 187. **Scenario comparison computes deltas from first scenario** — The first scenario in the list is the "base". All subsequent scenarios include `tax_delta` and `refund_delta` computed against the base. This provides a clear comparison point without requiring the client to compute differences.
+
+188. **2026 constants projected via CPI-U at 2.8%** — `inflate()` rounds to nearest $50 per IRS convention. SALT cap and CTC are fixed (not inflation-adjusted). SS wage base uses 3.5% growth (historically outpaces CPI-U). All projections carry a disclaimer about Rev. Proc. updates.
+
+189. **Roth conversion optimizer uses binary search** — 50 iterations of binary search gives sub-dollar precision. Checks marginal bracket rate (computed from brackets), not effective rate. If already above target bracket, returns 0 conversion immediately.
+
+190. **Marginal rate computed from brackets, not TaxResult** — TaxResult doesn't store marginal_rate. `_marginal_rate()` helper walks the bracket table to find the rate at the taxpayer's taxable income level. This is used for both projection display and Roth optimizer targeting.
 
 ## PDF Template Provenance
 
