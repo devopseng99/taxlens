@@ -96,7 +96,11 @@ def get_state_config(state_code: str) -> Optional[StateConfig]:
         return None
 
     try:
-        mod = importlib.import_module(f"state_configs.{state_code.lower()}")
+        # 'in' is a Python keyword, so Indiana uses 'in_.py'
+        module_name = state_code.lower()
+        if module_name == "in":
+            module_name = "in_"
+        mod = importlib.import_module(f"state_configs.{module_name}")
         config = getattr(mod, "STATE_CONFIG", None)
         _config_cache[state_code] = config
         return config

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.49.0)
+Updated: 2026-04-24 (v3.50.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,24 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 71 — Additional 10 State Tax Engines (v3.50.0) — 2026-04-24
+
+- [x] 9 new state config modules: VA, MA, MI, AZ, CO, MN, MD, WI, IN (WA already no-tax)
+- [x] Flat states: MA (5% + 4% millionaire surtax), MI (4.25%), AZ (2.5%), CO (4.4%), IN (3.05%)
+- [x] Graduated states: VA (2-5.75%), MN (5.35-9.85%), MD (2-5.75%), WI (3.54-7.65%)
+- [x] Reciprocal agreements: VA-DC-KY-MD-PA-WV, MD-DC-PA-VA-WV, MI-IL-IN-KY-MN-OH-WI, WI-IL-IN-KY-MI, IN-KY-MI-OH-PA-WI, MN-MI-ND
+- [x] Indiana uses in_.py (Python keyword avoidance), get_state_config handles mapping
+- [x] All 9 states compute correctly via compute_state_tax()
+- [x] 1243/1243 unit tests (48 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/state_configs/va.py`, `ma.py`, `mi.py`, `az.py`, `co.py`, `mn.py`, `md.py`, `wi.py`, `in_.py`
+- `tests/test_wave71_additional_states.py` — 48 tests (11 config, 6 flat, 4 graduated, 6 reciprocal, 13+8 computation)
+
+**Modified files:**
+- `app/state_configs/__init__.py` — IN → in_ keyword mapping
+- `app/main.py` — version 3.50.0
 
 ### Wave 70 — Horizontal Scaling Infrastructure (v3.49.0) — 2026-04-24
 

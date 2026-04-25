@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.49.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.50.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -639,6 +639,10 @@ Updated: 2026-04-24 (v3.49.0 API + v2.6.0 Portal)
 199. **Metering buffer: in-memory with Redis Streams upgrade path** — Single-replica in-memory metering with flush/aggregate pattern. Same API contract works with Redis Streams backend. Aggregated totals persist across flush (buffer clears, running totals stay).
 
 200. **HPA: CPU-based autoscaling 1-3 replicas** — Conservative scaling: 70% CPU target, 60s scale-up stabilization, 300s scale-down stabilization. PDB ensures minAvailable=1 during voluntary disruptions.
+
+201. **Indiana uses `in_.py` module name** — Python keyword `in` prevents `in.py`. The `get_state_config()` function maps `IN` → `in_` for the import. All other states use lowercase abbreviation directly.
+
+202. **20 states: 4 flat + 7 graduated + 9 no-tax** — Flat: IL, PA, NC, MA, MI, AZ, CO, IN. Graduated: CA, NY, NJ, GA, OH, VA, MN, MD, WI. No-tax: AK, FL, NV, NH, SD, TN, TX, WA, WY. Reciprocal agreements expanded: VA-DC-KY-MD-PA-WV, MD-DC-PA-VA-WV, MI-IL-IN-KY-MN-OH-WI, WI-IL-IN-KY-MI, IN-KY-MI-OH-PA-WI.
 
 ## PDF Template Provenance
 
