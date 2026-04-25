@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.52.0 — 73 waves complete)
+Updated: 2026-04-25 (v3.53.0 — 74 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1364,7 +1364,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 ### 90-Day Priority (BLOCKERS + TCJA Sunset)
 
-1. **BLOCKER: Fix Solo 401(k) / SEP-IRA mismodeling** — Currently modeled as Schedule C expense (reduces SE tax). Should be Schedule 1 line 16 above-the-line deduction (does NOT reduce SE tax). This is a correctness bug that produces wrong results for every self-employed filer using retirement deductions.
+1. ~~**BLOCKER: Fix Solo 401(k) / SEP-IRA mismodeling**~~ — **RESOLVED in Wave 74 (v3.53.0)**. Added SEP-IRA, Solo 401(k), SIMPLE IRA as Schedule 1 line 16 above-the-line deductions. SE tax unaffected by retirement contributions.
 
 2. **BLOCKER: PII encryption for SSNs** — SSNs stored in plaintext throughout: PersonInfo → TaxResult → result.json → PostgREST → PostgreSQL. Need field-level encryption at rest (Fernet, same pattern as Plaid tokens) and redaction in API responses (show last 4 only).
 
@@ -1401,7 +1401,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 ### Known Gaps by Severity
 
 **Correctness (wrong answers):**
-- Solo 401(k)/SEP modeled as Schedule C expense (BLOCKER)
+- ~~Solo 401(k)/SEP modeled as Schedule C expense~~ (FIXED v3.53.0 Wave 74)
 - QBI missing SSTB classification for high-income phaseout
 - No SEP-IRA or SIMPLE IRA contribution limits (only traditional IRA modeled)
 - Reasonable compensation not enforced for S-corp QBI

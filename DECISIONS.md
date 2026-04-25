@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.52.0 API + v2.6.0 Portal — 73 waves complete)
+Updated: 2026-04-25 (v3.53.0 API + v2.6.0 Portal — 74 waves complete)
 
 ## Architecture
 
@@ -665,6 +665,14 @@ Updated: 2026-04-25 (v3.52.0 API + v2.6.0 Portal — 73 waves complete)
 211. **PTET is the #1 state planning feature** — Pass-Through Entity Tax elections (available in 30+ states) let S-corp/partnership owners convert SALT-capped personal deductions into uncapped entity-level deductions. This is the single biggest tax planning move for passthrough business owners post-TCJA. Requires entity-level computation layer.
 
 212. **Carryforwards need persistent per-filer state** — Five major carryforwards exist (charitable, NOL, capital loss, AMT credit, passive activity loss) but none are consumed across tax years. The `charitable_carryforward` field on TaxResult is tracked but never imported into the next year's computation. Need a carryforward ledger per filer.
+
+## Wave 74 — Self-Employed Retirement Plans (v3.53.0)
+
+214. **SE retirement is Schedule 1 line 16, NOT Schedule C expense** — Solo 401(k), SEP-IRA, and SIMPLE IRA contributions are above-the-line deductions that reduce income tax but do NOT reduce self-employment tax. SE tax is computed on `Schedule C profit × 92.35%` BEFORE any retirement deduction. The deduction is applied in the ADJUSTMENTS section after SE tax is fully calculated. This matches IRS treatment per IRC §404(a)(8) and Form 1040 Schedule 1 line 16.
+
+215. **Net SE income for contribution limits = profit − 50% of SE tax** — SEP-IRA's 25% limit and Solo 401(k)'s employer contribution are based on net self-employment income, which is Schedule C profit minus the deductible half of SE tax. This is the IRS-prescribed method — the contribution limit depends on the tax, which depends on the income, creating a circular reference solved by the IRS rate tables.
+
+216. **Three plan types with year-specific limits** — SEP-IRA (employer-only, 25% of net SE income up to $70K/2025), Solo 401(k) (employee deferral $23,500 + employer 25%, total $70K), SIMPLE IRA (employee $16,500 + 3% employer match). Catch-up contributions: Solo 401(k) $7,500, SIMPLE $3,500 (both age 50+). Limits stored per-year in tax_config.py.
 
 213. **QBI needs SSTB classification** — The BusinessIncome schema lacks a `is_sstb` field (Specified Service Trade or Business). For high-income filers above the QBI threshold, SSTB status means QBI phases to $0 (not to the W-2 wage limitation). Without this field, lawyers/doctors/consultants get incorrect QBI results above ~$192K single / ~$384K MFJ.
 
