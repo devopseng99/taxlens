@@ -1400,23 +1400,19 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 ### Known Gaps by Severity
 
-**Correctness (wrong answers):**
-- ~~Solo 401(k)/SEP modeled as Schedule C expense~~ (FIXED v3.53.0 Wave 74)
-- ~~QBI missing SSTB classification for high-income phaseout~~ (FIXED v3.54.0 Wave 75)
-- Reasonable compensation not enforced for S-corp QBI
-- ~~PTET elections not modeled~~ (FIXED v3.58.0 Wave 79 — 15 states, K-1 credit flow, SALT bypass)
+**Correctness (remaining):**
+- Reasonable compensation not enforced for S-corp QBI (entity optimizer provides advisory range, but engine doesn't reject unreasonable comp)
 
-**Completeness (missing features):**
-- ~~No carryforward consumption~~ (FIXED v3.59.0 Wave 80 — 5 types: charitable, capital loss, passive, NOL, AMT credit)
-- ~~No entity comparison~~ (FIXED v3.60.0 Wave 81 — sole prop vs S-corp vs C-corp optimizer)
-- ~~No TCJA sunset comparison~~ (FIXED v3.57.0 Wave 78)
-- ~~No mega backdoor Roth pathway~~ (FIXED v3.61.0 Wave 82 — §415(c) space calc + Roth vs taxable projection)
-- No state fillable PDFs (except IL)
-- ~~SSNs stored in plaintext~~ (FIXED v3.56.0 Wave 77 — masked at storage boundary)
-
-**Scale (production readiness):**
-- Webhook delivery is simulated (always 200) — needs real httpx delivery with retries
-- Metering buffer is in-memory only — needs Redis Streams for multi-replica
+**Completeness (remaining):**
+- No state fillable PDFs (except IL) — requires obtaining official state PDF templates
 - No e-file capability (MeF XML generation)
 - No entity tax returns (1120, 1120-S, 1065)
-- **Tax engine:** All planned features complete (53 waves shipped)
+
+**Scale (remaining):**
+- Webhook delivery is simulated (always 200) — needs real httpx delivery with retries
+- Metering buffer is in-memory only — needs Redis Streams for multi-replica
+
+**Previously resolved (Waves 74-83):**
+- ~~Solo 401(k)/SEP~~ (v3.53.0), ~~QBI SSTB~~ (v3.54.0), ~~Marginal rates~~ (v3.55.0), ~~Passing checks~~ (v3.55.0), ~~PII encryption~~ (v3.56.0), ~~TCJA sunset~~ (v3.57.0), ~~PTET~~ (v3.58.0), ~~Carryforwards~~ (v3.59.0), ~~Entity optimizer~~ (v3.60.0), ~~Mega backdoor Roth~~ (v3.61.0), ~~IL PPRT~~ (v3.62.0)
+
+**Tax engine:** 83 waves shipped, 1499 unit tests, all 90-day + 6-month roadmap items resolved.
