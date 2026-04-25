@@ -37,6 +37,10 @@ class StateConfig:
     surtax_rate: float = 0.0                     # e.g., CA Mental Health 1%
     surtax_threshold: float = 0.0                # e.g., $1M for CA
 
+    # PTET (Pass-Through Entity Tax)
+    ptet_available: bool = False                  # State offers PTET election
+    ptet_entity_types: set = field(default_factory=set)  # e.g., {"s_corp", "partnership"}
+
 
 @dataclass
 class StateTaxResult:
@@ -68,6 +72,9 @@ class StateTaxResult:
     # Bottom line
     refund: float = 0.0
     owed: float = 0.0
+
+    # PTET credit
+    ptet_credit: float = 0.0                     # PTET credit applied to this state
 
     # Allocation (for nonresident returns)
     allocated_income: float = 0.0                # Income sourced to this state

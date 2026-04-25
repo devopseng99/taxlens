@@ -12,4 +12,6 @@ STATE_CONFIG = StateConfig(
     # MA has a 4% surtax on income over $1M (Millionaire Tax, effective 2023)
     surtax_rate=0.04,
     surtax_threshold=1_000_000,
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

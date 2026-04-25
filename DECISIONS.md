@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.57.0 API + v2.6.0 Portal — 78 waves complete)
+Updated: 2026-04-25 (v3.58.0 API + v2.6.0 Portal — 79 waves complete)
 
 ## Architecture
 
@@ -703,6 +703,12 @@ Updated: 2026-04-25 (v3.57.0 API + v2.6.0 Portal — 78 waves complete)
 222. **Fernet encryption with graceful degradation** — When `PII_FERNET_KEY` env var is set, `encrypt_ssn()` produces Fernet ciphertext (AES-128-CBC + HMAC, timestamped). When unset, it falls back to masking (last 4 digits only). This means the system is safe-by-default: even without encryption configured, SSNs are never stored in plaintext. The Fernet pattern matches the existing Plaid token encryption (`PLAID_FERNET_KEY`).
 
 223. **Redaction is immutable — never mutates input dicts** — `redact_person_dict()` and `redact_input_block()` always return new dicts, never modifying the originals. This prevents accidental loss of SSN data mid-computation when the same PersonInput dict is referenced by both the computation pipeline and the storage pipeline.
+
+224. **PTET credit lives on K1Income, not a separate entity model** — Rather than creating an EntityReturn model with full entity-level tax computation, PTET is modeled as K-1 passthrough metadata: `ptet_election`, `ptet_state`, `ptet_tax_paid` on K1Income. The entity pays the tax; the filer's K-1 reports the credit. This mirrors how CPAs actually encounter PTET — as K-1 line items, not entity returns they prepare.
+
+225. **PTET credit applied after state return computation** — State returns are computed first (via `compute_all_state_returns()`), then PTET credits are subtracted from matching state returns' `total_tax`. This avoids coupling PTET logic into per-state compute functions. The credit is tracked on both `StateTaxResult.ptet_credit` and `TaxResult.ptet_credits` (aggregated list).
+
+226. **15 states enabled for PTET, PA/OH intentionally excluded** — CA, NY, IL, NJ, GA, NC, VA, MA, MD, MN, CO, AZ, WI, IN, MI all have PTET programs. PA's flat 3.07% rate makes PTET less common in practice, and OH has CAT not income tax. Both excluded to avoid misleading results.
 
 ## PDF Template Provenance
 

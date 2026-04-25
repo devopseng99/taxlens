@@ -183,6 +183,10 @@ class K1IncomeInput(BaseModel):
     section_199a_income: float = 0.0
     distributions: float = 0.0
     tax_exempt_income: float = 0.0
+    # PTET (Pass-Through Entity Tax)
+    ptet_election: bool = False
+    ptet_state: str = ""
+    ptet_tax_paid: float = 0.0
 
 
 class CryptoTransactionInput(BaseModel):
@@ -718,6 +722,8 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
             section_1231_gain=k.section_1231_gain, guaranteed_payments=k.guaranteed_payments,
             section_199a_income=k.section_199a_income, distributions=k.distributions,
             tax_exempt_income=k.tax_exempt_income,
+            ptet_election=k.ptet_election, ptet_state=k.ptet_state,
+            ptet_tax_paid=k.ptet_tax_paid,
         )
         for k in req.k1_incomes
     ] if req.k1_incomes else None

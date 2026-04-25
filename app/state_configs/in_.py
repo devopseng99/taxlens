@@ -16,4 +16,6 @@ STATE_CONFIG = StateConfig(
     personal_exemption=1_000,
     reciprocal_states={"KY", "MI", "OH", "PA", "WI"},
     has_local_tax=True,  # County income tax (varies by county)
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

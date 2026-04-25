@@ -338,6 +338,9 @@ def _build_inputs(
                 section_199a_income=k.get("section_199a_income", 0),
                 distributions=k.get("distributions", 0),
                 tax_exempt_income=k.get("tax_exempt_income", 0),
+                ptet_election=k.get("ptet_election", False),
+                ptet_state=k.get("ptet_state", ""),
+                ptet_tax_paid=k.get("ptet_tax_paid", 0),
             )
             for k in k1_incomes
         ]

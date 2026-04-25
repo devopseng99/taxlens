@@ -10,4 +10,6 @@ STATE_CONFIG = StateConfig(
     rate=0.0425,
     personal_exemption=5_400,
     reciprocal_states={"IL", "IN", "KY", "MN", "OH", "WI"},
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

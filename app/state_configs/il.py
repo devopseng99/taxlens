@@ -10,4 +10,6 @@ STATE_CONFIG = StateConfig(
     rate=0.0495,
     personal_exemption=2_775,       # Per person (filer + spouse + dependents)
     reciprocal_states={"IA", "KY", "MI", "WI"},
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

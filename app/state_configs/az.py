@@ -14,4 +14,6 @@ STATE_CONFIG = StateConfig(
         "hoh": 21_900,
         "mfs": 14_600,
     },
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

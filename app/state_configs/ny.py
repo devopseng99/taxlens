@@ -7,6 +7,8 @@ STATE_CONFIG = StateConfig(
     abbreviation="NY",
     tax_type="graduated",
     form_name="IT-201",
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
     standard_deduction={
         "single": 8_000,
         "mfj": 16_050,

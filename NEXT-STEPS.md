@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.57.0 — 78 waves complete)
+Updated: 2026-04-25 (v3.58.0 — 79 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1378,7 +1378,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 ### 6-Month Priorities
 
-7. **PTET (Pass-Through Entity Tax) framework** — #1 state-level planning move for S-corp/partnership owners. 20+ states offer PTET elections that convert SALT-capped personal deductions into uncapped entity-level deductions. Need: entity-level computation, credit-on-K-1 flow, state election tracking.
+7. ~~**PTET (Pass-Through Entity Tax) framework**~~ — **RESOLVED in Wave 79 (v3.58.0)**. K1Income carries ptet_election/ptet_state/ptet_tax_paid. StateConfig has ptet_available flag. 15 states enabled. Credit aggregated on TaxResult and applied to state returns. SALT cap bypass verified — entity-level PTET not subject to $10K cap. 19 tests.
 
 8. **Carryforward tracking system** — Charitable contribution carryforward, NOL carryforward, capital loss carryforward, AMT credit carryforward, passive activity loss carryforward. Currently `charitable_carryforward` is tracked but not consumed in subsequent years. Need persistent per-filer carryforward state.
 
@@ -1403,17 +1403,16 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 **Correctness (wrong answers):**
 - ~~Solo 401(k)/SEP modeled as Schedule C expense~~ (FIXED v3.53.0 Wave 74)
 - ~~QBI missing SSTB classification for high-income phaseout~~ (FIXED v3.54.0 Wave 75)
-- No SEP-IRA or SIMPLE IRA contribution limits (only traditional IRA modeled)
 - Reasonable compensation not enforced for S-corp QBI
-- PTET elections not modeled (affects state tax for 20+ states)
+- ~~PTET elections not modeled~~ (FIXED v3.58.0 Wave 79 — 15 states, K-1 credit flow, SALT bypass)
 
 **Completeness (missing features):**
 - No carryforward consumption (charitable, NOL, capital loss, AMT credit, passive)
 - No entity comparison (sole prop vs S-corp vs C-corp)
-- No TCJA sunset comparison (2025 vs 2026 law)
+- ~~No TCJA sunset comparison~~ (FIXED v3.57.0 Wave 78)
 - No mega backdoor Roth pathway
 - No state fillable PDFs (except IL)
-- SSNs stored in plaintext (PII risk)
+- ~~SSNs stored in plaintext~~ (FIXED v3.56.0 Wave 77 — masked at storage boundary)
 
 **Scale (production readiness):**
 - Webhook delivery is simulated (always 200) — needs real httpx delivery with retries

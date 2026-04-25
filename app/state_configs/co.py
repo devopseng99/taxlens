@@ -9,4 +9,6 @@ STATE_CONFIG = StateConfig(
     form_name="CO-104",
     rate=0.044,  # 4.4% flat rate (reduced from 4.55% in 2024)
     # CO uses federal taxable income as starting point (no separate standard deduction)
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

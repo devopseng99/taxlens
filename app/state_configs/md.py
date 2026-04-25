@@ -58,4 +58,6 @@ STATE_CONFIG = StateConfig(
     },
     reciprocal_states={"DC", "PA", "VA", "WV"},
     has_local_tax=True,  # County piggyback tax
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

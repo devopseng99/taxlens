@@ -420,6 +420,10 @@ class K1Income:
     section_199a_income: float = 0.0  # Box 20 Code Z (1065) — QBI for §199A deduction
     distributions: float = 0.0        # Box 19 (1065) — not taxable, reduces basis
     tax_exempt_income: float = 0.0    # Box 18 (1065) — not taxable
+    # PTET (Pass-Through Entity Tax) election
+    ptet_election: bool = False       # Entity elected PTET in its filing state
+    ptet_state: str = ""              # State where PTET election was made
+    ptet_tax_paid: float = 0.0        # Entity-level state tax paid (filer's share)
 
 
 @dataclass
@@ -677,6 +681,10 @@ class TaxResult:
     k1_guaranteed_payments: float = 0.0
     k1_section_199a_income: float = 0.0
 
+    # --- PTET (Pass-Through Entity Tax) ---
+    ptet_total_credit: float = 0.0               # Total PTET credit on personal return
+    ptet_credits: list = field(default_factory=list)  # Per-entity PTET credit details
+
     # --- Quarterly Estimated Tax Planner ---
     quarterly_estimated_tax: float = 0.0     # Per-quarter estimated payment
     quarterly_schedule: list = field(default_factory=list)  # 4 quarterly amounts
@@ -798,6 +806,7 @@ class TaxResult:
                 "tax": round(sr.total_tax, 2),
                 "withholding": round(sr.withholding, 2),
                 "credit_for_other_states": round(sr.credit_for_other_states, 2),
+                "ptet_credit": round(sr.ptet_credit, 2),
                 "refund": round(sr.refund, 2),
                 "owed": round(sr.owed, 2),
             })
@@ -920,6 +929,8 @@ class TaxResult:
             "k1_rental_income": round(self.k1_rental_income, 2),
             "k1_capital_gains": round(self.k1_capital_gains, 2),
             "k1_guaranteed_payments": round(self.k1_guaranteed_payments, 2),
+            "ptet_total_credit": round(self.ptet_total_credit, 2),
+            "ptet_credits": self.ptet_credits if self.ptet_credits else None,
             "quarterly_estimated_tax": round(self.quarterly_estimated_tax, 2),
             "quarterly_schedule": self.quarterly_schedule if self.quarterly_schedule else None,
             "estimated_tax_penalty": round(self.estimated_tax_penalty, 2),
@@ -1690,6 +1701,17 @@ def compute_tax(
         result.line_7_capital_gain_loss = result.sched_d_net_gain
         # Rental income → Schedule E
         result.sched_e_net_income += result.k1_rental_income
+
+        # --- PTET Credits ---
+        for k1 in k1_incomes:
+            if k1.ptet_election and k1.ptet_tax_paid > 0 and k1.ptet_state:
+                result.ptet_credits.append({
+                    "entity_name": k1.entity_name,
+                    "entity_type": k1.entity_type,
+                    "state": k1.ptet_state.upper(),
+                    "tax_paid": round(k1.ptet_tax_paid, 2),
+                })
+                result.ptet_total_credit += k1.ptet_tax_paid
 
     # =======================================================================
     # IRC §1211 — CAPITAL LOSS LIMITATION ($3,000 / $1,500 MFS)
@@ -2674,6 +2696,26 @@ def compute_tax(
         days_worked_by_state=days_worked_by_state,
         total_wages=result.line_1a_wages,
     )
+
+    # Apply PTET credits to state returns (reduces state tax owed)
+    if result.ptet_total_credit > 0:
+        for sr in state_returns:
+            state_ptet = sum(
+                c["tax_paid"] for c in result.ptet_credits
+                if c["state"] == sr.state_code
+            )
+            if state_ptet > 0:
+                sr.ptet_credit = state_ptet
+                # PTET credit reduces state tax (acts like a payment/credit)
+                sr.total_tax = max(0, sr.total_tax - state_ptet)
+                # Recalculate refund/owed
+                total_payments = sr.withholding + sr.estimated_payments + sr.credit_for_other_states + state_ptet
+                if total_payments > (sr.tax + sr.surtax):
+                    sr.refund = round(total_payments - sr.tax - sr.surtax, 2)
+                    sr.owed = 0.0
+                else:
+                    sr.owed = round(sr.tax + sr.surtax - total_payments, 2)
+                    sr.refund = 0.0
 
     result.state_returns = state_returns
     result.residence_state = residence_state

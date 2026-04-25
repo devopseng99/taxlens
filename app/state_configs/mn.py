@@ -40,4 +40,6 @@ STATE_CONFIG = StateConfig(
         ],
     },
     reciprocal_states={"MI", "ND"},
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

@@ -48,4 +48,6 @@ STATE_CONFIG = StateConfig(
             (float("inf"), 0.0549),
         ],
     },
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
 )

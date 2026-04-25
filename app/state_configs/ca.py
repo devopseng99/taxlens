@@ -7,6 +7,8 @@ STATE_CONFIG = StateConfig(
     abbreviation="CA",
     tax_type="graduated",
     form_name="CA-540",
+    ptet_available=True,
+    ptet_entity_types={"s_corp", "partnership"},
     personal_exemption=144,         # Per-person credit (actually a credit, modeled as exemption)
     standard_deduction={
         "single": 5_540,
