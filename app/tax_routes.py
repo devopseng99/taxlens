@@ -988,6 +988,7 @@ async def download_pdf(
         "retirement_summary": "retirement_summary.pdf",
         "1099r": "1099r.pdf",
         "1040es": "form_1040es.pdf",
+        "1040x": "form_1040x.pdf",
         "ss_summary": "ss_summary.pdf",
         "il_1040": "il_1040.pdf",
     }
@@ -1113,6 +1114,97 @@ async def list_draft_pdfs(draft_id: str, username: str = Query(...)):
             "url": f"/api/tax-draft/{draft_id}/pdf/{name}?username={username}",
         }
     return {"draft_id": draft_id, "pdfs": pdfs}
+
+
+# ---------------------------------------------------------------------------
+# Amended Return (1040-X)
+# ---------------------------------------------------------------------------
+class AmendRequest(BaseModel):
+    """Request to create an amended return."""
+    explanation: str = Field(default="", description="Part III explanation of changes")
+
+
+@router.post(
+    "/amend/{original_draft_id}",
+    summary="Create amended return (1040-X)",
+    description="Compare an existing draft with a new amended draft to generate "
+                "Form 1040-X with line-by-line A/B/C columns.",
+)
+async def create_amended_return(
+    original_draft_id: str,
+    amended_draft_id: str = Query(..., description="Draft ID of the amended return"),
+    explanation: str = Query(default="", description="Part III explanation"),
+    username: str = Query(...),
+    _auth: str = Depends(require_auth),
+):
+    """Create Form 1040-X by comparing original and amended drafts."""
+    from amended_return import compute_amended_return
+    from pdf_generator import generate_1040x
+
+    orig_dir = get_draft_dir(username, original_draft_id)
+    amend_dir = get_draft_dir(username, amended_draft_id)
+
+    if not orig_dir.exists():
+        raise HTTPException(404, f"Original draft {original_draft_id} not found")
+    if not amend_dir.exists():
+        raise HTTPException(404, f"Amended draft {amended_draft_id} not found")
+
+    # Load results
+    from tax_engine import TaxResult, PersonInfo
+    orig_result_path = orig_dir / "result.json"
+    amend_result_path = amend_dir / "result.json"
+
+    if not orig_result_path.exists() or not amend_result_path.exists():
+        raise HTTPException(404, "Both drafts must have computed results")
+
+    orig_data = json.loads(orig_result_path.read_text())
+    amend_data = json.loads(amend_result_path.read_text())
+
+    # Reconstruct minimal TaxResults
+    def _load_result(data: dict) -> TaxResult:
+        r = TaxResult()
+        for attr in [
+            "line_11_agi", "line_12_deductions", "line_15_taxable_income",
+            "line_16_tax", "line_21_total_credits", "line_24_total_tax",
+            "line_33_total_payments", "line_34_overpaid", "line_37_owed",
+            "line_1a_wages", "line_2b_taxable_interest", "line_3b_ordinary_dividends",
+            "line_9_total_income",
+        ]:
+            if attr in data:
+                setattr(r, attr, data[attr])
+        r.filing_status = data.get("filing_status", "single")
+        return r
+
+    orig = _load_result(orig_data)
+    amend = _load_result(amend_data)
+
+    amended = compute_amended_return(
+        original=orig, amended=amend,
+        explanation=explanation,
+        original_draft_id=original_draft_id,
+        amended_draft_id=amended_draft_id,
+    )
+
+    # Generate 1040-X PDF
+    buf = generate_1040x(amended)
+    pdf_path = amend_dir / "form_1040x.pdf"
+    pdf_path.write_bytes(buf.read())
+
+    return {
+        "original_draft_id": original_draft_id,
+        "amended_draft_id": amended_draft_id,
+        "total_tax_change": amended.total_tax_change,
+        "refund_change": amended.refund_change,
+        "explanation": amended.explanation,
+        "lines": [
+            {
+                "line": l.line, "description": l.description,
+                "column_a": l.column_a, "column_b": l.column_b, "column_c": l.column_c,
+            }
+            for l in amended.lines
+        ],
+        "pdf_url": f"/api/tax-draft/{amended_draft_id}/pdf/1040x?username={username}",
+    }
 
 
 # ---------------------------------------------------------------------------

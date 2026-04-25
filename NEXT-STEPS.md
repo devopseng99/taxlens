@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.45.0)
+Updated: 2026-04-24 (v3.46.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,27 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 67 — Amended Return / Form 1040-X (v3.46.0) — 2026-04-24
+
+- [x] app/amended_return.py: compute_amended_return() with 17-line A/B/C column comparison
+- [x] AmendedLine dataclass: line, description, column_a (original), column_b (change), column_c (corrected)
+- [x] AmendedReturn dataclass: lines, explanation, refund_change, total_tax_change, draft IDs
+- [x] Auto-generated Part III explanation (describes material changes)
+- [x] Custom explanation override support
+- [x] generate_1040x() in pdf_generator.py — ReportLab 1040-X summary PDF with A/B/C columns
+- [x] POST /amend/{original_draft_id} endpoint in tax_routes.py
+- [x] "1040x" added to file_map for PDF downloads
+- [x] 1146/1146 unit tests (12 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/amended_return.py` — AmendedLine, AmendedReturn, compute_amended_return()
+- `tests/test_wave67_amended_return.py` — 12 tests (7 computation, 1 PDF, 4 endpoint)
+
+**Modified files:**
+- `app/pdf_generator.py` — generate_1040x()
+- `app/tax_routes.py` — POST /amend/{original_draft_id}, "1040x" in file_map
+- `app/main.py` — version 3.46.0
 
 ### Wave 66 — Intelligent Tax Optimization Engine (v3.45.0) — 2026-04-24
 

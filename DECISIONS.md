@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.45.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.46.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -623,6 +623,10 @@ Updated: 2026-04-24 (v3.45.0 API + v2.6.0 Portal)
 191. **Optimizer uses approximate marginal rate for savings** — Estimated savings use 22% as a common middle-bracket approximation rather than computing exact savings for each strategy. This is intentional: the optimizer is advisory, not a precise calculator. Exact numbers come from rerunning compute_tax with the strategy applied.
 
 192. **15 strategies with conditional applicability** — Strategies are only shown when applicable (e.g., 401k suggestions only if has_401k=True). The `applicable` flag excludes informational-only items from the savings total. Sorted by estimated_savings descending.
+
+193. **1040-X uses A/B/C column pattern** — Column A = original, Column B = net change (amended - original), Column C = corrected (A + B). This mirrors the official IRS Form 1040-X layout. 17 lines cover AGI, deductions, taxable income, tax, credits, other taxes, total tax, payments, overpayment, amount owed, plus Part II income breakdown.
+
+194. **Auto-generated explanation for 1040-X Part III** — When no custom explanation is provided, `compute_amended_return()` generates one by describing each material change (e.g., "AGI increased by $15,000"). This saves filers from manually writing the required explanation of changes.
 
 ## PDF Template Provenance
 

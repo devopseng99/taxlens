@@ -2162,6 +2162,106 @@ def generate_1040es_vouchers(result: TaxResult) -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Form 1040-X — Amended U.S. Individual Income Tax Return
+# ---------------------------------------------------------------------------
+def generate_1040x(amended_return) -> BytesIO:
+    """Generate Form 1040-X summary PDF showing A/B/C columns."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    # Header
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, height - 50, "Form 1040-X — Amended U.S. Individual Income Tax Return")
+    c.setFont("Helvetica", 9)
+    c.drawString(72, height - 68, f"Tax Year {amended_return.tax_year}  |  Filing Status: {amended_return.filing_status}")
+
+    y = height - 100
+
+    # Column headers
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(72, y, "Line")
+    c.drawString(120, y, "Description")
+    c.drawRightString(370, y, "A. Original")
+    c.drawRightString(440, y, "B. Change")
+    c.drawRightString(520, y, "C. Corrected")
+    y -= 5
+    c.setLineWidth(0.5)
+    c.line(72, y, 520, y)
+    y -= 12
+
+    # Lines
+    c.setFont("Helvetica", 8)
+    for line in amended_return.lines:
+        if y < 100:
+            c.showPage()
+            y = height - 50
+            c.setFont("Helvetica", 8)
+
+        # Highlight changed lines
+        if abs(line.column_b) > 0.01:
+            c.setFont("Helvetica-Bold", 8)
+        else:
+            c.setFont("Helvetica", 8)
+
+        c.drawString(72, y, line.line)
+        c.drawString(120, y, line.description[:35])
+        c.drawRightString(370, y, f"${line.column_a:,.2f}")
+
+        sign = "+" if line.column_b >= 0 else ""
+        c.drawRightString(440, y, f"{sign}${line.column_b:,.2f}" if line.column_b != 0 else "—")
+        c.drawRightString(520, y, f"${line.column_c:,.2f}")
+        y -= 14
+
+    # Summary
+    y -= 20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Summary of Changes")
+    y -= 16
+    c.setFont("Helvetica", 10)
+    c.drawString(90, y, f"Total tax change: ${amended_return.total_tax_change:+,.2f}")
+    y -= 16
+    if amended_return.refund_change > 0:
+        c.drawString(90, y, f"Additional refund due: ${amended_return.refund_change:,.2f}")
+    elif amended_return.refund_change < 0:
+        c.drawString(90, y, f"Additional amount owed: ${abs(amended_return.refund_change):,.2f}")
+    else:
+        c.drawString(90, y, "No change in refund/amount owed")
+
+    # Part III — Explanation
+    y -= 30
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, "Part III — Explanation of Changes")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    # Word wrap explanation
+    words = amended_return.explanation.split()
+    current_line = ""
+    for word in words:
+        if len(current_line + " " + word) > 80:
+            c.drawString(90, y, current_line)
+            y -= 12
+            current_line = word
+        else:
+            current_line = (current_line + " " + word).strip()
+    if current_line:
+        c.drawString(90, y, current_line)
+
+    # DRAFT watermark
+    c.saveState()
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillAlpha(0.1)
+    c.translate(300, 400)
+    c.rotate(45)
+    c.drawCentredString(0, 0, "DRAFT")
+    c.restoreState()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # Full Return PDF — merged package with cover page + bookmarks
 # ---------------------------------------------------------------------------
 # IRS filing order for forms
