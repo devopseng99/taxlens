@@ -398,7 +398,14 @@ def get_draft_dir(username: str, draft_id: str) -> Path:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
-@router.post("")
+@router.post(
+    "",
+    summary="Create tax draft",
+    description="Compute a full federal + state tax return from W-2 OCR data and supplemental inputs. "
+                "Generates all applicable IRS form PDFs (1040, Schedules A-E, SE, etc.) and stores "
+                "the result for later retrieval. Requires authentication.",
+    response_description="Complete tax computation result with line-by-line breakdown and PDF paths.",
+)
 async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_auth)):
     """Create a complete tax draft from OCR data + supplemental info.
 
@@ -864,7 +871,12 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
     return result_json
 
 
-@router.get("/{draft_id}")
+@router.get(
+    "/{draft_id}",
+    summary="Get tax draft",
+    description="Retrieve a previously computed tax draft including line-by-line results, "
+                "filing status, total tax, refund/owed amount, and generated form list.",
+)
 async def get_tax_draft(draft_id: str, username: str = Query(...)):
     """Get a previously computed tax draft summary."""
     draft_dir = get_draft_dir(username, draft_id)
@@ -874,7 +886,13 @@ async def get_tax_draft(draft_id: str, username: str = Query(...)):
     return json.loads(result_file.read_text())
 
 
-@router.get("/{draft_id}/pdf/{form_name}")
+@router.get(
+    "/{draft_id}/pdf/{form_name}",
+    summary="Download PDF form",
+    description="Download or view a specific generated tax form PDF. "
+                "Available forms: summary, 1040, schedule_a through schedule_se, "
+                "form_8959, form_8960, form_6251, form_8863, schedule_eic, etc.",
+)
 async def download_pdf(
     draft_id: str,
     form_name: str,
@@ -972,7 +990,11 @@ async def import_prior_year(
         Path(tmp_path).unlink(missing_ok=True)
 
 
-@router.get("/{draft_id}/pdfs")
+@router.get(
+    "/{draft_id}/pdfs",
+    summary="List draft PDFs",
+    description="List all generated PDF forms for a draft with file sizes and download URLs.",
+)
 async def list_draft_pdfs(draft_id: str, username: str = Query(...)):
     """List all PDFs available for a draft."""
     draft_dir = get_draft_dir(username, draft_id)
@@ -990,7 +1012,11 @@ async def list_draft_pdfs(draft_id: str, username: str = Query(...)):
     return {"draft_id": draft_id, "pdfs": pdfs}
 
 
-@router.get("s/{username}")
+@router.get(
+    "s/{username}",
+    summary="List user drafts",
+    description="List all tax drafts for a user with computation results.",
+)
 async def list_drafts(username: str):
     """List all tax drafts for a user."""
     drafts_dir = STORAGE_ROOT / username.replace("/", "_").replace("..", "_") / "drafts"

@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.34.0)")
+    logger.info("TaxLens API starting (v3.35.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,10 +83,25 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.34.0",
+    version="3.35.0",
+    description=(
+        "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
+        "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
+        "for AI agent integration. Covers 53+ tax forms, 10 states, OCR document "
+        "processing, and scenario optimization."
+    ),
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "Tax Drafts", "description": "Create, retrieve, and manage tax computations"},
+        {"name": "Documents", "description": "Upload and OCR tax documents"},
+        {"name": "Admin", "description": "Tenant provisioning, API key management, OAuth clients"},
+        {"name": "Billing", "description": "Stripe checkout, subscription management, usage"},
+        {"name": "Monitoring", "description": "Usage tracking and admin monitoring"},
+        {"name": "Documentation", "description": "API guides, MCP integration, PostgREST spec"},
+        {"name": "oauth", "description": "OAuth 2.0 token endpoint (RFC 6749 + PKCE)"},
+    ],
 )
 
 # --- Prometheus Metrics ---
@@ -329,7 +344,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.34.0",
+        "version": "3.35.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -394,6 +409,184 @@ async def readiness():
             status_code=503,
             content={"ready": False, "db_ok": db_ok, "storage_ok": storage_ok},
         )
+
+
+@app.get(
+    "/postgrest-openapi",
+    summary="PostgREST OpenAPI spec",
+    description="Proxy the PostgREST auto-generated OpenAPI 3.0 spec. "
+                "Shows all database tables/views available via the REST API.",
+    tags=["Documentation"],
+)
+async def postgrest_openapi():
+    """Proxy PostgREST OpenAPI spec with caching."""
+    if not DB_ENABLED:
+        raise HTTPException(503, "Database not enabled")
+
+    # Try Redis cache first
+    try:
+        from redis_client import get_redis
+        r = await get_redis()
+        if r:
+            cached = await r.get("postgrest_openapi")
+            if cached:
+                return JSONResponse(json.loads(cached),
+                                    media_type="application/json")
+    except Exception:
+        pass
+
+    # Fetch from PostgREST
+    import httpx as _httpx
+    from db.postgrest_client import POSTGREST_URL
+    try:
+        async with _httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{POSTGREST_URL}/")
+            resp.raise_for_status()
+            spec = resp.json()
+    except Exception as e:
+        raise HTTPException(502, f"PostgREST unreachable: {e}")
+
+    # Cache in Redis (5 min TTL)
+    try:
+        from redis_client import get_redis
+        r = await get_redis()
+        if r:
+            await r.set("postgrest_openapi", json.dumps(spec), ex=300)
+    except Exception:
+        pass
+
+    return JSONResponse(spec, media_type="application/json")
+
+
+@app.get(
+    "/docs/api-guide",
+    summary="API quick-start guide",
+    description="Returns a structured API guide with authentication, endpoints, and examples.",
+    tags=["Documentation"],
+)
+async def api_guide():
+    """Structured API guide for developers and MCP integrators."""
+    base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
+    return {
+        "title": "TaxLens API Quick-Start Guide",
+        "version": "3.35.0",
+        "base_url": base_url,
+        "authentication": {
+            "methods": [
+                {
+                    "type": "API Key",
+                    "header": "X-API-Key",
+                    "description": "Include your API key in the X-API-Key header. "
+                                   "Provisioned via admin endpoints.",
+                },
+                {
+                    "type": "OAuth 2.0 Bearer Token",
+                    "header": "Authorization: Bearer <token>",
+                    "token_endpoint": f"{base_url}/oauth/token",
+                    "grant_types": ["client_credentials", "authorization_code", "refresh_token"],
+                    "description": "Use POST /oauth/token with client_credentials grant for MCP agents. "
+                                   "PKCE S256 required for authorization_code.",
+                },
+            ],
+            "scopes": ["compute", "drafts", "documents", "mcp", "plaid"],
+        },
+        "endpoints": {
+            "tax_drafts": {
+                "create": {"method": "POST", "path": "/tax-draft",
+                           "description": "Compute a full tax return from OCR + inputs"},
+                "get": {"method": "GET", "path": "/tax-draft/{draft_id}",
+                        "description": "Retrieve draft results"},
+                "list": {"method": "GET", "path": "/tax-drafts/{username}",
+                         "description": "List all drafts for a user"},
+                "download_pdf": {"method": "GET", "path": "/tax-draft/{draft_id}/pdf/{form}",
+                                 "description": "Download a specific form PDF"},
+                "list_pdfs": {"method": "GET", "path": "/tax-draft/{draft_id}/pdfs",
+                              "description": "List available PDFs for a draft"},
+            },
+            "documents": {
+                "upload": {"method": "POST", "path": "/upload",
+                           "description": "Upload a tax document (PDF/image)"},
+                "analyze": {"method": "POST", "path": "/analyze/{proc_id}",
+                            "description": "Run Azure OCR on an uploaded document"},
+            },
+            "mcp": {
+                "endpoint": f"{base_url}/mcp",
+                "description": "Model Context Protocol (StreamableHTTP). "
+                               "9 tools: compute_tax_scenario, get_tax_summary, list_deductions, "
+                               "optimize_deductions, compare_scenarios, estimate_quarterly_payments, "
+                               "list_states, get_filing_requirements, check_audit_risk",
+            },
+            "billing": {
+                "plans": {"method": "GET", "path": "/billing/plans"},
+                "onboarding": {"method": "POST", "path": "/billing/onboarding/free"},
+                "checkout": {"method": "POST", "path": "/billing/checkout"},
+            },
+            "oauth": {
+                "token": {"method": "POST", "path": "/oauth/token",
+                          "content_type": "application/x-www-form-urlencoded",
+                          "description": "Exchange credentials for access + refresh tokens"},
+            },
+        },
+        "rate_limits": {
+            "free": "10 API calls/min, 5 computations/day",
+            "starter": "30 API calls/min, 50 computations/day",
+            "professional": "120 API calls/min, 500 computations/day",
+            "enterprise": "600 API calls/min, unlimited computations",
+            "headers": ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+        },
+        "interactive_docs": f"{base_url}/docs",
+        "openapi_spec": f"{base_url}/openapi.json",
+        "postgrest_spec": f"{base_url}/postgrest-openapi",
+    }
+
+
+@app.get(
+    "/docs/mcp-guide",
+    summary="MCP integration guide",
+    description="Guide for integrating TaxLens as an MCP server with Claude Desktop or other MCP clients.",
+    tags=["Documentation"],
+)
+async def mcp_guide():
+    """MCP integration guide for Claude Desktop and MCP clients."""
+    base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
+    return {
+        "title": "TaxLens MCP Integration Guide",
+        "protocol": "StreamableHTTP",
+        "endpoint": f"{base_url}/mcp",
+        "authentication": {
+            "method": "OAuth 2.0",
+            "grant_type": "client_credentials",
+            "token_endpoint": f"{base_url}/oauth/token",
+        },
+        "claude_desktop_config": {
+            "mcpServers": {
+                "taxlens": {
+                    "url": f"{base_url}/mcp",
+                    "oauth": {
+                        "client_id": "<your_client_id>",
+                        "client_secret": "<your_client_secret>",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                    },
+                }
+            }
+        },
+        "available_tools": [
+            {"name": "compute_tax_scenario", "description": "Compute federal + state tax for given inputs"},
+            {"name": "get_tax_summary", "description": "Get formatted summary of a tax computation"},
+            {"name": "list_deductions", "description": "List all available deductions with eligibility"},
+            {"name": "optimize_deductions", "description": "Compare standard vs itemized deductions"},
+            {"name": "compare_scenarios", "description": "Compare two tax scenarios side-by-side"},
+            {"name": "estimate_quarterly_payments", "description": "Compute estimated quarterly payments"},
+            {"name": "list_states", "description": "List supported state tax engines"},
+            {"name": "get_filing_requirements", "description": "Determine if filing is required"},
+            {"name": "check_audit_risk", "description": "Assess audit risk factors for a return"},
+        ],
+        "example_prompts": [
+            "What would my taxes be with $120K salary, married filing jointly, 2 kids?",
+            "Compare standard deduction vs itemized with $25K mortgage interest",
+            "How much should I pay in estimated taxes per quarter?",
+        ],
+    }
 
 
 @app.get("/whoami")

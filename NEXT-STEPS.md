@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.34.0)
+Updated: 2026-04-24 (v3.35.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,25 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 56 — API Reference Documentation (v3.35.0) — 2026-04-24
+
+- [x] Enriched OpenAPI metadata: summaries + descriptions on all tax_routes endpoints
+- [x] FastAPI openapi_tags for organized Swagger UI (Tax Drafts, Documents, Admin, Billing, etc.)
+- [x] Rich app description in FastAPI constructor
+- [x] GET /postgrest-openapi: proxied PostgREST spec with Redis cache (5min TTL)
+- [x] GET /docs/api-guide: structured API quickstart (auth, endpoints, rate limits, scopes)
+- [x] GET /docs/mcp-guide: MCP integration guide (Claude Desktop config, 9 tools, examples)
+- [x] PostgREST proxy exempt from tenant context middleware
+- [x] 975/975 unit tests (15 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave56_api_docs.py` — 15 tests (4 OpenAPI, 3 PostgREST proxy, 3 API guide, 3 MCP guide, 2 integration)
+
+**Modified files:**
+- `app/main.py` — version 3.35.0, openapi_tags, 3 new doc endpoints, PostgREST proxy
+- `app/tax_routes.py` — summary/description on all endpoints
+- `app/middleware/tenant_context.py` — /postgrest-openapi skip path
 
 ### Wave 55 — Redis-Backed Rate Limiting (v3.34.0) — 2026-04-24
 

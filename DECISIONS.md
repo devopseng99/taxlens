@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.34.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.35.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,14 @@ Updated: 2026-04-24 (v3.34.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 56 — API Reference Documentation (v3.35.0)
+
+237. **Three structured documentation endpoints** — `/docs/api-guide` (full API quickstart with auth methods, endpoints, rate limits), `/docs/mcp-guide` (Claude Desktop config, 9 tools, example prompts), and `/postgrest-openapi` (proxied PostgREST spec with Redis caching). All return structured JSON, not HTML — clients render as needed.
+
+238. **PostgREST OpenAPI cached in Redis** — The `/postgrest-openapi` proxy fetches the spec from PostgREST and caches it in Redis with 5-min TTL. Falls back to direct fetch when Redis unavailable. This avoids hammering PostgREST on every docs page load.
+
+239. **Enriched OpenAPI metadata on all endpoints** — All tax_routes endpoints now have `summary` and `description` parameters for the FastAPI OpenAPI generator. The app-level `openapi_tags` array organizes endpoints by category (Tax Drafts, Documents, Admin, Billing, etc.).
 
 ## Wave 55 — Redis-Backed Rate Limiting (v3.34.0)
 

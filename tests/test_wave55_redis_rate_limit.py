@@ -288,9 +288,9 @@ class TestK8sManifests:
         content = open(path).read()
         assert "6379" in content
 
-    def test_version_updated(self):
-        main_path = os.path.join(os.path.dirname(__file__), "..", "app", "main.py")
-        src = open(main_path).read()
-        version = "3.34.0"
-        count = src.count(f'"{version}"')
-        assert count >= 2, f"Expected {version} in 2+ places, found {count}"
+    def test_redis_client_module_exists(self):
+        redis_path = os.path.join(os.path.dirname(__file__), "..", "app", "redis_client.py")
+        assert os.path.exists(redis_path)
+        src = open(redis_path).read()
+        assert "TOKEN_BUCKET_LUA" in src
+        assert "SLIDING_COUNTER_LUA" in src
