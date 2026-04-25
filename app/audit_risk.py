@@ -75,6 +75,15 @@ class RiskFlag:
 
 
 @dataclass
+class PassingCheck:
+    """A check that passed (within normal range)."""
+    category: str        # Same categories as RiskFlag
+    description: str     # Human-readable explanation
+    your_value: str      # What the filer reported
+    norm_value: str      # What's typical (for context)
+
+
+@dataclass
 class AuditRiskReport:
     """Complete audit risk assessment for a tax return."""
     agi_bracket: str
@@ -82,6 +91,7 @@ class AuditRiskReport:
     overall_risk: str       # "low", "medium", "high"
     risk_score: int          # 0-100
     flags: list[RiskFlag] = field(default_factory=list)
+    passing_checks: list[PassingCheck] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -100,6 +110,16 @@ class AuditRiskReport:
                 }
                 for f in self.flags
             ],
+            "num_passing": len(self.passing_checks),
+            "passing_checks": [
+                {
+                    "category": p.category,
+                    "description": p.description,
+                    "your_value": p.your_value,
+                    "norm_value": p.norm_value,
+                }
+                for p in self.passing_checks
+            ],
         }
 
 
@@ -115,6 +135,7 @@ def assess_audit_risk(result) -> AuditRiskReport:
     agi = result.line_11_agi
     bracket = _get_bracket(agi)
     flags: list[RiskFlag] = []
+    passing: list[PassingCheck] = []
     score = 0
 
     # --- 1. Charitable contributions vs AGI ---
@@ -140,8 +161,23 @@ def assess_audit_risk(result) -> AuditRiskReport:
                 norm_value=f"~{norm:.1%} of AGI typical",
             ))
             score += 10
+        else:
+            passing.append(PassingCheck(
+                category="charitable",
+                description="Charitable contributions are within normal range for your income bracket",
+                your_value=f"{ratio:.1%} of AGI (${charitable:,.0f})",
+                norm_value=f"~{norm:.1%} of AGI typical",
+            ))
+    elif charitable == 0 and result.deduction_type == "itemized":
+        passing.append(PassingCheck(
+            category="charitable",
+            description="No charitable deductions claimed",
+            your_value="$0",
+            norm_value="N/A",
+        ))
 
     # --- 2. Schedule C profit margin ---
+    sched_c_checked = False
     for biz in getattr(result, 'sched_c_businesses', []):
         if isinstance(biz, dict):
             gross = biz.get("gross_receipts", 0)
@@ -153,6 +189,7 @@ def assess_audit_risk(result) -> AuditRiskReport:
             net = getattr(biz, 'net_profit', 0)
 
         if gross > 0:
+            sched_c_checked = True
             expense_ratio = expenses / gross
             if expense_ratio > SCHED_C_EXPENSE_RATIO_HIGH:
                 flags.append(RiskFlag(
@@ -163,6 +200,13 @@ def assess_audit_risk(result) -> AuditRiskReport:
                     norm_value=f"Typical expense ratio is under {SCHED_C_EXPENSE_RATIO_HIGH:.0%}",
                 ))
                 score += 15
+            else:
+                passing.append(PassingCheck(
+                    category="schedule_c",
+                    description="Business expense ratio is within normal range",
+                    your_value=f"${expenses:,.0f} expenses / ${gross:,.0f} gross = {expense_ratio:.0%}",
+                    norm_value=f"Typical expense ratio is under {SCHED_C_EXPENSE_RATIO_HIGH:.0%}",
+                ))
 
             if net < 0:
                 flags.append(RiskFlag(
@@ -173,8 +217,16 @@ def assess_audit_risk(result) -> AuditRiskReport:
                     norm_value="IRS scrutinizes businesses with 3+ years of losses in 5 years",
                 ))
                 score += 10
+            else:
+                passing.append(PassingCheck(
+                    category="schedule_c",
+                    description="Business is profitable",
+                    your_value=f"Net profit: ${net:,.0f}",
+                    norm_value="Profitable businesses attract less scrutiny",
+                ))
 
     # --- 3. Home office deduction ---
+    home_office_checked = False
     for biz in getattr(result, 'sched_c_businesses', []):
         if isinstance(biz, dict):
             home_sqft = biz.get("home_office_sqft", 0)
@@ -184,6 +236,7 @@ def assess_audit_risk(result) -> AuditRiskReport:
             total_sqft = getattr(biz, 'home_total_sqft', 0)
 
         if total_sqft > 0 and home_sqft > 0:
+            home_office_checked = True
             pct = home_sqft / total_sqft
             if pct > HOME_OFFICE_PCT_HIGH:
                 flags.append(RiskFlag(
@@ -194,6 +247,13 @@ def assess_audit_risk(result) -> AuditRiskReport:
                     norm_value=f"Typical is under {HOME_OFFICE_PCT_HIGH:.0%}",
                 ))
                 score += 10
+            else:
+                passing.append(PassingCheck(
+                    category="home_office",
+                    description="Home office percentage is within normal range",
+                    your_value=f"{home_sqft:.0f} sq ft / {total_sqft:.0f} sq ft = {pct:.0%}",
+                    norm_value=f"Typical is under {HOME_OFFICE_PCT_HIGH:.0%}",
+                ))
 
     # --- 4. Large rental losses ---
     rental_loss = -result.sched_e_net_income if result.sched_e_net_income < 0 else 0
@@ -208,6 +268,20 @@ def assess_audit_risk(result) -> AuditRiskReport:
                 norm_value="Large rental losses attract scrutiny, especially with high AGI",
             ))
             score += 10
+        else:
+            passing.append(PassingCheck(
+                category="rental_loss",
+                description="Rental loss is within acceptable range relative to income",
+                your_value=f"${rental_loss:,.0f} loss ({loss_ratio:.0%} of AGI)",
+                norm_value="Losses under 25% of AGI are typical",
+            ))
+    elif result.sched_e_net_income >= 0 and result.sched_e_net_income > 0:
+        passing.append(PassingCheck(
+            category="rental_loss",
+            description="Rental income is positive (no loss)",
+            your_value=f"Net rental income: ${result.sched_e_net_income:,.0f}",
+            norm_value="Positive rental income does not attract scrutiny",
+        ))
 
     # --- 5. High EITC with other income ---
     if result.eitc > 0 and agi > 0:
@@ -221,6 +295,13 @@ def assess_audit_risk(result) -> AuditRiskReport:
                 norm_value="EITC+SE is the most audited combination in lower income brackets",
             ))
             score += 8
+        else:
+            passing.append(PassingCheck(
+                category="eitc",
+                description="EITC claimed without self-employment income — lower audit risk",
+                your_value=f"EITC: ${result.eitc:,.0f}",
+                norm_value="EITC without SE income has lower audit rates",
+            ))
 
     # --- 6. Large cash charitable (non-receipted risk) ---
     if charitable > 500 and result.deduction_type == "itemized":
@@ -240,6 +321,13 @@ def assess_audit_risk(result) -> AuditRiskReport:
             norm_value=f"Base audit rate for {bracket}: {BASE_AUDIT_RATE[bracket]:.1%}",
         ))
         score += 5
+    else:
+        passing.append(PassingCheck(
+            category="income_level",
+            description="Income level has a normal base audit rate",
+            your_value=f"AGI: ${agi:,.0f} ({bracket})",
+            norm_value=f"Base audit rate: {BASE_AUDIT_RATE[bracket]:.1%}",
+        ))
 
     # --- 8. Itemized deductions significantly above standard ---
     if result.deduction_type == "itemized":
@@ -253,6 +341,20 @@ def assess_audit_risk(result) -> AuditRiskReport:
                 norm_value="Large itemized deductions may warrant documentation review",
             ))
             score += 5
+        else:
+            passing.append(PassingCheck(
+                category="itemized_deductions",
+                description="Itemized deductions are within reasonable range",
+                your_value=f"${result.itemized_total:,.0f} itemized vs ${std:,.0f} standard",
+                norm_value="Under 2x standard deduction is typical",
+            ))
+    else:
+        passing.append(PassingCheck(
+            category="itemized_deductions",
+            description="Using standard deduction (no itemized scrutiny)",
+            your_value=f"Standard deduction: ${result.standard_deduction:,.0f}",
+            norm_value="Standard deduction does not attract scrutiny",
+        ))
 
     # --- Compute overall risk ---
     score = min(score, 100)
@@ -269,4 +371,5 @@ def assess_audit_risk(result) -> AuditRiskReport:
         overall_risk=overall,
         risk_score=score,
         flags=flags,
+        passing_checks=passing,
     )

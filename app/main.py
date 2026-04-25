@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.54.0)")
+    logger.info("TaxLens API starting (v3.55.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -83,7 +83,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.54.0",
+    version="3.55.0",
     description=(
         "Multi-tenant tax intelligence API. Computes federal 1040 + state returns, "
         "generates IRS-compliant PDFs, and supports MCP (Model Context Protocol) "
@@ -345,7 +345,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.54.0",
+        "version": "3.55.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -482,7 +482,7 @@ async def api_guide():
     base_url = os.getenv("TAXLENS_API_URL", "https://dropit.istayintek.com/api")
     return {
         "title": "TaxLens API Quick-Start Guide",
-        "version": "3.54.0",
+        "version": "3.55.0",
         "base_url": base_url,
         "authentication": {
             "methods": [
@@ -797,6 +797,7 @@ async def compare_scenarios_api(
     from tax_engine import (
         PersonInfo, W2Income, Deductions, AdditionalIncome, Payments, compute_tax,
     )
+    from tax_projector import _marginal_rate, _effective_rate
 
     results = []
     for i, scenario in enumerate(scenarios):
@@ -834,8 +835,8 @@ async def compare_scenarios_api(
             "agi": round(result.line_11_agi, 2),
             "taxable_income": round(result.line_15_taxable_income, 2),
             "total_tax": round(result.line_24_total_tax, 2),
-            "effective_rate": round(result.effective_rate * 100, 2),
-            "marginal_rate": round(result.marginal_rate * 100, 2),
+            "effective_rate": round(_effective_rate(result.line_24_total_tax, result.line_9_total_income) * 100, 2),
+            "marginal_rate": round(_marginal_rate(result.line_15_taxable_income, scenario.get("filing_status", "single")) * 100, 2),
             "refund": round(result.line_34_overpaid, 2),
             "owed": round(result.line_37_owed, 2),
         })

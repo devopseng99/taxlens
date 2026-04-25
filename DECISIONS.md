@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.54.0 API + v2.6.0 Portal — 75 waves complete)
+Updated: 2026-04-25 (v3.55.0 API + v2.6.0 Portal — 76 waves complete)
 
 ## Architecture
 
@@ -681,6 +681,12 @@ Updated: 2026-04-25 (v3.54.0 API + v2.6.0 Portal — 75 waves complete)
 218. **w2_wages_paid on BusinessIncome enables non-SSTB W-2 limitation** — The W-2 wage limitation (`max(50% W-2, 25% W-2 + 2.5% UBIA)`) requires knowing how much the business pays its employees. Added `w2_wages_paid` field alongside `is_sstb`. For most Schedule C sole proprietors this is $0, but businesses with employees (e.g., a restaurant) can claim the W-2 limitation.
 
 213. **QBI needs SSTB classification** — The BusinessIncome schema lacks a `is_sstb` field (Specified Service Trade or Business). For high-income filers above the QBI threshold, SSTB status means QBI phases to $0 (not to the W-2 wage limitation). Without this field, lawyers/doctors/consultants get incorrect QBI results above ~$192K single / ~$384K MFJ.
+
+## Wave 76 — Compare Scenarios Marginal Rates + Audit Risk Passing Checks (v3.55.0)
+
+219. **Compute marginal/effective rates inline, not on TaxResult** — The compare_scenarios endpoints (both REST and MCP) previously tried to access `result.effective_rate` and `result.marginal_rate` on TaxResult — fields that didn't exist (latent bug). Fixed by computing rates inline using `_effective_rate()` and `_marginal_rate()` from `tax_projector.py`. Rates are per-scenario since each may have different filing status and income levels.
+
+220. **Audit risk passing checks alongside flags** — Added `PassingCheck` dataclass and `passing_checks` list to `AuditRiskReport`. Every check that doesn't trigger a flag now records a passing check with the same category, the filer's value, and the norm. This gives users confidence about what's normal on their return, not just what's flagged. The `to_dict()` method includes `num_passing` and `passing_checks` array.
 
 ## PDF Template Provenance
 

@@ -693,13 +693,18 @@ def compare_scenarios(
 
     Returns a comparison table with key differences highlighted.
     """
+    from tax_projector import _marginal_rate, _effective_rate
+
     results = []
     for i, scenario in enumerate(scenarios):
         label = scenario.pop("label", f"Scenario {i + 1}")
+        fs = scenario.get("filing_status", "single")
         inputs = _build_inputs(**scenario)
         result = compute_tax(**inputs)
         summary = _result_to_dict(result)
         summary["scenario_label"] = label
+        summary["effective_rate"] = round(_effective_rate(result.line_24_total_tax, result.line_9_total_income) * 100, 2)
+        summary["marginal_rate"] = round(_marginal_rate(result.line_15_taxable_income, fs) * 100, 2)
         results.append(summary)
 
     # Build comparison
@@ -710,7 +715,8 @@ def compare_scenarios(
 
     if len(results) >= 2:
         keys = ["total_income", "agi", "deduction_type", "deduction_amount",
-                "taxable_income", "federal_tax", "net_refund", "se_tax", "state_taxes"]
+                "taxable_income", "federal_tax", "net_refund", "se_tax", "state_taxes",
+                "effective_rate", "marginal_rate"]
         for key in keys:
             vals = [r.get(key) for r in results]
             comparison["comparison"][key] = {

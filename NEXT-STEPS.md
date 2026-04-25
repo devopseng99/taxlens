@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.54.0 — 75 waves complete)
+Updated: 2026-04-25 (v3.55.0 — 76 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1372,9 +1372,9 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 4. ~~**QBI SSTB field on BusinessIncome**~~ — **RESOLVED in Wave 75 (v3.54.0)**. Added is_sstb + w2_wages_paid to BusinessIncome. SSTB QBI phases to $0 above threshold.
 
-5. **compare_scenarios should return marginal rates** — Current comparison output shows total tax and effective rate but not marginal rate. Marginal rate is the #1 thing users compare between scenarios.
+5. ~~**compare_scenarios should return marginal rates**~~ — **RESOLVED in Wave 76 (v3.55.0)**. Both REST and MCP compare_scenarios now return effective_rate and marginal_rate per scenario. Fixed latent bug where main.py accessed non-existent TaxResult attrs.
 
-6. **Audit risk should show passing checks** — Currently only shows flags (what's risky). Should also show "clean" indicators — filers want reassurance, not just warnings.
+6. ~~**Audit risk should show passing checks**~~ — **RESOLVED in Wave 76 (v3.55.0)**. Added PassingCheck dataclass + passing_checks list to AuditRiskReport. Every check that doesn't trigger a flag records a passing check with category, description, and norm values.
 
 ### 6-Month Priorities
 
