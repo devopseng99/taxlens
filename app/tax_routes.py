@@ -18,7 +18,7 @@ from tax_engine import (
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
     UnemploymentCompensation, EducationExpense, DependentCareExpense, RetirementContribution,
-    GamblingIncome, ForeignTaxCredit, QuarterlyIncome,
+    GamblingIncome, ForeignTaxCredit, QuarterlyIncome, SelfEmployedRetirement,
     compute_tax, parse_w2_from_ocr, parse_1099int_from_ocr,
     parse_1099div_from_ocr, parse_1099nec_from_ocr, parse_1098_from_ocr,
     parse_1099b_from_structured, parse_1099r_from_ocr,
@@ -216,6 +216,17 @@ class IRAContributionInput(BaseModel):
     age_50_plus: bool = False
 
 
+class SelfEmployedRetirementInput(BaseModel):
+    """Self-employed retirement plan contribution (Schedule 1 line 16).
+
+    This is an above-the-line deduction that reduces income tax but does NOT
+    reduce self-employment tax.
+    """
+    plan_type: str = Field(default="sep_ira", description="Plan type: sep_ira, solo_401k, or simple_ira")
+    contribution_amount: float = Field(default=0.0, description="Total contribution amount")
+    age_50_plus: bool = Field(default=False, description="Age 50+ catch-up eligible")
+
+
 class SocialSecurityBenefitInput(BaseModel):
     """SSA-1099 — Social Security benefits."""
     recipient: str = "filer"
@@ -339,6 +350,9 @@ class TaxDraftRequest(BaseModel):
 
     # IRA contributions (deductible traditional IRA)
     ira_contributions: list[IRAContributionInput] = Field(default=[], description="Traditional IRA contributions for above-the-line deduction")
+
+    # Self-employed retirement (Schedule 1 line 16 — does NOT reduce SE tax)
+    se_retirement_contributions: list[SelfEmployedRetirementInput] = Field(default=[], description="Solo 401(k), SEP-IRA, or SIMPLE IRA contributions (above-the-line deduction, does NOT reduce SE tax)")
 
     # Social Security benefits (SSA-1099)
     social_security_benefits: list[SocialSecurityBenefitInput] = Field(default=[], description="SSA-1099 Social Security benefits (taxable 0-85% based on income)")
@@ -757,6 +771,16 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         for i in req.ira_contributions
     ] if req.ira_contributions else None
 
+    # --- Build self-employed retirement contributions ---
+    se_ret_list = [
+        SelfEmployedRetirement(
+            plan_type=s.plan_type,
+            contribution_amount=s.contribution_amount,
+            age_50_plus=s.age_50_plus,
+        )
+        for s in req.se_retirement_contributions
+    ] if req.se_retirement_contributions else None
+
     # --- Build Social Security benefits ---
     ss_list = [
         SocialSecurityBenefit(
@@ -849,6 +873,7 @@ async def create_tax_draft(req: TaxDraftRequest, _auth: str = Depends(require_au
         depreciable_assets=asset_list,
         retirement_distributions=retirement_list,
         ira_contributions=ira_list,
+        se_retirement_contributions=se_ret_list,
         social_security_benefits=ss_list,
         unemployment_benefits=unemployment_list,
         gambling_income=gambling_list,

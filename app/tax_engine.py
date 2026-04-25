@@ -461,6 +461,27 @@ class IRAContribution:
 
 
 @dataclass
+class SelfEmployedRetirement:
+    """Self-employed retirement plan contribution — Schedule 1 line 16.
+
+    These are above-the-line deductions that reduce income tax but do NOT
+    reduce self-employment tax. The SE tax base is 92.35% of net Schedule C
+    profit BEFORE any retirement deduction.
+
+    Plan types:
+      - "sep_ira": SEP-IRA — employer contribution only, up to 25% of net
+        SE income (after SE tax deduction) or dollar limit, whichever is less.
+      - "solo_401k": Solo 401(k) — employee deferral ($23,500 2025) plus
+        employer contribution (25% of net SE income), total capped at $70,000.
+      - "simple_ira": SIMPLE IRA — employee deferral ($16,500 2025) plus
+        employer match (typically 3% of net SE income).
+    """
+    plan_type: str = "sep_ira"       # "sep_ira", "solo_401k", "simple_ira"
+    contribution_amount: float = 0.0  # Total amount contributed
+    age_50_plus: bool = False         # Catch-up eligible (50+)
+
+
+@dataclass
 class SocialSecurityBenefit:
     """SSA-1099 — Social Security benefits received."""
     recipient: str = "filer"       # "filer" or "spouse"
@@ -668,6 +689,13 @@ class TaxResult:
     ira_deduction: float = 0.0                    # Traditional IRA above-the-line deduction
     ira_deduction_before_phaseout: float = 0.0    # IRA deduction before phaseout reduction
     ira_phaseout_applied: bool = False             # Whether AGI phaseout reduced IRA deduction
+
+    # --- Self-Employed Retirement (Schedule 1 line 16) ---
+    se_retirement_deduction: float = 0.0           # Above-the-line deduction (does NOT reduce SE tax)
+    se_retirement_plan_type: str = ""              # "sep_ira", "solo_401k", "simple_ira"
+    se_retirement_contribution: float = 0.0        # Raw contribution amount
+    se_retirement_limit: float = 0.0               # Computed limit for the plan type
+    se_retirement_excess: float = 0.0              # Contribution exceeding limit
 
     # --- Form 8606 (Nondeductible IRA Basis) ---
     form_8606_nondeductible_contribution: float = 0.0  # Line 1: This year's nondeductible amount
@@ -1370,6 +1398,7 @@ def compute_tax(
     prior_year_ira_basis: float = 0.0,
     total_ira_value_year_end: float = 0.0,
     roth_conversion_amount: float = 0.0,
+    se_retirement_contributions: list[SelfEmployedRetirement] | None = None,
     prior_year_tax: float = 0.0,
     prior_year_agi: float = 0.0,
     quarterly_income: QuarterlyIncome | None = None,
@@ -1852,6 +1881,48 @@ def compute_tax(
         result.form_8889_deduction = total_deductible
         result.form_8889_excess = total_excess
         adjustments += result.hsa_deduction
+
+    # Self-employed retirement plans — Schedule 1 line 16 (above-the-line)
+    # CRITICAL: This deduction does NOT reduce SE tax. SE tax is computed on
+    # Schedule C profit × 92.35% BEFORE any retirement deduction.
+    se_retirement_contributions = se_retirement_contributions or []
+    if se_retirement_contributions and result.sched_c_total_profit > 0:
+        # Net SE income for contribution limit = Schedule C profit - 50% of SE tax
+        net_se_income = result.sched_c_total_profit - result.se_tax_deduction
+        for contrib in se_retirement_contributions:
+            plan = contrib.plan_type
+            amount = contrib.contribution_amount
+            result.se_retirement_plan_type = plan
+            result.se_retirement_contribution = amount
+            if plan == "sep_ira":
+                # SEP: 25% of net SE income, capped at dollar limit
+                pct_limit = net_se_income * c.SEP_IRA_PCT
+                dollar_limit = c.SEP_IRA_LIMIT
+                limit = min(pct_limit, dollar_limit)
+            elif plan == "solo_401k":
+                # Employee deferral + employer 25% of net SE income
+                employee_limit = c.SOLO_401K_EMPLOYEE_LIMIT
+                if contrib.age_50_plus:
+                    employee_limit += c.SOLO_401K_CATCHUP
+                employer_limit = net_se_income * c.SEP_IRA_PCT  # Same 25% rate
+                limit = min(employee_limit + employer_limit, c.SOLO_401K_TOTAL_LIMIT)
+                if contrib.age_50_plus:
+                    limit = min(employee_limit + employer_limit,
+                                c.SOLO_401K_TOTAL_LIMIT + c.SOLO_401K_CATCHUP)
+            elif plan == "simple_ira":
+                employee_limit = c.SIMPLE_IRA_LIMIT
+                if contrib.age_50_plus:
+                    employee_limit += c.SIMPLE_IRA_CATCHUP
+                # Employer match: typically 3% of net SE income
+                employer_match = net_se_income * 0.03
+                limit = employee_limit + employer_match
+            else:
+                limit = 0.0
+            allowed = min(amount, max(0, limit))
+            result.se_retirement_limit = round(limit, 2)
+            result.se_retirement_deduction = round(allowed, 2)
+            result.se_retirement_excess = round(max(0, amount - allowed), 2)
+            adjustments += result.se_retirement_deduction
 
     # IRA above-the-line deduction (with income-based phaseout for active plan participants)
     if result.ira_deduction > 0:
@@ -2610,7 +2681,8 @@ def compute_tax(
                   or result.gambling_winnings > 0 or result.k1_ordinary_income > 0
                   or result.se_tax_deduction > 0 or result.hsa_deduction > 0
                   or result.ira_deduction > 0 or result.student_loan_deduction > 0
-                  or result.educator_expense_deduction > 0 or result.alimony_paid > 0)
+                  or result.educator_expense_deduction > 0 or result.alimony_paid > 0
+                  or result.se_retirement_deduction > 0)
     if has_sched1:
         result.forms_generated.append("Schedule 1")
     if businesses:

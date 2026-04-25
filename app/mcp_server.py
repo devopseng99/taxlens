@@ -18,7 +18,7 @@ from tax_engine import (
     EducationExpense, DependentCareExpense, RetirementContribution,
     RentalProperty, HSAContribution, EnergyImprovement, K1Income, CryptoTransaction,
     DepreciableAsset, RetirementDistribution, IRAContribution, SocialSecurityBenefit,
-    UnemploymentCompensation, GamblingIncome, ForeignTaxCredit, QuarterlyIncome,
+    UnemploymentCompensation, GamblingIncome, ForeignTaxCredit, QuarterlyIncome, SelfEmployedRetirement,
     compute_tax,
 )
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
@@ -96,6 +96,7 @@ def _build_inputs(
     depreciable_assets: list[dict] | None = None,
     retirement_distributions: list[dict] | None = None,
     ira_contributions: list[dict] | None = None,
+    se_retirement_contributions: list[dict] | None = None,
     social_security_benefits: list[dict] | None = None,
     unemployment_benefits: list[dict] | None = None,
     gambling_income: list[dict] | None = None,
@@ -367,6 +368,18 @@ def _build_inputs(
             for i in ira_contributions
         ]
 
+    # Build self-employed retirement contributions
+    se_ret_list = None
+    if se_retirement_contributions:
+        se_ret_list = [
+            SelfEmployedRetirement(
+                plan_type=s.get("plan_type", "sep_ira"),
+                contribution_amount=s.get("contribution_amount", 0),
+                age_50_plus=s.get("age_50_plus", False),
+            )
+            for s in se_retirement_contributions
+        ]
+
     # Build Social Security benefits
     ss_list = None
     if social_security_benefits:
@@ -442,6 +455,7 @@ def _build_inputs(
         depreciable_assets=asset_list,
         retirement_distributions=ret_dist_list,
         ira_contributions=ira_list,
+        se_retirement_contributions=se_ret_list,
         social_security_benefits=ss_list,
         unemployment_benefits=unemp_list,
         gambling_income=gamb_list,
@@ -520,6 +534,7 @@ def compute_tax_scenario(
     depreciable_assets: list[dict] | None = None,
     retirement_distributions: list[dict] | None = None,
     ira_contributions: list[dict] | None = None,
+    se_retirement_contributions: list[dict] | None = None,
     social_security_benefits: list[dict] | None = None,
     unemployment_benefits: list[dict] | None = None,
     gambling_income: list[dict] | None = None,
@@ -583,6 +598,7 @@ def compute_tax_scenario(
         depreciable_assets: Business/rental assets for depreciation (Form 4562). Each dict: {"description", "cost", "date_placed_in_service" (YYYY-MM-DD), "macrs_class" (3/5/7/15/27/39), "asset_use" ("business"/"rental"), "business_use_pct" (0-100), "section_179_elected", "bonus_depreciation" (bool), "recovery_year" (1-based)}. Section 179 limit: $1,250,000 (2025). Bonus: 40% (2025). Real property (27/39-year) not eligible for Section 179 or bonus.
         retirement_distributions: Form 1099-R retirement distributions. Each dict: {"payer_name", "gross_distribution", "taxable_amount", "taxable_amount_not_determined" (bool), "federal_withheld", "distribution_code" ("1"=early, "7"=normal, "G"=rollover), "is_ira" (bool, True=IRA lines 4a/4b, False=pension lines 5a/5b), "is_roth" (bool), "is_early" (bool)}. Roth and rollover distributions are non-taxable. Early distributions (code "1") incur 10% penalty.
         ira_contributions: Traditional IRA contributions for above-the-line deduction. Each dict: {"contributor" ("filer"/"spouse"), "contribution_amount", "age_50_plus" (bool)}. Limit: $7,000 ($8,000 if 50+).
+        se_retirement_contributions: Self-employed retirement plan contributions (Schedule 1 line 16). Does NOT reduce SE tax. Each dict: {"plan_type" ("sep_ira"/"solo_401k"/"simple_ira"), "contribution_amount", "age_50_plus" (bool)}. SEP: min(25% net SE income, $70K). Solo 401(k): $23,500 employee + 25% employer, $70K total. SIMPLE: $16,500 + 3% match.
         social_security_benefits: SSA-1099 Social Security benefits. Each dict: {"recipient" ("filer"/"spouse"), "gross_benefits", "federal_withheld"}. Taxable 0-85% based on provisional income (IRC §86). Single: base $25K/upper $34K. MFJ: base $32K/upper $44K.
         unemployment_benefits: Form 1099-G unemployment compensation. Each dict: {"state", "compensation", "federal_withheld", "state_withheld"}. Fully taxable.
         gambling_income: Form W-2G gambling winnings. Each dict: {"payer_name", "winnings", "federal_withheld", "type_of_wager"}. All winnings are taxable income.
@@ -630,6 +646,7 @@ def compute_tax_scenario(
         depreciable_assets=depreciable_assets,
         retirement_distributions=retirement_distributions,
         ira_contributions=ira_contributions,
+        se_retirement_contributions=se_retirement_contributions,
         social_security_benefits=social_security_benefits,
         unemployment_benefits=unemployment_benefits,
         gambling_income=gambling_income,

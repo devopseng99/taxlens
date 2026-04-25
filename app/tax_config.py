@@ -63,6 +63,10 @@ CHARITABLE_NONCASH_AGI_LIMIT = 0.30  # Non-cash property: 30% of AGI
 HSA_CATCHUP = 1_000                  # Age 55+ catch-up (statutory, not indexed)
 IRA_CATCHUP = 1_000                   # Age 50+ catch-up (statutory, not indexed)
 EARLY_WITHDRAWAL_PENALTY_RATE = 0.10  # 10% early withdrawal from retirement acct
+SEP_IRA_PCT = 0.25                   # SEP-IRA: 25% of net SE income (after SE deduction)
+# Note: net SE income for SEP calc = Schedule C profit × 0.9235 × 0.5 deducted from profit
+# Effective rate on Schedule C profit: 0.25 × (1 - 0.5 × 0.153) / (1 + 0.25 × (1 - 0.5 × 0.153))
+# Simplified: use the IRS rate table factor of ~20.0% of net profit
 
 # --- Student Loan Interest Deduction Phaseout ---
 # Per IRC §221(b)(2) — MAGI-based linear phaseout, MFS gets $0
@@ -234,6 +238,13 @@ _YEAR_2024 = {
     "SECTION_179_PHASEOUT_START": 2_890_000,
     # IRA — Rev. Proc. 2023-34
     "IRA_CONTRIBUTION_LIMIT": 7_000,
+    # Self-employed retirement plan limits (2024)
+    "SOLO_401K_EMPLOYEE_LIMIT": 23_000,      # Employee deferral limit
+    "SOLO_401K_CATCHUP": 7_500,              # Age 50+ catch-up
+    "SOLO_401K_TOTAL_LIMIT": 69_000,         # Total limit (employee + employer)
+    "SEP_IRA_LIMIT": 69_000,                 # Annual contribution dollar cap
+    "SIMPLE_IRA_LIMIT": 16_000,              # Employee deferral limit
+    "SIMPLE_IRA_CATCHUP": 3_500,             # Age 50+ catch-up
     # Estimated tax penalty rate (IRS sets quarterly)
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -315,6 +326,13 @@ _YEAR_2025 = {
     "SECTION_179_PHASEOUT_START": 3_130_000,
     # IRA — Rev. Proc. 2024-40
     "IRA_CONTRIBUTION_LIMIT": 7_000,
+    # Self-employed retirement plan limits (2025) — Notice 2024-80
+    "SOLO_401K_EMPLOYEE_LIMIT": 23_500,      # Employee deferral limit
+    "SOLO_401K_CATCHUP": 7_500,              # Age 50+ catch-up
+    "SOLO_401K_TOTAL_LIMIT": 70_000,         # Total limit (employee + employer)
+    "SEP_IRA_LIMIT": 70_000,                 # Annual contribution dollar cap
+    "SIMPLE_IRA_LIMIT": 16_500,              # Employee deferral limit
+    "SIMPLE_IRA_CATCHUP": 3_500,             # Age 50+ catch-up
     # Estimated tax penalty rate
     "ESTIMATED_TAX_PENALTY_RATE": 0.08,
     # Illinois
@@ -392,6 +410,7 @@ def get_year_config(tax_year: int = 2025) -> SimpleNamespace:
     # Depreciation
     ns.IRA_CATCHUP = IRA_CATCHUP
     ns.EARLY_WITHDRAWAL_PENALTY_RATE = EARLY_WITHDRAWAL_PENALTY_RATE
+    ns.SEP_IRA_PCT = SEP_IRA_PCT
     ns.IRA_PHASEOUT_ACTIVE = IRA_PHASEOUT_ACTIVE.get(tax_year, IRA_PHASEOUT_ACTIVE[2025])
     ns.IRA_PHASEOUT_SPOUSE_ACTIVE = IRA_PHASEOUT_SPOUSE_ACTIVE.get(tax_year, IRA_PHASEOUT_SPOUSE_ACTIVE[2025])
     ns.STUDENT_LOAN_PHASEOUT = STUDENT_LOAN_PHASEOUT.get(tax_year, STUDENT_LOAN_PHASEOUT[2025])
