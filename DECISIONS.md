@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.40.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.41.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -599,6 +599,10 @@ Updated: 2026-04-24 (v3.40.0 API + v2.6.0 Portal)
 179. **1040-ES vouchers use ReportLab (not fillable template)** — IRS Form 1040-ES is a worksheet+voucher booklet with no machine-fillable fields. We generate 4-page voucher PDFs via ReportLab canvas with filer info, SSN, quarterly amount, and due dates. Vouchers are conditional on `quarterly_estimated_tax > 0`.
 
 180. **1040-ES due dates hardcoded to 2025 tax year** — Apr 15 2026, Jun 15 2026, Sep 15 2026, Jan 15 2027. Will need update when 2026 tax year is added.
+
+181. **Full return PDF uses pypdf PdfWriter merge (not PdfMerger)** — `PdfWriter.add_page()` + `add_outline_item()` for bookmarks. PdfMerger is deprecated in pypdf 3+. Cover page generated via ReportLab, then merged first. Forms ordered per `_FORM_ORDER` constant matching IRS filing sequence.
+
+182. **Full return endpoint reconstructs TaxResult from result.json** — The `/pdf/full_return` endpoint reads the saved `result.json` file and populates a minimal TaxResult for the cover page. This avoids recomputing the entire return just to generate the merge.
 
 ## PDF Template Provenance
 

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.40.0)
+Updated: 2026-04-24 (v3.41.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,25 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 62 — Enhanced PDF Package + Cover Letter (v3.41.0) — 2026-04-24
+
+- [x] generate_full_return_pdf(): merges all forms into single PDF with bookmarks
+- [x] Cover page: filer info, return summary (income, AGI, tax, payments, refund/owed), TOC with page numbers
+- [x] _FORM_ORDER constant: 30+ forms in IRS filing sequence
+- [x] PDF bookmarks for navigation to each form
+- [x] GET /tax-draft/{id}/pdf/full_return endpoint
+- [x] Handles multiple 1099-R files, state returns, empty directories
+- [x] DRAFT watermark on cover page
+- [x] 1062/1062 unit tests (12 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave62_full_return_pdf.py` — 12 tests (2 cover, 4 merge, 3 order, 3 endpoint)
+
+**Modified files:**
+- `app/pdf_generator.py` — _generate_cover_page(), generate_full_return_pdf(), _FORM_ORDER
+- `app/tax_routes.py` — GET /{draft_id}/pdf/full_return endpoint
+- `app/main.py` — version 3.41.0
 
 ### Wave 61 — 1040-ES Estimated Tax Voucher Generation (v3.40.0) — 2026-04-24
 

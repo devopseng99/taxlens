@@ -1005,6 +1005,56 @@ async def download_pdf(
     )
 
 
+@router.get(
+    "/{draft_id}/pdf/full_return",
+    summary="Download full return PDF package",
+    description="Download a single merged PDF containing all tax forms with cover page, "
+                "table of contents, and bookmarks. Forms are ordered per IRS filing conventions.",
+)
+async def download_full_return(
+    draft_id: str,
+    username: str = Query(...),
+):
+    """Download merged full return PDF with cover page and bookmarks."""
+    from pdf_generator import generate_full_return_pdf
+    draft_dir = get_draft_dir(username, draft_id)
+    if not draft_dir.exists():
+        raise HTTPException(404, f"Draft {draft_id} not found")
+
+    # Load the result JSON to reconstruct TaxResult for cover page
+    result_path = draft_dir / "result.json"
+    if not result_path.exists():
+        raise HTTPException(404, f"Draft {draft_id} has no computed result")
+
+    import json
+    from tax_engine import TaxResult, PersonInfo
+    result_data = json.loads(result_path.read_text())
+    result = TaxResult()
+    result.filing_status = result_data.get("filing_status", "single")
+    result.line_9_total_income = result_data.get("line_9_total_income", 0)
+    result.line_11_agi = result_data.get("line_11_agi", 0)
+    result.line_15_taxable_income = result_data.get("line_15_taxable_income", 0)
+    result.line_24_total_tax = result_data.get("line_24_total_tax", 0)
+    result.line_33_total_payments = result_data.get("line_33_total_payments", 0)
+    result.line_34_overpaid = result_data.get("federal_refund", 0)
+    result.line_37_owed = result_data.get("federal_owed", 0)
+    if "filer_name" in result_data:
+        parts = result_data["filer_name"].split(" ", 1)
+        result.filer = PersonInfo(
+            first_name=parts[0],
+            last_name=parts[1] if len(parts) > 1 else "",
+            ssn=result_data.get("filer_ssn", "XXX-XX-XXXX"),
+        )
+
+    buf = generate_full_return_pdf(result, str(draft_dir))
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="TaxLens_{draft_id}_full_return.pdf"'},
+    )
+
+
 @router.post("/import-prior-year")
 async def import_prior_year(
     file: UploadFile = File(...),
