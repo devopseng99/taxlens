@@ -12,4 +12,6 @@ STATE_CONFIG = StateConfig(
     reciprocal_states={"IA", "KY", "MI", "WI"},
     ptet_available=True,
     ptet_entity_types={"s_corp", "partnership"},
+    pprt_rate=0.015,                # 1.5% Personal Property Replacement Tax
+    pprt_entity_types={"s_corp", "partnership"},
 )

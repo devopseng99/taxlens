@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.61.0 API + v2.6.0 Portal — 82 waves complete)
+Updated: 2026-04-25 (v3.62.0 API + v2.6.0 Portal — 83 waves complete)
 
 ## Architecture
 
@@ -723,6 +723,10 @@ Updated: 2026-04-25 (v3.61.0 API + v2.6.0 Portal — 82 waves complete)
 232. **Catch-up contributions don't count toward §415(c)** — The mega backdoor Roth calculator correctly excludes age 50+ catch-up ($7,500) from the §415(c) annual additions limit. Only regular deferrals (up to §402(g)) and employer match count toward the $70K/$72K total. This is a common misunderstanding that would undercount available after-tax space.
 
 233. **Roth vs taxable projection uses annual LTCG tax drag** — The 10-year projection compares Roth (tax-free growth) vs taxable (growth taxed at 15% annually). This is conservative: real taxable accounts may defer gains and realize them at sale, but annual tax drag is the standard comparison methodology.
+
+234. **PPRT modeled on K-1 income, not as separate entity return** — IL PPRT (1.5% on S-corp/partnership income) is an entity-level tax but surfaces on the filer's K-1. We compute it when K-1 ordinary_income > 0 and the entity_type matches pprt_entity_types. The PPRT adds to IL state return total_tax. This matches how CPAs encounter PPRT — as a line item on the entity return that flows to the individual's state tax planning.
+
+235. **PPRT uses pprt_rate/pprt_entity_types on StateConfig** — Rather than hardcoding the IL PPRT, the config is generic: any state can declare a pprt_rate. Currently only IL uses it (1.5%), but this prepares for other states' replacement/franchise taxes if needed.
 
 ## PDF Template Provenance
 

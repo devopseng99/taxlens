@@ -12,7 +12,7 @@ from typing import Optional
 from tax_config import *
 from tax_config import get_year_config, SUPPORTED_TAX_YEARS
 from state_tax_engine import compute_state_tax, compute_all_state_returns
-from state_configs import StateTaxResult, NO_TAX_STATES
+from state_configs import StateTaxResult, NO_TAX_STATES, get_state_config
 
 
 # ---------------------------------------------------------------------------
@@ -698,6 +698,10 @@ class TaxResult:
     ptet_total_credit: float = 0.0               # Total PTET credit on personal return
     ptet_credits: list = field(default_factory=list)  # Per-entity PTET credit details
 
+    # --- PPRT (IL Personal Property Replacement Tax) ---
+    pprt_total: float = 0.0                      # Total PPRT on K-1 income
+    pprt_details: list = field(default_factory=list)  # Per-entity PPRT details
+
     # --- Quarterly Estimated Tax Planner ---
     quarterly_estimated_tax: float = 0.0     # Per-quarter estimated payment
     quarterly_schedule: list = field(default_factory=list)  # 4 quarterly amounts
@@ -820,6 +824,7 @@ class TaxResult:
                 "withholding": round(sr.withholding, 2),
                 "credit_for_other_states": round(sr.credit_for_other_states, 2),
                 "ptet_credit": round(sr.ptet_credit, 2),
+                "pprt_tax": round(sr.pprt_tax, 2),
                 "refund": round(sr.refund, 2),
                 "owed": round(sr.owed, 2),
             })
@@ -965,6 +970,8 @@ class TaxResult:
             "k1_guaranteed_payments": round(self.k1_guaranteed_payments, 2),
             "ptet_total_credit": round(self.ptet_total_credit, 2),
             "ptet_credits": self.ptet_credits if self.ptet_credits else None,
+            "pprt_total": round(self.pprt_total, 2) if self.pprt_total > 0 else None,
+            "pprt_details": self.pprt_details if self.pprt_details else None,
             "quarterly_estimated_tax": round(self.quarterly_estimated_tax, 2),
             "quarterly_schedule": self.quarterly_schedule if self.quarterly_schedule else None,
             "estimated_tax_penalty": round(self.estimated_tax_penalty, 2),
@@ -1767,6 +1774,24 @@ def compute_tax(
                     "tax_paid": round(k1.ptet_tax_paid, 2),
                 })
                 result.ptet_total_credit += k1.ptet_tax_paid
+
+        # --- PPRT (IL Personal Property Replacement Tax) ---
+        for k1 in k1_incomes:
+            k1_state = k1.ptet_state.upper() if k1.ptet_state else residence_state.upper()
+            state_cfg = get_state_config(k1_state)
+            if (state_cfg and state_cfg.pprt_rate > 0
+                    and k1.entity_type in state_cfg.pprt_entity_types
+                    and k1.ordinary_income > 0):
+                pprt = round(k1.ordinary_income * state_cfg.pprt_rate, 2)
+                result.pprt_details.append({
+                    "entity_name": k1.entity_name,
+                    "entity_type": k1.entity_type,
+                    "state": k1_state,
+                    "income": round(k1.ordinary_income, 2),
+                    "rate": state_cfg.pprt_rate,
+                    "tax": pprt,
+                })
+                result.pprt_total += pprt
 
     # =======================================================================
     # IRC §1211 — CAPITAL LOSS LIMITATION ($3,000 / $1,500 MFS)
@@ -2814,6 +2839,28 @@ def compute_tax(
                 else:
                     sr.owed = round(sr.tax + sr.surtax - total_payments, 2)
                     sr.refund = 0.0
+
+    # Apply PPRT to state returns (adds to state tax owed)
+    if result.pprt_total > 0:
+        for sr in state_returns:
+            state_pprt = sum(
+                d["tax"] for d in result.pprt_details
+                if d["state"] == sr.state_code
+            )
+            if state_pprt > 0:
+                sr.pprt_tax = state_pprt
+                sr.total_tax = round(sr.total_tax + state_pprt, 2)
+                # Recalculate refund/owed
+                total_payments = sr.withholding + sr.estimated_payments + sr.credit_for_other_states
+                if sr.ptet_credit > 0:
+                    total_payments += sr.ptet_credit
+                diff = total_payments - sr.total_tax
+                if diff >= 0:
+                    sr.refund = round(diff, 2)
+                    sr.owed = 0.0
+                else:
+                    sr.refund = 0.0
+                    sr.owed = round(abs(diff), 2)
 
     result.state_returns = state_returns
     result.residence_state = residence_state

@@ -41,6 +41,10 @@ class StateConfig:
     ptet_available: bool = False                  # State offers PTET election
     ptet_entity_types: set = field(default_factory=set)  # e.g., {"s_corp", "partnership"}
 
+    # Entity-level replacement/franchise taxes
+    pprt_rate: float = 0.0                        # Personal Property Replacement Tax (IL: 1.5%)
+    pprt_entity_types: set = field(default_factory=set)  # Entity types subject to PPRT
+
 
 @dataclass
 class StateTaxResult:
@@ -75,6 +79,9 @@ class StateTaxResult:
 
     # PTET credit
     ptet_credit: float = 0.0                     # PTET credit applied to this state
+
+    # Entity-level taxes
+    pprt_tax: float = 0.0                        # IL Personal Property Replacement Tax
 
     # Allocation (for nonresident returns)
     allocated_income: float = 0.0                # Income sourced to this state

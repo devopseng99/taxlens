@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.61.0 — 82 waves complete)
+Updated: 2026-04-25 (v3.62.0 — 83 waves complete)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -1388,7 +1388,7 @@ All 73 waves complete. v3.52.0 deployed. Below is the prioritized roadmap from t
 
 11. ~~**Mega backdoor Roth modeling**~~ — **RESOLVED in Wave 82 (v3.61.0)**. `mega_backdoor_roth.py` computes after-tax 401(k) space under §415(c), handles catch-up (doesn't count toward §415(c)), projects Roth vs taxable growth. REST `/mega-backdoor-roth` + MCP `compute_mega_backdoor_roth`. 18 tests.
 
-12. **IL PPRT (Personal Property Replacement Tax)** — 1.5% on S-corp/partnership income earned in IL. Not currently modeled. Affects every IL business owner.
+12. ~~**IL PPRT (Personal Property Replacement Tax)**~~ — **RESOLVED in Wave 83 (v3.62.0)**. StateConfig has pprt_rate + pprt_entity_types. IL config: 1.5% on S-corp/partnership K-1 ordinary income. PPRT added to IL state return total_tax. Coexists with PTET credit. 15 tests.
 
 ### 18-Month Vision
 
