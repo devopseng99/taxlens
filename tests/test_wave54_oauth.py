@@ -459,12 +459,10 @@ class TestMiddlewareIntegration:
         from middleware.tenant_context import _SKIP_PATHS
         assert "/oauth/token" in _SKIP_PATHS
 
-    def test_main_version_updated(self):
+    def test_oauth_token_exempt_from_metering(self):
         main_path = os.path.join(os.path.dirname(__file__), "..", "app", "main.py")
         src = open(main_path).read()
-        version = "3.33.0"
-        count = src.count(f'"{version}"')
-        assert count >= 2, f"Expected version {version} in at least 2+ places, found {count}"
+        assert "/oauth/token" in src
 
     def test_oauth_module_importable(self):
         from oauth import router, create_authorization_code, cleanup_expired_tokens

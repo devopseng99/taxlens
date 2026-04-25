@@ -64,7 +64,7 @@ async def lifespan(app):
 
     # Start metering logger
     await metering.start()
-    logger.info("TaxLens API starting (v3.33.0)")
+    logger.info("TaxLens API starting (v3.34.0)")
 
     async with mcp.session_manager.run():
         yield
@@ -72,13 +72,18 @@ async def lifespan(app):
     # Graceful shutdown — flush pending metering events
     logger.info("TaxLens API shutting down — flushing metering buffer")
     await metering.stop()
+    try:
+        from redis_client import close as redis_close
+        await redis_close()
+    except Exception:
+        pass
     await postgrest.close()
     logger.info("TaxLens API shutdown complete")
 
 
 app = FastAPI(
     title="TaxLens Agentic Tax Intelligence Platform",
-    version="3.33.0",
+    version="3.34.0",
     docs_url="/docs",
     root_path="/api",
     lifespan=lifespan,
@@ -324,7 +329,7 @@ async def health(deep: bool = False):
 
     result = {
         "status": status,
-        "version": "3.33.0",
+        "version": "3.34.0",
         "uptime_seconds": round(_time.time() - _STARTUP_TIME),
         "storage_root": str(STORAGE_ROOT),
         "writable": storage_writable,
@@ -338,6 +343,14 @@ async def health(deep: bool = False):
         "plaid_enabled": PLAID_ENABLED,
         "email_enabled": EMAIL_ENABLED,
     }
+
+    # Redis health
+    try:
+        from redis_client import health_check as redis_health_check
+        redis_status = await redis_health_check()
+        result.update(redis_status)
+    except Exception:
+        result["redis_enabled"] = False
 
     if deep and db_latency_ms is not None:
         result["db_latency_ms"] = db_latency_ms

@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.33.0)
+Updated: 2026-04-24 (v3.34.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,28 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 55 — Redis-Backed Rate Limiting (v3.34.0) — 2026-04-24
+
+- [x] Redis 7 Alpine StatefulSet + Service in taxlens-db namespace (64Mi, allkeys-lru)
+- [x] redis_client.py: async connection pool, lazy init, graceful fallback when REDIS_URL unset
+- [x] Token bucket via Redis Lua script (atomic refill + consume, 2-min TTL auto-cleanup)
+- [x] Daily/monthly counter via Redis Lua script (window-based reset)
+- [x] IP rate limiting via Redis sorted set sliding window
+- [x] Health endpoint reports redis_enabled, redis_ok, redis_latency_ms
+- [x] Graceful Redis shutdown in lifespan
+- [x] Full backward compatibility: no REDIS_URL = pure in-memory (unchanged behavior)
+- [x] 960/960 unit tests (31 new), 65/65 E2E tests passing
+
+**New files:**
+- `app/redis_client.py` — async Redis client with Lua scripts
+- `charts/taxlens-db/templates/redis-statefulset.yaml` — Redis 7 Alpine StatefulSet
+- `charts/taxlens-db/templates/redis-service.yaml` — ClusterIP service
+- `tests/test_wave55_redis_rate_limit.py` — 31 tests (6 client, 3 bucket, 3 counter, 5 fallback, 4 redis, 4 ip, 3 plans, 3 k8s)
+
+**Modified files:**
+- `app/rate_limiter.py` — Redis-first with in-memory fallback for all rate limit methods
+- `app/main.py` — version 3.34.0, Redis health in /health, Redis close in lifespan
 
 ### Wave 54 — MCP OAuth 2.0 Token Endpoint (v3.33.0) — 2026-04-24
 

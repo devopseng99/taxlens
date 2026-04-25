@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.33.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.34.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -411,6 +411,16 @@ Updated: 2026-04-24 (v3.33.0 API + v2.6.0 Portal)
 189. **Depreciation order: Section 179 → Bonus → MACRS** — Section 179 reduces depreciable basis first, then bonus depreciation applies to the remaining basis, then regular MACRS applies to what's left. This is the IRS-specified ordering per Form 4562 instructions.
 
 190. **Depreciation flows post-computation** — Business depreciation reduces `sched_c_total_profit` after Schedule C is initially computed. Rental depreciation reduces `sched_e_net_income` after Schedule E is computed. This avoids modifying the underlying BusinessIncome/RentalProperty dataclasses and keeps the depreciation calculation self-contained.
+
+## Wave 55 — Redis-Backed Rate Limiting (v3.34.0)
+
+233. **Redis as optional shared state for rate limiting** — When `REDIS_URL` is set, token buckets and daily/monthly counters use Redis Lua scripts for atomic operations across replicas. When unset or Redis is unreachable, the system gracefully degrades to the original in-memory implementation. No code path changes required — the fallback is automatic.
+
+234. **Lua scripts for atomic rate limiting** — Three Lua scripts handle all Redis-side logic: TOKEN_BUCKET_LUA (atomic refill + consume with 2-min auto-expiry), SLIDING_COUNTER_LUA (daily/monthly counters with window reset), IP_SLIDING_WINDOW_LUA (sorted set sliding window for IP throttling). Lua scripts execute atomically on the Redis server, preventing race conditions.
+
+235. **Redis 7 Alpine with allkeys-lru eviction** — The Redis StatefulSet uses 64Mi memory limit with allkeys-lru policy. No persistence (appendonly=no, save="") — rate limit state is ephemeral by design. If Redis restarts, buckets refill to capacity (a brief window of no rate limiting), which is acceptable.
+
+236. **Health endpoint reports Redis status** — `/health` now includes `redis_enabled`, `redis_ok`, and `redis_latency_ms` fields. This enables monitoring dashboards to track Redis availability without separate probe infrastructure.
 
 ## Wave 54 — MCP OAuth 2.0 Token Endpoint (v3.33.0)
 

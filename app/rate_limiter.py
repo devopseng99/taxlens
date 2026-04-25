@@ -1,9 +1,14 @@
-"""In-memory token bucket rate limiter per tenant with plan-based limits."""
+"""Token bucket rate limiter per tenant with plan-based limits.
+
+Uses Redis when REDIS_URL is set (shared state across replicas).
+Falls back to in-memory when Redis is unavailable.
+"""
 
 import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional
 
 from db.postgrest_client import postgrest, DB_ENABLED
@@ -107,7 +112,6 @@ class DailyCounter:
     reset_day: str = ""
 
     def _today(self) -> str:
-        from datetime import datetime, timezone
         return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     def check(self) -> bool:
@@ -145,7 +149,7 @@ class TenantLimits:
 
 
 class RateLimiter:
-    """Per-tenant rate limiter with plan-based limits loaded from PostgreSQL."""
+    """Per-tenant rate limiter with Redis backend + in-memory fallback."""
 
     def __init__(self):
         self._tenants: dict[str, TenantLimits] = {}
@@ -153,6 +157,21 @@ class RateLimiter:
         self._cache_refresh: float = 0.0
         self._cache_ttl: float = 300.0  # 5 minutes
         self._lock = asyncio.Lock()
+        self._redis_scripts: dict = {}
+
+    async def _get_redis(self):
+        """Get Redis client (lazy import to avoid circular deps)."""
+        try:
+            from redis_client import get_redis
+            return await get_redis()
+        except Exception:
+            return None
+
+    async def _get_lua_script(self, r, script_name: str, script_src: str):
+        """Register and cache a Lua script."""
+        if script_name not in self._redis_scripts:
+            self._redis_scripts[script_name] = r.register_script(script_src)
+        return self._redis_scripts[script_name]
 
     async def _refresh_plans(self):
         """Load tenant plan limits from PostgreSQL via PostgREST (cached for 5 min)."""
@@ -180,7 +199,7 @@ class RateLimiter:
             logger.warning("Failed to refresh plan limits: %s", e)
 
     def _get_tenant(self, tenant_id: str) -> TenantLimits:
-        """Get or create tenant limits."""
+        """Get or create tenant limits (in-memory fallback)."""
         if tenant_id not in self._tenants:
             plan = self._plans_cache.get(tenant_id, PLAN_DEFAULTS["starter"])
             self._tenants[tenant_id] = TenantLimits(plan)
@@ -189,12 +208,33 @@ class RateLimiter:
     async def check_api_rate(self, tenant_id: str) -> tuple[bool, dict]:
         """Check API call rate limit. Returns (allowed, headers)."""
         await self._refresh_plans()
-        limits = self._get_tenant(tenant_id)
-
-        allowed = limits.api_bucket.consume()
         plan = self._plans_cache.get(tenant_id, PLAN_DEFAULTS["starter"])
         rpm = plan.get("api_calls_per_minute", 30)
 
+        # Try Redis first
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                from redis_client import TOKEN_BUCKET_LUA
+                script = await self._get_lua_script(r, "token_bucket", TOKEN_BUCKET_LUA)
+                key = f"rl:api:{tenant_id}"
+                result = await script(keys=[key], args=[rpm, rpm / 60.0, time.time(), 1])
+                allowed = bool(int(result[0]))
+                tokens_left = max(0, int(float(result[1])))
+                headers = {
+                    "X-RateLimit-Limit": str(rpm),
+                    "X-RateLimit-Remaining": str(tokens_left),
+                    "X-RateLimit-Reset": str(int(time.time() + 60)),
+                }
+                if not allowed:
+                    headers["Retry-After"] = "1"
+                return allowed, headers
+            except Exception as e:
+                logger.warning("Redis rate limit failed, falling back to in-memory: %s", e)
+
+        # In-memory fallback
+        limits = self._get_tenant(tenant_id)
+        allowed = limits.api_bucket.consume()
         headers = {
             "X-RateLimit-Limit": str(rpm),
             "X-RateLimit-Remaining": str(max(0, int(limits.api_bucket.tokens))),
@@ -204,35 +244,59 @@ class RateLimiter:
             headers["Retry-After"] = str(int(limits.api_bucket.retry_after) + 1)
         return allowed, headers
 
+    async def _check_counter(self, tenant_id: str, counter_type: str,
+                              limit: int, window_key: str,
+                              fallback_counter: DailyCounter) -> tuple[bool, int]:
+        """Check a daily/monthly counter via Redis or in-memory fallback."""
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                from redis_client import SLIDING_COUNTER_LUA
+                script = await self._get_lua_script(r, "sliding_counter", SLIDING_COUNTER_LUA)
+                key = f"rl:{counter_type}:{tenant_id}"
+                # First check, then increment if allowed
+                result = await script(keys=[key], args=[limit, window_key, 1])
+                allowed = bool(int(result[0]))
+                remaining = int(result[1])
+                return allowed, remaining
+            except Exception as e:
+                logger.warning("Redis counter failed, falling back: %s", e)
+
+        # In-memory fallback
+        allowed = fallback_counter.check()
+        if allowed:
+            fallback_counter.increment()
+        return allowed, fallback_counter.remaining
+
     async def check_computation(self, tenant_id: str) -> tuple[bool, int]:
         """Check daily computation limit. Returns (allowed, remaining)."""
         await self._refresh_plans()
-        limits = self._get_tenant(tenant_id)
-        allowed = limits.compute_daily.check()
-        if allowed:
-            limits.compute_daily.increment()
-        return allowed, limits.compute_daily.remaining
+        plan = self._plans_cache.get(tenant_id, PLAN_DEFAULTS["starter"])
+        limit = plan.get("computations_per_day", 50)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        fallback = self._get_tenant(tenant_id).compute_daily
+        return await self._check_counter(tenant_id, "compute", limit, today, fallback)
 
     async def check_ocr(self, tenant_id: str) -> tuple[bool, int]:
         """Check monthly OCR page limit. Returns (allowed, remaining)."""
         await self._refresh_plans()
-        limits = self._get_tenant(tenant_id)
-        allowed = limits.ocr_monthly.check()
-        if allowed:
-            limits.ocr_monthly.increment()
-        return allowed, limits.ocr_monthly.remaining
+        plan = self._plans_cache.get(tenant_id, PLAN_DEFAULTS["starter"])
+        limit = plan.get("ocr_pages_per_month", 100)
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        fallback = self._get_tenant(tenant_id).ocr_monthly
+        return await self._check_counter(tenant_id, "ocr", limit, month, fallback)
 
     async def check_agent(self, tenant_id: str) -> tuple[bool, int]:
         """Check daily agent message limit. Returns (allowed, remaining)."""
         await self._refresh_plans()
-        limits = self._get_tenant(tenant_id)
-        allowed = limits.agent_daily.check()
-        if allowed:
-            limits.agent_daily.increment()
-        return allowed, limits.agent_daily.remaining
+        plan = self._plans_cache.get(tenant_id, PLAN_DEFAULTS["starter"])
+        limit = plan.get("agent_messages_per_day", 100)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        fallback = self._get_tenant(tenant_id).agent_daily
+        return await self._check_counter(tenant_id, "agent", limit, today, fallback)
 
     def get_tenant_usage(self, tenant_id: str) -> dict:
-        """Get current usage counters for a tenant."""
+        """Get current usage counters for a tenant (in-memory view)."""
         limits = self._tenants.get(tenant_id)
         if not limits:
             return {"api_tokens": 0, "computations_today": 0,
@@ -249,22 +313,26 @@ class RateLimiter:
 
 
 class IPRateLimiter:
-    """In-memory per-IP rate limiter using token buckets.
-
-    Used for public (unauthenticated) endpoints to prevent abuse.
-    """
+    """Per-IP rate limiter using Redis sorted set sliding window or in-memory fallback."""
 
     def __init__(self, default_rpm: int = 30):
         self._buckets: dict[str, TokenBucket] = {}
         self._default_rpm = default_rpm
-        self._max_ips = 4096  # evict oldest if exceeded
+        self._max_ips = 4096
+        self._redis_scripts: dict = {}
+
+    async def _get_redis(self):
+        try:
+            from redis_client import get_redis
+            return await get_redis()
+        except Exception:
+            return None
 
     def check(self, ip: str, rpm: int | None = None) -> tuple[bool, dict]:
-        """Check if IP is within rate limit. Returns (allowed, headers)."""
+        """Synchronous in-memory check (called from sync middleware path)."""
         rpm = rpm or self._default_rpm
         if ip not in self._buckets:
             if len(self._buckets) >= self._max_ips:
-                # Evict oldest entry
                 oldest = next(iter(self._buckets))
                 del self._buckets[oldest]
             self._buckets[ip] = TokenBucket(capacity=rpm, rate=rpm / 60.0, tokens=rpm)
@@ -278,6 +346,33 @@ class IPRateLimiter:
         if not allowed:
             headers["Retry-After"] = str(int(bucket.retry_after) + 1)
         return allowed, headers
+
+    async def check_async(self, ip: str, rpm: int | None = None) -> tuple[bool, dict]:
+        """Async check using Redis sliding window when available."""
+        rpm = rpm or self._default_rpm
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                from redis_client import IP_SLIDING_WINDOW_LUA
+                if "ip_window" not in self._redis_scripts:
+                    self._redis_scripts["ip_window"] = r.register_script(IP_SLIDING_WINDOW_LUA)
+                script = self._redis_scripts["ip_window"]
+                key = f"rl:ip:{ip}"
+                result = await script(keys=[key], args=[60, rpm, time.time()])
+                allowed = bool(int(result[0]))
+                remaining = int(result[1])
+                headers = {
+                    "X-RateLimit-Limit": str(rpm),
+                    "X-RateLimit-Remaining": str(remaining),
+                }
+                if not allowed:
+                    headers["Retry-After"] = "1"
+                return allowed, headers
+            except Exception as e:
+                logger.warning("Redis IP rate limit failed, falling back: %s", e)
+
+        # In-memory fallback
+        return self.check(ip, rpm)
 
 
 # --- IP rate limit config for public endpoints ---

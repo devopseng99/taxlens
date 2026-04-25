@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: taxlens-redis
+  namespace: taxlens-db
+spec:
+  serviceName: taxlens-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: taxlens-redis
+  template:
+    metadata:
+      labels:
+        app: taxlens-redis
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: mgplcb05
+      containers:
+        - name: redis
+          image: docker.io/redis:7-alpine
+          args:
+            - redis-server
+            - --protected-mode
+            - "no"
+            - --maxmemory
+            - 64mb
+            - --maxmemory-policy
+            - allkeys-lru
+            - --appendonly
+            - "no"
+            - --save
+            - ""
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 50m
+            limits:
+              memory: 64Mi
+              cpu: 200m
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
