@@ -2037,6 +2037,131 @@ def generate_1099r(dist, payer_ein: str = "") -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Form 1040-ES — Estimated Tax Payment Vouchers
+# ---------------------------------------------------------------------------
+_ES_DUE_DATES = [
+    ("1", "April 15, 2026"),
+    ("2", "June 15, 2026"),
+    ("3", "September 15, 2026"),
+    ("4", "January 15, 2027"),
+]
+
+
+def generate_1040es_vouchers(result: TaxResult) -> BytesIO:
+    """Generate 4-page 1040-ES estimated tax payment vouchers.
+
+    Each page is one quarterly voucher with filer info, SSN, amount,
+    and IRS payment address.
+    """
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+    amount = result.quarterly_estimated_tax
+
+    filer = result.filer
+    name = f"{filer.first_name} {filer.last_name}" if filer else "Taxpayer"
+    ssn = filer.ssn if filer else "XXX-XX-XXXX"
+    address = ""
+    if filer:
+        parts = [filer.address_street, filer.address_city]
+        if filer.address_state:
+            parts.append(filer.address_state)
+        if filer.address_zip:
+            parts.append(filer.address_zip)
+        address = ", ".join(p for p in parts if p)
+
+    for voucher_num, due_date in _ES_DUE_DATES:
+        # Title
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(72, height - 50, f"Form 1040-ES — Estimated Tax Payment Voucher {voucher_num}")
+        c.setFont("Helvetica", 10)
+        c.drawString(72, height - 68, f"Tax Year 2025  |  Due: {due_date}")
+
+        y = height - 110
+
+        # Voucher box
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(1.5)
+        c.rect(60, y - 280, width - 120, 280, stroke=1, fill=0)
+
+        # Inside the box
+        y -= 20
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(80, y, f"1040-ES  Voucher {voucher_num}  (Calendar Year 2025)")
+        y -= 30
+
+        # Amount
+        c.setFont("Helvetica", 10)
+        c.drawString(80, y, "Amount of estimated tax you are paying")
+        c.setFont("Helvetica-Bold", 14)
+        c.drawRightString(width - 80, y, f"${amount:,.2f}")
+        y -= 5
+        c.setLineWidth(0.5)
+        c.line(350, y, width - 80, y)
+        y -= 25
+
+        # Filer info
+        c.setFont("Helvetica", 9)
+        c.drawString(80, y, "Your first name and middle initial")
+        c.drawString(350, y, "Your social security number")
+        y -= 14
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(80, y, name)
+        c.drawString(350, y, ssn)
+        y -= 20
+
+        c.setFont("Helvetica", 9)
+        c.drawString(80, y, "Your last name")
+        y -= 14
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(80, y, filer.last_name if filer else "")
+        y -= 20
+
+        c.setFont("Helvetica", 9)
+        c.drawString(80, y, "Address (number, street, and apt. no.)")
+        y -= 14
+        c.setFont("Helvetica", 10)
+        c.drawString(80, y, filer.address_street if filer else "")
+        y -= 20
+
+        c.setFont("Helvetica", 9)
+        c.drawString(80, y, "City, state, and ZIP code")
+        y -= 14
+        c.setFont("Helvetica", 10)
+        city_line = ""
+        if filer:
+            city_line = f"{filer.address_city}, {filer.address_state} {filer.address_zip}"
+        c.drawString(80, y, city_line)
+        y -= 30
+
+        # Filing status
+        c.setFont("Helvetica", 9)
+        c.drawString(80, y, f"Filing status: {result.filing_status.replace('_', ' ').title()}")
+
+        # IRS mailing address
+        y -= 40
+        c.setFont("Helvetica", 8)
+        c.drawString(80, y, "Mail voucher and check to: Internal Revenue Service")
+        y -= 12
+        c.drawString(80, y, "See IRS instructions for the correct address based on your state of residence.")
+
+        # DRAFT watermark
+        c.saveState()
+        c.setFont("Helvetica-Bold", 60)
+        c.setFillAlpha(0.1)
+        c.translate(300, 400)
+        c.rotate(45)
+        c.drawCentredString(0, 0, "DRAFT")
+        c.restoreState()
+
+        c.showPage()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # Public API — generate all forms
 # ---------------------------------------------------------------------------
 def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
@@ -2254,6 +2379,13 @@ def generate_all_pdfs(result: TaxResult, output_dir: str) -> dict:
         p = out / "schedule_ai.pdf"
         p.write_bytes(buf.read())
         paths["schedule_ai"] = str(p)
+
+    # Form 1040-ES — Estimated Tax Vouchers (if quarterly estimated tax > 0)
+    if result.quarterly_estimated_tax > 0:
+        buf = generate_1040es_vouchers(result)
+        p = out / "form_1040es.pdf"
+        p.write_bytes(buf.read())
+        paths["1040es"] = str(p)
 
     # State returns — dispatch by state
     for sr in getattr(result, 'state_returns', []):

@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-24 (v3.39.0 API + v2.6.0 Portal)
+Updated: 2026-04-24 (v3.40.0 API + v2.6.0 Portal)
 
 ## Architecture
 
@@ -595,6 +595,10 @@ Updated: 2026-04-24 (v3.39.0 API + v2.6.0 Portal)
 177. **1099-G OCR returns UnemploymentCompensation directly** — `parse_1099g_from_ocr()` returns the `UnemploymentCompensation` dataclass directly (not a dict), matching the existing engine type. OCR-parsed 1099-G entries are merged into the unemployment_list alongside manually entered entries, using the same extend pattern as 1099-R retirement distributions.
 
 178. **1099-MISC withholding added to additional_withholding** — Federal withholding from 1099-MISC (Box 4) is included in `additional_withholding` alongside 1099-DIV and 1099-NEC withholding, ensuring all non-W-2 withholding flows to Line 25d correctly.
+
+179. **1040-ES vouchers use ReportLab (not fillable template)** — IRS Form 1040-ES is a worksheet+voucher booklet with no machine-fillable fields. We generate 4-page voucher PDFs via ReportLab canvas with filer info, SSN, quarterly amount, and due dates. Vouchers are conditional on `quarterly_estimated_tax > 0`.
+
+180. **1040-ES due dates hardcoded to 2025 tax year** — Apr 15 2026, Jun 15 2026, Sep 15 2026, Jan 15 2027. Will need update when 2026 tax year is added.
 
 ## PDF Template Provenance
 

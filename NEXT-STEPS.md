@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-24 (v3.39.0)
+Updated: 2026-04-24 (v3.40.0)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
@@ -895,6 +895,24 @@ Differentiation features that set TaxLens apart from basic tax calculators.
 - `k8s/cronjob-pg-backup.yaml` — PG backup CronJob (taxlens-db namespace)
 - `k8s/cronjob-smoke-test.yaml` — Smoke test CronJob (taxlens namespace)
 - `tests/test_wave39_operational.py` — 20 tests (9 backup YAML, 11 smoke test YAML)
+
+### Wave 61 — 1040-ES Estimated Tax Voucher Generation (v3.40.0) — 2026-04-24
+
+- [x] generate_1040es_vouchers(): 4-page ReportLab PDF with filer info, SSN, amount, due dates
+- [x] Due dates: Apr 15 2026, Jun 15 2026, Sep 15 2026, Jan 15 2027
+- [x] Filer name, address, SSN, filing status on each voucher
+- [x] IRS mailing address reference + DRAFT watermark
+- [x] Conditional generation in generate_all_pdfs (quarterly_estimated_tax > 0)
+- [x] 1040es added to tax_routes.py file_map for individual download
+- [x] 1050/1050 unit tests (13 new), 65/65 E2E tests passing
+
+**New files:**
+- `tests/test_wave61_1040es.py` — 13 tests (4 PDF render, 3 due dates, 4 integration, 2 engine)
+
+**Modified files:**
+- `app/pdf_generator.py` — generate_1040es_vouchers(), _ES_DUE_DATES, generate_all_pdfs hook
+- `app/tax_routes.py` — 1040es in file_map
+- `app/main.py` — version 3.40.0
 
 ### Wave 60 — 1099-MISC + 1099-G OCR Parsers (v3.39.0) — 2026-04-24
 

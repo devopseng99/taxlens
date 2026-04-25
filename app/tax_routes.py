@@ -984,6 +984,7 @@ async def download_pdf(
         "form_4562": "form_4562.pdf",
         "retirement_summary": "retirement_summary.pdf",
         "1099r": "1099r.pdf",
+        "1040es": "form_1040es.pdf",
         "ss_summary": "ss_summary.pdf",
         "il_1040": "il_1040.pdf",
     }
