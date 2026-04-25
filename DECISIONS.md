@@ -1,6 +1,6 @@
 # TaxLens — Key Technical Decisions
 
-Updated: 2026-04-25 (v3.62.0 API + v2.6.0 Portal — 83 waves complete)
+Updated: 2026-04-25 (v3.62.0 API (DEPLOYED) + v2.6.0 Portal — 83 waves complete, 31/31 smoke tests)
 
 ## Architecture
 
@@ -727,6 +727,10 @@ Updated: 2026-04-25 (v3.62.0 API + v2.6.0 Portal — 83 waves complete)
 234. **PPRT modeled on K-1 income, not as separate entity return** — IL PPRT (1.5% on S-corp/partnership income) is an entity-level tax but surfaces on the filer's K-1. We compute it when K-1 ordinary_income > 0 and the entity_type matches pprt_entity_types. The PPRT adds to IL state return total_tax. This matches how CPAs encounter PPRT — as a line item on the entity return that flows to the individual's state tax planning.
 
 235. **PPRT uses pprt_rate/pprt_entity_types on StateConfig** — Rather than hardcoding the IL PPRT, the config is generic: any state can declare a pprt_rate. Currently only IL uses it (1.5%), but this prepares for other states' replacement/franchise taxes if needed.
+
+236. **Smoke tests require TAXLENS_API_KEY env var** — After API key auth became mandatory (Wave 11b), the smoke test script was never updated to pass `X-API-Key` headers. Fixed by requiring `TAXLENS_API_KEY` env var and injecting it into all curl calls (POST + GET). This prevents silent 401 failures that look like engine bugs.
+
+237. **Smoke test expectations must track engine behavior changes** — Multi-state expansion (Wave 71) and standard deduction changes invalidated 4 of 31 smoke test assertions: (a) `work_states` without `days_worked_by_state` doesn't generate nonresident returns — removed IT-201 expectations from NJ→NY tests, (b) low-income MFJ with only dividends uses standard deduction even with high itemizable amounts — removed Schedule A expectation, (c) borderline refund/owed scenarios shift with bracket updates — removed strict refund assertion.
 
 ## PDF Template Provenance
 

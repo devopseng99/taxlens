@@ -1,6 +1,6 @@
 # TaxLens — Next Steps
 
-Updated: 2026-04-25 (v3.62.0 — 83 waves complete)
+Updated: 2026-04-25 (v3.62.0 DEPLOYED — 83 waves complete, 1499 unit + 31/31 smoke tests)
 
 ## Completed
 - [x] Wave 1-4: Deploy, bridge, E2E, multi-form OCR
